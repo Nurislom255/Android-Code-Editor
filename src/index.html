@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>CodeEditor</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+
+    <header id="toolbar">
+      <div class="toolbar-group">
+        <button id="btn-open-folder" class="btn" title="Open a folder">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z"/></svg>
+          Open Folder
+        </button>
+        <button id="btn-open-file" class="btn btn-ghost" title="Open individual file(s)">Open File</button>
+        <div class="dropdown">
+          <button id="btn-new-menu" class="btn btn-ghost" title="Create new">+ New</button>
+          <div id="new-menu" class="dropdown-menu hidden">
+            <button id="btn-new-file" class="dropdown-item">New File</button>
+            <button id="btn-new-folder" class="dropdown-item">New Folder</button>
+            <button id="btn-new-project" class="dropdown-item">New Project (boilerplate)</button>
+          </div>
+        </div>
+      </div>
+      <div class="toolbar-group toolbar-center">
+        <span id="project-name" class="project-name">No folder open</span>
+      </div>
+      <div class="toolbar-group">
+        <div class="dropdown">
+          <div class="btn-split">
+            <button id="btn-save" class="btn btn-ghost btn-split-main" title="Save (Ctrl+S)">Save</button>
+            <button id="btn-save-menu" class="btn btn-ghost btn-split-caret" title="More save options">&#9662;</button>
+          </div>
+          <div id="save-menu" class="dropdown-menu hidden">
+            <button id="btn-save-as" class="dropdown-item">Save As&hellip;</button>
+            <button id="btn-save-all" class="dropdown-item">Save All (Ctrl+Shift+S)</button>
+          </div>
+        </div>
+        <button id="btn-run" class="btn btn-accent" title="Run current JS file">
+          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
+          Run
+        </button>
+        <button id="btn-settings" class="btn btn-icon" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19.14 12.94a7.14 7.14 0 0 0 .06-.94 7.14 7.14 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94L14.4 2.3a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.36 2.54a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.36a.5.5 0 0 0 .12.64l2.03 1.58a7.14 7.14 0 0 0 0 1.88L2.82 14a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.36-2.54a7.3 7.3 0 0 0 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="body">
+      <aside id="sidebar">
+        <div id="file-tree" class="file-tree">
+          <div class="empty-state">
+            <p>No folder open yet.</p>
+            <button id="btn-open-folder-empty" class="btn btn-accent">Open Folder</button>
+          </div>
+        </div>
+      </aside>
+
+      <main id="main-panel">
+        <div id="tab-bar" class="tab-bar"></div>
+        <div id="editor-mount" class="editor-mount"></div>
+      </main>
+    </div>
+
+    <section id="bottom-panel" class="bottom-panel">
+      <div id="panel-resize-handle" class="panel-resize-handle" title="Drag to resize"><span></span></div>
+      <div class="bottom-panel-tabs">
+        <button id="tab-console" class="panel-tab active">Console</button>
+        <button id="tab-preview" class="panel-tab">Preview</button>
+        <button id="btn-collapse-panel" class="btn-collapse" title="Collapse panel">&times;</button>
+      </div>
+      <div id="console-output" class="console-output"></div>
+      <iframe id="preview-frame" class="preview-frame hidden" sandbox="allow-scripts"></iframe>
+    </section>
+
+  </div>
+
+  <!-- Settings drawer -->
+  <div id="settings-drawer" class="settings-drawer hidden">
+    <div class="settings-header">
+      <h2>Settings</h2>
+      <button id="btn-close-settings" class="btn-collapse">&times;</button>
+    </div>
+    <label class="setting-row">
+      <span>Theme</span>
+      <select id="setting-theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </label>
+    <label class="setting-row">
+      <span>Font size</span>
+      <input id="setting-fontsize" type="number" min="10" max="28" step="1" />
+    </label>
+    <label class="setting-row">
+      <span>Tab width</span>
+      <input id="setting-tabwidth" type="number" min="1" max="8" step="1" />
+    </label>
+    <label class="setting-row">
+      <span>Coding keys bar</span>
+      <select id="setting-keysbar">
+        <option value="auto">Auto</option>
+        <option value="always">Always on</option>
+        <option value="never">Never</option>
+      </select>
+    </label>
+    <p class="settings-note">"Auto" shows the symbol bar when the on-screen keyboard is up, and hides it when a hardware/Bluetooth keyboard seems to be in use. If it guesses wrong, force it with Always/Never.</p>
+  </div>
+
+  <!-- Tablet coding-keys bar — see keysBar.js. Fixed-position, so its
+       location in the DOM doesn't matter for layout. -->
+  <div id="keys-bar" class="keys-bar hidden"></div>
+
+  <input type="file" id="hidden-file-input" multiple style="display:none" />
+
+  <script src="bundle.js"></script>
+</body>
+</html>
