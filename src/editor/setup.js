@@ -10,7 +10,7 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { indentOnInput, bracketMatching, foldGutter, foldKeymap, indentUnit } from '@codemirror/language';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { highlightSelectionMatches, searchKeymap, search } from '@codemirror/search';
-import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap, completeAnyWord } from '@codemirror/autocomplete';
+import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap, completeAnyWord, acceptCompletion } from '@codemirror/autocomplete';
 import { lintKeymap } from '@codemirror/lint';
 import { editorTheme, editorHighlighting } from './theme.js';
 import { wrapIndent, stickyScroll, fastScroll } from './viewPlugins.js';
@@ -18,6 +18,11 @@ import { expandStack } from './selection.js';
 import { syntaxLinter } from './syntaxLint.js';
 import { gitGutter } from './gitGutter.js';
 import { snippetSource } from './snippets.js';
+import { docInfo } from './context.js';
+import { openFilesWordSource, pathSource, composeCompletion } from './completions.js';
+import { emmetSource } from './emmet.js';
+import { linkedTags } from './linkedTags.js';
+import { semicolonExtension, completeStatement } from './semicolons.js';
 
 export const comp = {
   language: new Compartment(),
@@ -35,12 +40,28 @@ export const comp = {
 /** Languages whose own completion already offers identifiers from the file. */
 const HAS_LOCAL_COMPLETION = new Set(['javascript', 'jsx', 'typescript', 'tsx', 'python', 'html', 'css']);
 
-export function langDataExtension(languageId, userSnippets) {
+const EMMET_KIND = { html: 'html', css: 'css', scss: 'css', less: 'css' };
+
+/**
+ * Everything that depends on the document's language and the typing
+ * settings: completion sources, Emmet, linked tags, automatic semicolons.
+ * Rebuilt (compartment `langData`) when the language or those settings change.
+ * @param {{id:number, lang:{id:string}}} doc
+ */
+export function langDataExtension(doc, userSnippets, settings) {
+  const languageId = doc.lang.id;
   const sources = [];
+  if (settings.emmet && EMMET_KIND[languageId]) sources.push(emmetSource(EMMET_KIND[languageId]));
   const snip = snippetSource(languageId, userSnippets);
   if (snip) sources.push(snip);
   if (!HAS_LOCAL_COMPLETION.has(languageId)) sources.push(completeAnyWord);
-  return sources.length ? EditorState.languageData.of(() => sources.map((s) => ({ autocomplete: s }))) : [];
+  sources.push(openFilesWordSource, pathSource);
+  return [
+    docInfo.of({ id: doc.id, langId: languageId }),
+    EditorState.languageData.of(() => sources.map((s) => ({ autocomplete: s }))),
+    settings.linkedTags && languageId === 'html' ? linkedTags : [],
+    semicolonExtension(languageId, settings.autoSemicolons),
+  ];
 }
 
 export function wrapExtension(on) { return on ? EditorView.lineWrapping : []; }
@@ -79,6 +100,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     bracketMatching(),
     comp.closeBrackets.of(closeBracketsExtension(settings.autoCloseBrackets)),
     autocompletion({ activateOnTyping: true, closeOnBlur: true, icons: true, maxRenderedOptions: 60 }),
+    composeCompletion,
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
@@ -89,7 +111,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     comp.sticky.of(stickyExtension(settings.stickyScroll)),
     comp.fastScroll.of(fastScrollExtension(settings.fastScroll)),
     comp.language.of([]),
-    comp.langData.of(langDataExtension(doc.lang.id, userSnippets)),
+    comp.langData.of(langDataExtension(doc, userSnippets, settings)),
     comp.lint.of([]),
     comp.wrap.of(wrapExtension(doc.wrap)),
     comp.readOnly.of(readOnlyExtension(doc.locked || !!doc.readOnlyReason)),
@@ -104,6 +126,9 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     editorTheme,
     ...extra,
     keymap.of([
+      { key: 'Mod-Shift-Enter', run: (v) => !!completeStatement(v), preventDefault: true },
+      // Tab accepts the highlighted suggestion (expands Emmet), like VS Code
+      { key: 'Tab', run: acceptCompletion },
       ...defaultKeymap,
       ...searchKeymap,
       ...historyKeymap,

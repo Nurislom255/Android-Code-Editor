@@ -24,29 +24,48 @@
 // a scroll; only a swipe that couldn't scroll anything becomes a command. With
 // wrap on (the phone default) nothing scrolls sideways, so swipes always work.
 
-import { GestureRecognizer, gestureKey } from '../core/gestures.js';
+//
+// WHY THE LAYER CLAIMS HORIZONTAL TOUCHES: a slightly diagonal swipe used to
+// let the browser start a vertical scroll (which then vetoed the command via
+// "did it scroll?") or treat the touch as cursor placement. As soon as the
+// recognizer locks a one-finger touch as horizontal, and the code can't scroll
+// that way anyway, the layer calls preventDefault() on the rest of the touch:
+// no scrolling, no caret placement, no synthetic click.
+//
+// SAFETY NET: selection and scroll position are snapshotted at touchstart and
+// put back before a gesture's action runs. A swipe never moves the cursor.
+
+import { GestureRecognizer, gestureKey, presetOptions } from '../core/gestures.js';
 
 const IGNORE_SELECTOR = '.cm-tooltip, .cm-panels, .cm-fastscroll, .cm-sticky, .cm-gutters, .cm-search, input, textarea, button';
 
+/** Could the code area scroll sideways when the finger moves by dx? */
+function canScrollX(scroller, dx) {
+  const max = scroller.scrollWidth - scroller.clientWidth;
+  if (max <= 1) return false;
+  // finger right → content moves right → scrollLeft decreases
+  return dx > 0 ? scroller.scrollLeft > 1 : scroller.scrollLeft < max - 1;
+}
+
 export function attachGestures(host, { getView, getSettings, runGesture, onPinch, onLineSelect }) {
   const recognizer = new GestureRecognizer({}, () => ({ width: window.innerWidth, height: window.innerHeight }));
-  let session = null; // {scrollLeft, scrollTop, ignored}
-
-  const settingsToOptions = () => {
-    const s = getSettings();
-    recognizer.setOptions({ minSwipeDistance: s.swipeDistance });
-    return s;
-  };
+  // {view, doc, selection, scrollLeft, scrollTop, ignored, claimed}
+  let session = null;
 
   host.addEventListener('touchstart', (e) => {
-    const s = settingsToOptions();
+    const s = getSettings();
     const view = getView();
     if (!view || !s.gesturesEnabled) return;
+    recognizer.setOptions(presetOptions(s.gestureSensitivity));
     if (!recognizer.active) {
       session = {
+        view,
+        doc: view.state.doc,
+        selection: view.state.selection,
         scrollLeft: view.scrollDOM.scrollLeft,
         scrollTop: view.scrollDOM.scrollTop,
         ignored: !!(e.target.closest && e.target.closest(IGNORE_SELECTOR)),
+        claimed: false,
       };
     }
     for (const t of e.changedTouches) recognizer.pointerDown(t.identifier, t.clientX, t.clientY, e.timeStamp);
@@ -56,15 +75,22 @@ export function attachGestures(host, { getView, getSettings, runGesture, onPinch
     if (!session) return;
     const s = getSettings();
     if (!s.gesturesEnabled) return;
+    const ev = recognizer.pointerMoves([...e.changedTouches].map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY })), e.timeStamp);
+    if (ev && ev.type === 'lock') {
+      // Claim a horizontal one-finger touch unless it is a real sideways
+      // scroll of a long line (wrap off) — that stays the browser's.
+      session.claimed = ev.axis === 'h' && !session.ignored && !canScrollX(session.view.scrollDOM, ev.dx);
+    } else if (ev && !session.ignored) {
+      onPinch(ev);
+    }
     // Two fingers belong to us (pinch / two-finger swipes): stop the browser
     // from scrolling or zooming the page at the same time.
-    if (e.touches.length >= 2 && e.cancelable) e.preventDefault();
-    const ev = recognizer.pointerMoves([...e.changedTouches].map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY })), e.timeStamp);
-    if (ev && !session.ignored) onPinch(ev);
+    if ((e.touches.length >= 2 || session.claimed) && e.cancelable) e.preventDefault();
   }, { capture: true, passive: false });
 
   const end = (e) => {
     if (!session) return;
+    let handled = false;
     for (const t of e.changedTouches) {
       const g = recognizer.pointerUp(t.identifier, t.clientX, t.clientY, e.timeStamp);
       if (!g || session.ignored) continue;
@@ -72,25 +98,45 @@ export function attachGestures(host, { getView, getSettings, runGesture, onPinch
       // A cancelled touch was taken over by the system (e.g. Android's own
       // navigation gesture) — never act on it.
       if (e.type === 'touchcancel') continue;
-      handle(g);
+      handled = handle(g) || handled;
     }
+    // A claimed touch must not turn into a tap/click afterwards (that is
+    // what placed the caret where the finger lifted).
+    if ((handled || session.claimed) && e.cancelable) e.preventDefault();
+    if (session.claimed && !handled) restore(session);
     if (!recognizer.active) session = null;
   };
-  host.addEventListener('touchend', end, { capture: true, passive: true });
+  host.addEventListener('touchend', end, { capture: true, passive: false });
   host.addEventListener('touchcancel', end, { capture: true, passive: true });
+
+  /** Puts selection and scroll back to where they were when the touch began. */
+  function restore(sn) {
+    const view = getView();
+    if (!view || view !== sn.view) return;
+    if (view.state.doc === sn.doc && !view.state.selection.eq(sn.selection)) {
+      view.dispatch({ selection: sn.selection });
+    }
+    if (Math.abs(view.scrollDOM.scrollTop - sn.scrollTop) > 0) view.scrollDOM.scrollTop = sn.scrollTop;
+    if (Math.abs(view.scrollDOM.scrollLeft - sn.scrollLeft) > 0) view.scrollDOM.scrollLeft = sn.scrollLeft;
+  }
 
   function handle(g) {
     const view = getView();
-    if (!view) return;
+    if (!view) return false;
     if (g.type === 'swipe' && g.fingers === 1) {
       // Vertical one-finger movement is always scrolling.
-      if (g.direction === 'up' || g.direction === 'down') return;
-      const scrolled = Math.abs(view.scrollDOM.scrollLeft - session.scrollLeft) > 6
-        || Math.abs(view.scrollDOM.scrollTop - session.scrollTop) > 40;
-      if (scrolled) return;
+      if (g.direction === 'up' || g.direction === 'down') return false;
+      if (!session.claimed) {
+        const scrolled = Math.abs(view.scrollDOM.scrollLeft - session.scrollLeft) > 6
+          || Math.abs(view.scrollDOM.scrollTop - session.scrollTop) > 40;
+        if (scrolled) return false;
+      }
     }
     const key = gestureKey(g);
-    if (key) runGesture(key, view, g);
+    if (!key) return false;
+    restore(session);
+    runGesture(key, view, g);
+    return true;
   }
 
   // ---- line-number gutter: tap selects a line, drag selects several ----------

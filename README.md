@@ -6,8 +6,9 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
-What's next: see **[ROADMAP.md](ROADMAP.md)** (keys bar redesign, gesture fixes,
-Emmet, VS Code look, built-in Python and C++).
+What's next: see **[ROADMAP.md](ROADMAP.md)** (keys bar redesign, VS Code look,
+tabs & explorer, built-in Python and C++). Phase 1 of it — typing
+correctness — is built: see *Typing* below.
 
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
@@ -37,17 +38,51 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 
 How false triggers are avoided (see `src/core/gestures.js`):
 
-- A swipe must be **short, fast and straight**: ≥ 56 px (configurable), ≤ 450 ms,
-  ≥ 0.25 px/ms, and mostly along one axis. Slow drags stay scrolling/reading.
+- A swipe must be **short, fast and fairly straight**: with the Normal
+  sensitivity ≥ 56 px, ≤ 500 ms, ≥ 0.22 px/ms and within 35° of its axis.
+  The angle comes from a line fitted through the whole finger path, so a
+  thumb arc whose end curls up still counts. Strict / Loose presets are in
+  Settings, with a **test pad** that tells you how each swipe was read (or
+  why it wasn't a swipe: "too slow (620 > 500 ms)", "too diagonal (41°)").
+- A swipe never moves the cursor: after the first 8 px a mostly-sideways
+  touch is claimed by the editor (no scrolling, no caret placement), and the
+  selection and scroll position from before the touch are put back before
+  the gesture's action runs.
+- A finger that rests ≥ 400 ms before moving is selecting text, not swiping.
 - Touches that start within 20 px of the screen edge belong to Android's own
   back gesture and are ignored.
-- **"Did it scroll?" rule**: with soft-wrap off, a horizontal flick is also how
-  you scroll a long line. If the flick actually scrolled the code, it was a
-  scroll; only a swipe that couldn't scroll anything becomes a command. With
-  wrap on (the phone default) nothing scrolls sideways, so swipes always work.
+- **"Can it scroll?" rule**: with soft-wrap off, a horizontal flick is also how
+  you scroll a long line. If the code can scroll that way, the browser keeps
+  the touch and a flick that scrolled stays a scroll; only a swipe that
+  couldn't scroll anything becomes a command. With wrap on (the phone
+  default) nothing scrolls sideways, so swipes always work.
 - Two-finger touches are claimed by the editor (no page zoom/scroll) so pinch
   and two-finger swipes are reliable. Pinch vs. two-finger swipe is decided by
   the change in finger spread (≥ 14 % *and* ≥ 28 px).
+
+---
+
+## Typing (ROADMAP Phase 1)
+
+- **Automatic semicolons** (C, C++, Java, C#, JS, TS; never Python/Kotlin):
+  typing `int x = `, `return `, `foo(`, `std::cout << `… at the end of a line
+  adds a faded `;` after the cursor. Type `;` or press **Enter** to step over
+  it (Enter only when the statement is complete — after `=`, `,`, `<<`, `.`
+  it just breaks the line and the `;` moves along). **Backspace** right after
+  it appears removes it. Never in `for (…;…;…)`, `if`/`while`/function/class
+  headers, `#include`, strings or comments. JS files written without
+  semicolons are detected and left alone. Settings → Typing.
+- **Complete statement**: keys-bar `⏎;` or **Ctrl+Shift+Enter** — adds the
+  missing `;` (`:` after a Python header, ` {}` after `if (…)` or a function
+  header), closes an open `(`, and starts a new indented line.
+- **Emmet** in HTML and CSS: `!` → HTML5 page, `ul>li*3`, `div.card>p`,
+  `div` on a new line → `<div></div>` (no `<` needed); CSS `m10`, `df`,
+  `p10-20`. Accept with **Tab**, Enter or swipe right.
+- **Renaming `<div>` renames `</div>`**.
+- Suggestions for **file paths** in `src=""`, `href=""`, `url()`, `import '…'`,
+  `#include "…"` and for **words from your other open files**.
+- The keys bar types through the same pipeline as the keyboard, so `(` from
+  the bar auto-closes and `>` from the bar closes an HTML tag.
 
 ---
 
@@ -59,9 +94,10 @@ How false triggers are avoided (see `src/core/gestures.js`):
   (`ProjectFs` interface, spec §4.2). Import a folder or `.zip`, export `.zip`.
 - Lazy file tree that hides `.git`, `node_modules`, `build` by default.
 - Soft wrap per file, with wrapped rows indented under their line.
-- Coding-keys bar: per-language symbol rows (editable), Tab, arrows with
-  repeat, trackpad, Shift/Ctrl/Alt (one-shot, double-tap to lock), undo/redo,
-  hide keyboard, line operations, expand/shrink selection.
+- Coding-keys bar: per-language symbol rows (editable), Tab, Complete
+  statement (`⏎;`), arrows with repeat, trackpad, Shift/Ctrl/Alt (one-shot,
+  double-tap to lock), undo/redo, hide keyboard, line operations,
+  expand/shrink selection. Both rows scroll sideways from any key.
 - Auto-close brackets, auto-indent, line operations, undo grouping.
 - Highlighting for ~30 languages (incremental Lezer parsers for JS/TS/JSX,
   HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for
@@ -110,7 +146,7 @@ How false triggers are avoided (see `src/core/gestures.js`):
 | Push/pull in a plain browser | Works, but GitHub's git servers don't send CORS headers, so requests go through the proxy configured in Settings → Git |
 | Device folders (Option B, all-files access) | `CapacitorProjectFs` is implemented and unit-tested against a fake plugin, **not yet run on a real device** — see `CAPACITOR_SETUP.md` |
 | Haptics in the APK | `navigator.vibrate` needs the `VIBRATE` permission in the Android manifest |
-| Real-device keyboard matrix (Gboard, Samsung, SwiftKey) | Tested in emulated Chromium only; real keyboards differ — please test on your phone |
+| Real-device keyboard matrix (Gboard, Samsung, SwiftKey) | Tested in emulated Chromium only; real keyboards differ — please test on your phone (ROADMAP lists the Phase 1 checks) |
 
 ---
 
@@ -153,6 +189,9 @@ npm run check        # all of the above
 
 The e2e tests drive real touch input through the Chrome DevTools Protocol with
 explicit timestamps, so swipe speed in tests is exact; they also run git
-push/pull/clone against a local `git http-backend` server.
+push/pull/clone against a local `git http-backend` server. Tests that press
+Enter/Backspace in the editor run on the desktop project only: in Android
+emulation CodeMirror drops a share of synthetic Enter/Backspace presses
+(details in ROADMAP.md, Phase 1 result).
 
 To wrap as an APK, see **[CAPACITOR_SETUP.md](CAPACITOR_SETUP.md)**.

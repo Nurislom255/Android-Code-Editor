@@ -19,6 +19,7 @@ export const GESTURE_ACTIONS = Object.freeze({
   commandPalette: 'Command palette',
   quickOpen: 'Quick open file',
   toggleComment: 'Toggle comment',
+  completeStatement: 'Complete statement (; and new line)',
   hideKeyboard: 'Hide keyboard',
   nextTab: 'Next tab',
   prevTab: 'Previous tab',
@@ -67,7 +68,10 @@ export const DEFAULTS = Object.freeze({
   gesturesEnabled: true,
   gestureHints: true,
   gestureMap: { ...DEFAULT_GESTURE_MAP },
-  swipeDistance: 56,
+  gestureSensitivity: 'normal', // 'strict' | 'normal' | 'loose' (core/gestures.js presets)
+  autoSemicolons: true,       // C-like languages and JS/TS (editor/semicolons.js)
+  emmet: true,                // HTML/CSS abbreviations in autocomplete
+  linkedTags: true,           // renaming <div> also renames </div>
   userSnippets: '',           // JSON: {"javascript": [{"label": "..", "body": ".."}]}
   runTimeLimit: 10,           // seconds; every run is also stoppable
   historyDays: 7,
@@ -127,7 +131,12 @@ export function normalizeSettings(raw) {
     gesturesEnabled: bool(r.gesturesEnabled, d.gesturesEnabled),
     gestureHints: bool(r.gestureHints, d.gestureHints),
     gestureMap,
-    swipeDistance: clamp(r.swipeDistance, 30, 160, d.swipeDistance),
+    // v2.0 had a raw `swipeDistance` instead of presets: a raised value meant
+    // "gestures trigger by accident", which is what Strict is for.
+    gestureSensitivity: oneOf(r.gestureSensitivity, ['strict', 'normal', 'loose'], Number(r.swipeDistance) > 70 ? 'strict' : d.gestureSensitivity),
+    autoSemicolons: bool(r.autoSemicolons, d.autoSemicolons),
+    emmet: bool(r.emmet, d.emmet),
+    linkedTags: bool(r.linkedTags, d.linkedTags),
     userSnippets: str(r.userSnippets, d.userSnippets, 50000),
     runTimeLimit: clamp(r.runTimeLimit, 1, 300, d.runTimeLimit),
     historyDays: clamp(r.historyDays, 1, 90, d.historyDays),

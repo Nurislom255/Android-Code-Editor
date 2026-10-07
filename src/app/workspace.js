@@ -16,6 +16,7 @@ import { EditorView } from '@codemirror/view';
 import { EditorState, Transaction, Annotation, Text } from '@codemirror/state';
 import { comp, buildExtensions, wrapExtension, readOnlyExtension, indentExtension, lineNumbersExtension,
   closeBracketsExtension, lintExtension, stickyExtension, fastScrollExtension, langDataExtension } from '../editor/setup.js';
+import { setEditorEnv } from '../editor/context.js';
 import { languageForName, loadLanguage, languageById } from '../editor/languages.js';
 import { setGitBase } from '../editor/gitGutter.js';
 import { decodeBytes, encodeText, applySaveTransforms, hashString, degradeFor, EOL } from '../core/textFormat.js';
@@ -97,6 +98,11 @@ export class Workspace {
     this.autosaveTimers = new Map();
     this.saveQueue = new Map();
     this.userSnippets = parseUserSnippets(getSettings().userSnippets).snippets;
+    // What completion sources may know about the other open documents.
+    setEditorEnv({
+      openDocs: () => [...this.docs.values()].map((d) => ({ id: d.id, name: d.name, state: this.stateOf(d.id) })),
+      docPath: (id) => (this.docs.has(id) ? this.docs.get(id).path : null),
+    });
   }
 
   // ---- events -------------------------------------------------------------
@@ -727,7 +733,7 @@ export class Workspace {
     const lang = languageForName(doc.name);
     if (lang.id === doc.lang.id) return;
     doc.lang = lang;
-    this.reconfigure(() => comp.langData.reconfigure(langDataExtension(lang.id, this.userSnippets)), doc.id);
+    this.reconfigure(() => comp.langData.reconfigure(langDataExtension(doc, this.userSnippets, this.getSettings())), doc.id);
     this._loadLanguageFor(doc);
     this.emit('active', { pane: this.pane, doc: this.activeDoc });
   }
@@ -903,7 +909,7 @@ export class Workspace {
     if (!doc) return;
     doc.lang = languageById(langId);
     doc.degrade = { ...doc.degrade, highlight: true };
-    this.reconfigure(() => [comp.langData.reconfigure(langDataExtension(langId, this.userSnippets)), comp.language.reconfigure([]), comp.lint.reconfigure([])], docId);
+    this.reconfigure(() => [comp.langData.reconfigure(langDataExtension(doc, this.userSnippets, this.getSettings())), comp.language.reconfigure([]), comp.lint.reconfigure([])], docId);
     this._loadLanguageFor(doc);
     this.emit('active', { pane: this.pane, doc: this.activeDoc });
   }
@@ -924,7 +930,9 @@ export class Workspace {
       const parsed = parseUserSnippets(next.userSnippets);
       if (parsed.error) this.ui.toast(parsed.error, 'error');
       this.userSnippets = parsed.snippets;
-      this.reconfigure((doc) => comp.langData.reconfigure(langDataExtension(doc.lang.id, this.userSnippets)));
+    }
+    if (prev.userSnippets !== next.userSnippets || prev.emmet !== next.emmet || prev.linkedTags !== next.linkedTags || prev.autoSemicolons !== next.autoSemicolons) {
+      this.reconfigure((doc) => comp.langData.reconfigure(langDataExtension(doc, this.userSnippets, next)));
     }
     for (const p of this.panes) if (p) p.view.requestMeasure();
   }

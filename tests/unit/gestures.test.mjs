@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GestureRecognizer, gestureKey } from '../../src/core/gestures.js';
+import { GestureRecognizer, gestureKey, presetOptions, describeDecision, pathAngle, SENSITIVITY_PRESETS } from '../../src/core/gestures.js';
 
 const VIEW = () => ({ width: 400, height: 800 });
 
@@ -141,4 +141,103 @@ test('pointerMoves updates every finger before judging a pinch', () => {
   r.pointerDown(2, 300, 360, 0);
   assert.equal(r.pointerMoves([{ id: 1, x: 200, y: 300 }, { id: 2, x: 200, y: 360 }], 50), null);
   assert.equal(gestureKey(r.pointerUp(1, 200, 300, 120)), 'swipe-left-2');
+});
+
+/** One finger along a list of [x, y] points, `ms` total, from t=0 (optionally after resting `restMs`). */
+function path(r, pts, ms, restMs = 0) {
+  const events = [];
+  r.pointerDown(1, pts[0][0], pts[0][1], 0);
+  for (let i = 1; i < pts.length; i++) {
+    const e = r.pointerMove(1, pts[i][0], pts[i][1], restMs + (ms * i) / (pts.length - 1));
+    if (e) events.push(e);
+  }
+  const last = pts.at(-1);
+  return { events, g: r.pointerUp(1, last[0], last[1], restMs + ms) };
+}
+
+const line = (x0, y0, x1, y1, n = 8) => Array.from({ length: n + 1 }, (_, i) => [x0 + ((x1 - x0) * i) / n, y0 + ((y1 - y0) * i) / n]);
+
+test('a 30° diagonal swipe still counts (Normal), but not with Strict', () => {
+  const dy = Math.tan(Math.PI / 6) * 160; // 30°
+  const r = new GestureRecognizer({}, VIEW);
+  assert.equal(gestureKey(path(r, line(100, 300, 260, 300 + dy), 160).g), 'swipe-right-1');
+  const strict = new GestureRecognizer(presetOptions('strict'), VIEW);
+  assert.equal(path(strict, line(100, 300, 260, 300 + dy), 160).g, null);
+  assert.match(strict.lastDecision.reason, /too diagonal/);
+});
+
+test('angle is judged from the whole path: a thumb arc whose tail curls up still counts', () => {
+  // mostly flat, then the last bit lifts sharply: end-to-end angle ≈ 36°
+  const pts = [...Array.from({ length: 13 }, (_, i) => [100 + i * 10, 400 - i]), [228, 380], [232, 355], [234, 330], [236, 300]];
+  const endAngle = Math.atan2(100, 136) * 180 / Math.PI;
+  assert.ok(endAngle > 35 && endAngle < 40, `end angle ${endAngle}`);
+  assert.ok(pathAngle(pts.map(([x, y]) => ({ x, y })), true) < 35);
+  const r = new GestureRecognizer({}, VIEW);
+  assert.equal(gestureKey(path(r, pts, 180).g), 'swipe-right-1');
+});
+
+test('a straight line at 42° is not a swipe, whatever the path fit says', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  assert.equal(path(r, line(100, 300, 200, 390), 120).g, null);
+  assert.match(r.lastDecision.reason, /too diagonal \(42°/);
+});
+
+test('direction lock is reported once, early, for one finger', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  const { events } = path(r, line(100, 300, 260, 330, 10), 160);
+  assert.equal(events.length, 1);
+  assert.deepEqual([events[0].type, events[0].axis], ['lock', 'h']);
+  const v = new GestureRecognizer({}, VIEW);
+  assert.equal(path(v, line(200, 300, 215, 120, 10), 160).events[0].axis, 'v');
+});
+
+test('no lock and no swipe after a long press (the finger is selecting text)', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  r.pointerDown(1, 100, 300, 0);
+  r.pointerMove(1, 101, 300, 300);
+  assert.equal(r.pointerMove(1, 140, 300, 520), null, 'no lock after resting 520 ms');
+  assert.equal(r.pointerUp(1, 200, 300, 600), null);
+  assert.equal(r.lock, 'none');
+  // and with a loose preset whose duration limit would allow 600 ms:
+  const loose = new GestureRecognizer({ ...presetOptions('loose') }, VIEW);
+  loose.pointerDown(1, 100, 300, 0);
+  loose.pointerMove(1, 100, 301, 450);
+  loose.pointerMove(1, 180, 301, 520);
+  assert.equal(loose.pointerUp(1, 260, 301, 600), null);
+  assert.match(loose.lastDecision.reason, /long press/);
+});
+
+test('two-finger touches never report a lock', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  const { events } = twoFingers(r, [250, 300], [260, 400], [100, 305], [110, 405], 180);
+  assert.equal(events.filter((e) => e.type === 'lock').length, 0);
+});
+
+test('presets get stricter in every dimension', () => {
+  const { strict, normal, loose } = SENSITIVITY_PRESETS;
+  assert.ok(strict.minSwipeDistance > normal.minSwipeDistance && normal.minSwipeDistance > loose.minSwipeDistance);
+  assert.ok(strict.maxAngle < normal.maxAngle && normal.maxAngle < loose.maxAngle);
+  assert.ok(strict.maxSwipeDuration < normal.maxSwipeDuration && normal.maxSwipeDuration < loose.maxSwipeDuration);
+  assert.ok(strict.minSwipeVelocity > normal.minSwipeVelocity && normal.minSwipeVelocity > loose.minSwipeVelocity);
+  assert.equal(presetOptions('bogus'), normal);
+});
+
+test('a slower swipe (600 ms) counts with Loose only', () => {
+  const r = new GestureRecognizer(presetOptions('normal'), VIEW);
+  assert.equal(path(r, line(100, 300, 220, 305), 600).g, null);
+  assert.match(r.lastDecision.reason, /too slow/);
+  const loose = new GestureRecognizer(presetOptions('loose'), VIEW);
+  assert.equal(gestureKey(path(loose, line(100, 300, 220, 305), 600).g), 'swipe-right-1');
+});
+
+test('the test pad text explains every decision', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  oneFinger(r, 100, 300, 260, 310, 150);
+  assert.match(describeDecision(r.lastDecision), /^✓ Swipe right, 1 finger · 160 px · \d+° · 150 ms$/);
+  oneFinger(r, 100, 300, 130, 300, 100);
+  assert.match(describeDecision(r.lastDecision), /too short/);
+  oneFinger(r, 100, 300, 101, 300, 100);
+  assert.match(describeDecision(r.lastDecision), /Not a gesture: tap/);
+  oneFinger(r, 5, 300, 200, 300, 100);
+  assert.match(describeDecision(r.lastDecision), /screen edge/);
 });

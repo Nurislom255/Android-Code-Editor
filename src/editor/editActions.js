@@ -18,11 +18,12 @@ import {
 } from '@codemirror/commands';
 import {
   completionStatus, acceptCompletion, startCompletion, closeCompletion,
-  hasNextSnippetField, hasPrevSnippetField, nextSnippetField, prevSnippetField, insertBracket,
+  hasNextSnippetField, hasPrevSnippetField, nextSnippetField, prevSnippetField,
 } from '@codemirror/autocomplete';
 import { openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
 import { gotoLine } from '@codemirror/search';
 import { indentUnit, getIndentUnit } from '@codemirror/language';
+import { EditorView } from '@codemirror/view';
 import { expandSelection as cmExpand, shrinkSelection as cmShrink } from './selection.js';
 
 const run = (cmd, label) => (view) => (view && !view.state.readOnly && cmd(view) ? label : null);
@@ -91,16 +92,20 @@ export function arrow(view, dir, { shift = false, ctrl = false, alt = false } = 
 }
 
 /**
- * Inserts text as if typed: auto-closes brackets/quotes (when enabled) and
- * marks the edit as typing so autocompletion reacts to it.
+ * Inserts text exactly as if it was typed on a keyboard: it goes through the
+ * same input handlers as real typing (EditorView.inputHandler), so the
+ * keys bar gets auto-closed brackets and quotes, `>` closing an HTML tag,
+ * `;` stepping over a pending semicolon — whatever is enabled — and the edit
+ * is marked as typing so suggestions react to it.
  */
-export function typeText(view, text, { autoClose = true } = {}) {
+export function typeText(view, text) {
   if (!view || view.state.readOnly) return null;
-  if (autoClose && text.length === 1) {
-    const tr = insertBracket(view.state, text);
-    if (tr) { view.dispatch(tr); return text; }
+  const { from, to } = view.state.selection.main;
+  const insert = () => view.state.update(view.state.replaceSelection(text), { userEvent: 'input.type', scrollIntoView: true });
+  for (const handler of view.state.facet(EditorView.inputHandler)) {
+    if (handler(view, from, to, text, insert)) return text;
   }
-  view.dispatch(view.state.replaceSelection(text), { userEvent: 'input.type', scrollIntoView: true });
+  view.dispatch(insert());
   return text;
 }
 
@@ -111,16 +116,20 @@ export function hideKeyboard(view) {
   return 'Keyboard hidden';
 }
 
-/** The keys-bar Tab: indents a selection, otherwise inserts one indent step
+/** The keys-bar Tab: accepts a suggestion or moves to the next snippet field;
+ * otherwise indents a selection, or inserts one indent step
  * (spaces up to the next tab stop, or a real tab — per the file's settings). */
 export function tabKey(view) {
   if (!view || view.state.readOnly) return null;
+  // Like a keyboard Tab: accept the suggestion / go to the next snippet field first.
+  if (completionStatus(view.state) === 'active' && acceptCompletion(view)) return 'Completed';
+  if (hasNextSnippetField(view.state) && nextSnippetField(view)) return 'Next field';
   const { state } = view;
   if (state.selection.ranges.some((r) => !r.empty)) return indent(view);
   const unit = state.facet(indentUnit);
-  if (unit === '\t') return typeText(view, '\t', { autoClose: false }) && 'Tab';
+  if (unit === '\t') return typeText(view, '\t') && 'Tab';
   const size = getIndentUnit(state);
   const head = state.selection.main.head;
   const col = head - state.doc.lineAt(head).from;
-  return typeText(view, ' '.repeat(size - (col % size)), { autoClose: false }) && 'Tab';
+  return typeText(view, ' '.repeat(size - (col % size))) && 'Tab';
 }

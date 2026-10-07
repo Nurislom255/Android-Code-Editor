@@ -10,7 +10,7 @@ build, and how we know it is done.
 | Phase | Goal | Size | Status |
 |---|---|---|---|
 | 0 | Real-device test loop (diagnostics) | Small | Not started |
-| 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | Not started |
+| 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Built; automated tests pass. Waiting for the on-phone check** (see "Phase 1 — result") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | Not started |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started |
@@ -82,7 +82,61 @@ shows the cause.
 
 ---
 
-## Phase 1 — Typing correctness
+## Phase 1 — result (what shipped, and what still needs the phone)
+
+Built on branch `claude/android-editor-v2-gestures-5gpnqo`. Unit tests: the
+recognizer, 99 table-driven semicolon cases, Emmet rules. E2E (desktop, Pixel 7
+and Galaxy Tab emulation): `tests/e2e/typing.spec.mjs`, new cases in
+`gestures.spec.mjs` and `keysbar.spec.mjs`.
+
+| Item | Shipped | Where |
+|---|---|---|
+| 1.1 | Angle from the fitted finger path (≤ 35° Normal), direction lock after 8 px, horizontal touches claimed (`preventDefault`) when the code can't scroll sideways, selection + scroll restored before every gesture action, long-press (≥ 400 ms rest) never a swipe, Strict / Normal / Loose presets, **test pad** in Settings that prints why a touch was or wasn't a swipe | `core/gestures.js`, `editor/gestureLayer.js`, `ui/settingsPanel.js` |
+| 1.2 | Keys-bar text goes through every `EditorView.inputHandler` (auto-close, `>` closes tags, `;` steps over); suggestions forced open ~110 ms after an IME composition edit if CodeMirror didn't open them; words from all open files | `editor/editActions.js` `typeText`, `editor/completions.js` |
+| 1.3 | Emmet (lazy-loaded chunk) for HTML and CSS; bare tag names (`div` → `<div></div>`) only at the start of a line or right after a tag, one-letter tags only on swipe right / Ctrl+Space (so prose isn't hijacked); linked tag rename, also through an empty name `<>`; path suggestions in `src`/`href`, `url()`, `@import`, `import`/`require`/`fetch`, `#include "…"`, Markdown links | `core/emmetRules.js`, `editor/emmet.js`, `editor/linkedTags.js`, `editor/completions.js` |
+| 1.4 | Pending `;` with every rule and exclusion listed below; Complete statement on the keys bar (`⏎;`), Ctrl+Shift+Enter and the gesture map; setting Settings → Typing | `core/semicolons.js`, `editor/semicolons.js` |
+| 1.5 | Keys use `touch-action: pan-x` (only the trackpad strip keeps `none`) | `src/styles.css` |
+
+Decisions taken while building (differences from the plan above):
+- **No flicker:** the pending `;` is added after a non-word character (space,
+  `=`, `(`, `"`…), so typing `int main(` never shows a `;` in between. It is
+  still re-checked (and removed) after every edit of its statement.
+- **Enter counts auto-closed brackets:** in `foo(a|);` Enter steps over `);`
+  (the statement is complete once the `)` is counted). With nothing typed yet
+  (`foo(|);`) or after a comma, Enter splits the brackets as usual.
+- `break` / `continue` / `return` alone + Enter add their `;`.
+- **Chains:** if the next line starts with `.`, `?.`, `->`, `<<`, `>>`, `&&`,
+  `||`, `??`, `?` or `:`, the `;` Enter just added on the line above is taken
+  back (method chains, `cout` continuation lines).
+- C/C++ globals get a `;` only with an initializer (`int count = 0`), not for
+  a bare `int count` (too often the start of a function); fields in a
+  class/struct always do.
+- **Tab accepts a suggestion** (keyboard and keys bar), which is how Emmet
+  expands, like VS Code.
+- Ctrl+Shift+Enter is also a global shortcut: on Android, CodeMirror
+  re-dispatches Enter **without modifiers**, so an editor-only binding never
+  fires with a hardware keyboard.
+- Gboard composition: implemented defensively without Phase 0 logs (the
+  fallback only acts when CodeMirror's own activation didn't open the list).
+
+Found while testing: in Android emulation, CodeMirror drops about 40 % of
+synthetic Enter/Backspace presses even in a plain `.txt` file (its Android
+key path waits for the keyboard's DOM change). Tests that depend on those
+keys therefore run on the desktop project only. Whether real keyboards are
+affected is one of the on-phone checks below.
+
+**Still to check on the owner's phone** (Phase 0 is not built yet, so the
+gesture test pad is the only on-device diagnostic for now):
+- [ ] 20 swipes right at 0–30° all autocomplete; the cursor never jumps.
+- [ ] Vertical scrolls and slow drags never trigger commands.
+- [ ] Typing `doc` with Gboard shows suggestions within ~150 ms.
+- [ ] Enter steps over the pending `;` with Gboard (and Backspace right after
+      it appears removes it).
+- [ ] The first keys row scrolls when dragged starting on a key.
+
+---
+
+## Phase 1 — Typing correctness (the plan)
 
 ### 1.1 Gestures misfire on slightly diagonal swipes (reported issue 3)
 
