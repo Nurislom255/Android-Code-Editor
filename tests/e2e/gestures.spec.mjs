@@ -1,0 +1,145 @@
+// Touch gestures on the code, driven with real touch events (CDP).
+import { test, expect } from '@playwright/test';
+import {
+  boot, newProject, openFile, editorText, setText, codePoint, swipe, pinch, twoFingerTap, completionOpen,
+} from './helpers.mjs';
+
+test.skip(({ hasTouch }) => !hasTouch, 'touch-only');
+
+async function jsFile(page, text, cursor = null) {
+  await boot(page);
+  await newProject(page, 'g', 'js');
+  await openFile(page, 'main.js');
+  await setText(page, text, cursor);
+}
+
+const right = async (page, fingers = 1) => {
+  const p = await codePoint(page, 0.25, 0.5);
+  await swipe(page, { from: p, to: { x: p.x + 160, y: p.y + 4 }, fingers });
+};
+const left = async (page, fingers = 1) => {
+  const p = await codePoint(page, 0.75, 0.5);
+  await swipe(page, { from: p, to: { x: p.x - 160, y: p.y - 4 }, fingers });
+};
+
+test('swipe right accepts the highlighted autocomplete suggestion', async ({ page }) => {
+  await jsFile(page, 'const documentTitle = 1;\ndocumentT');
+  await page.evaluate(() => window.__app.run('autocomplete')); // open the list like typing would
+  await expect(completionOpen(page)).toBeVisible();
+  await right(page);
+  await expect(completionOpen(page)).toHaveCount(0);
+  expect(await editorText(page)).toBe('const documentTitle = 1;\ndocumentTitle');
+  await expect(page.locator('#gesture-hint')).toHaveText('Completed');
+});
+
+test('swipe right with no list open shows suggestions; typing then swiping completes', async ({ page }) => {
+  await jsFile(page, 'let counterValue = 0;\ncou');
+  await right(page);
+  await expect(completionOpen(page)).toBeVisible();
+  await expect(page.locator('#gesture-hint')).toHaveText('Suggestions');
+  await page.waitForTimeout(120);
+  await right(page);
+  expect(await editorText(page)).toBe('let counterValue = 0;\ncounterValue');
+});
+
+test('swipe right expands a snippet and then jumps between its fields', async ({ page }) => {
+  await jsFile(page, 'fori');
+  await right(page); // open list
+  await expect(completionOpen(page)).toBeVisible();
+  await expect(page.locator('.cm-completionLabel', { hasText: /^fori$/ }).first()).toBeVisible();
+  await right(page);
+  const text = await editorText(page);
+  expect(text).toContain('for (let i = 0; i < array.length; i++) {');
+  // cursor sits on the first field "i"; swipe right → next field "array"
+  await right(page);
+  const sel = await page.evaluate(() => { const s = window.__app.ws.view.state; return s.sliceDoc(s.selection.main.from, s.selection.main.to); });
+  expect(sel).toBe('array');
+});
+
+test('swipe left closes the list, then deletes the previous word', async ({ page }) => {
+  await jsFile(page, 'let alpha = 1;\nconst beta = alp');
+  await page.evaluate(() => window.__app.run('autocomplete'));
+  await expect(completionOpen(page)).toBeVisible();
+  await left(page);
+  await expect(completionOpen(page)).toHaveCount(0);
+  expect(await editorText(page)).toBe('let alpha = 1;\nconst beta = alp');
+  await left(page);
+  expect(await editorText(page)).toBe('let alpha = 1;\nconst beta = ');
+  await expect(page.locator('#gesture-hint')).toHaveText('Deleted word');
+});
+
+test('two-finger swipes undo and redo', async ({ page }) => {
+  await jsFile(page, '');
+  await page.keyboard.type('hello');
+  await page.waitForTimeout(800); // separate undo group
+  await page.keyboard.type(' world');
+  expect(await editorText(page)).toBe('hello world');
+  await left(page, 2);
+  expect(await editorText(page)).toBe('hello');
+  await right(page, 2);
+  expect(await editorText(page)).toBe('hello world');
+});
+
+test('slow drags and vertical flicks do not trigger commands', async ({ page }) => {
+  await jsFile(page, 'let a = 1;\nlet b = 2');
+  const p = await codePoint(page, 0.2, 0.5);
+  await swipe(page, { from: p, to: { x: p.x + 160, y: p.y }, duration: 1200, steps: 12 });
+  await swipe(page, { from: p, to: { x: p.x + 10, y: p.y - 150 }, duration: 150 });
+  await expect(completionOpen(page)).toHaveCount(0);
+  expect(await editorText(page)).toBe('let a = 1;\nlet b = 2');
+});
+
+test('a horizontal flick that scrolls a long line is a scroll, not a command', async ({ page }) => {
+  const long = `const s = "${'x'.repeat(400)}";\nlet tail = 1;\n`;
+  await jsFile(page, long, long.length);
+  await page.evaluate(() => { const d = window.__app.ws.activeDoc; window.__app.ws.setWrap(d.id, false); });
+  await page.evaluate(() => { window.__app.ws.view.scrollDOM.scrollLeft = 0; });
+  const before = await editorText(page);
+  // finger moves left → content scrolls right (there is room to scroll)
+  await left(page);
+  await page.waitForTimeout(200);
+  const scrolled = await page.evaluate(() => window.__app.ws.view.scrollDOM.scrollLeft);
+  expect(scrolled).toBeGreaterThan(0);
+  expect(await editorText(page)).toBe(before);
+});
+
+test('pinch zooms the code font and remembers it', async ({ page }) => {
+  await jsFile(page, 'let a = 1;');
+  const before = await page.evaluate(() => window.__app.settings.fontSize);
+  await pinch(page, { center: await codePoint(page, 0.5, 0.5), startGap: 80, endGap: 160 });
+  const after = await page.evaluate(() => window.__app.settings.fontSize);
+  expect(after).toBeGreaterThan(before);
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('codeeditor:settings')).fontSize);
+  expect(stored).toBe(after);
+});
+
+test('two-finger tap opens the command palette', async ({ page }) => {
+  await jsFile(page, 'let a = 1;');
+  await twoFingerTap(page, await codePoint(page, 0.5, 0.5));
+  await expect(page.locator('.palette')).toBeVisible();
+});
+
+test('tap a line number to select the line', async ({ page }) => {
+  await jsFile(page, 'one\ntwo\nthree\n');
+  const num = page.locator('.cm-lineNumbers .cm-gutterElement', { hasText: /^2$/ });
+  await num.tap();
+  const sel = await page.evaluate(() => { const s = window.__app.ws.view.state; return s.sliceDoc(s.selection.main.from, s.selection.main.to); });
+  expect(sel).toBe('two\n');
+});
+
+test('gestures can be remapped in settings', async ({ page }) => {
+  await jsFile(page, 'abc');
+  await page.evaluate(() => window.__app.updateSettings({ gestureMap: { ...window.__app.settings.gestureMap, 'swipe-left-1': 'toggleComment' } }));
+  await left(page);
+  expect(await editorText(page)).toBe('// abc');
+});
+
+test('swiping the status bar switches tabs', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'tabs', 'web');
+  await openFile(page, 'style.css');
+  const bar = await page.locator('#statusbar').boundingBox();
+  const y = bar.y + bar.height / 2;
+  await swipe(page, { from: { x: bar.x + bar.width * 0.7, y }, to: { x: bar.x + bar.width * 0.2, y } });
+  await expect(page.locator('.tab.active .tab-name')).not.toHaveText('style.css');
+});

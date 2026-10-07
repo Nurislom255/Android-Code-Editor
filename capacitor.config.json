@@ -1,5 +1,8 @@
 {
   "appId": "com.example.codeeditor",
   "appName": "CodeEditor",
-  "webDir": "www"
+  "webDir": "docs",
+  "android": {
+    "allowMixedContent": false
+  }
 }

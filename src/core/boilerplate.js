@@ -69,3 +69,29 @@ document.addEventListener('DOMContentLoaded', () => {
 `,
   },
 ];
+
+// "JavaScript (console)" starter: shows console output, readline() and input().
+export const CONSOLE_STARTER = [
+  {
+    name: 'main.js',
+    content: `// main.js — press Run (▶) or Ctrl+Enter. Output appears in the console below.
+
+function greet(name) {
+  return \`Hello, \${name}!\`;
+}
+
+console.log(greet('world'));
+console.log({ numbers: [1, 2, 3], nested: { ok: true } });
+
+// readline() reads the next line from the console's "stdin" box (null at the end).
+const first = readline();
+if (first !== null) console.log('stdin said:', first);
+
+// input() asks interactively when the stdin box is empty. It returns a Promise:
+// const age = await input('How old are you? ');
+// console.log(\`In 10 years you'll be \${Number(age) + 10}.\`);
+
+// Swipe right on the code to autocomplete; try typing "fori" then swipe right.
+`,
+  },
+];

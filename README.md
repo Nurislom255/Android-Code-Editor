@@ -1,98 +1,155 @@
-# Android-Code-Editor
-This project makes writing code and learning web development easier for Android device users by providing features that are vital for a good code editor
-# CodeEditor Web — Baseline
+# Android Code Editor — v2
 
-A working baseline of the code editor from the original Android spec, rebuilt for the web
-so it can be wrapped into an APK with **Capacitor**.
+An offline-first code editor for Android phones and tablets, built as a web app
+(CodeMirror 6) and wrapped into an APK with Capacitor. v2 follows the
+[*CodeEditor Android — Project Specification & Build Plan (v2)*](SPEC.md), mapping each
+native-Android decision to its web equivalent, and adds **touch gestures** so
+coding on a phone feels natural.
 
-## Run it right now
+Run it: build once (`npm run build`), then `npm run serve` and open
+<http://localhost:5173>. It also works as an installable PWA from GitHub Pages
+(`docs/` is the published build) and fully offline after the first visit.
 
-You can't just double-click `www/index.html` — opening a folder needs the File System
-Access API, which browsers restrict to secure contexts (`http://`, not `file://`). Serve it
-locally instead:
+---
 
-```bash
-cd www
-npx serve .
-# or: python3 -m http.server 8000
-```
+## Touch gestures (new in v2)
 
-Then open the printed `localhost` URL in **desktop Chrome or Edge** (the File System Access
-API isn't supported in Safari or Firefox yet — the app still works there, just falls back to
-"Open File" instead of "Open Folder").
+Gestures act on the code itself. All of them can be remapped or switched off
+in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 
-## What's actually working (not stubbed)
+| Gesture | Default action |
+|---|---|
+| **Swipe right** (1 finger) | **Autocomplete**: accept the highlighted suggestion → else jump to the next snippet field → else open the suggestion list |
+| **Swipe left** (1 finger) | Close the suggestion list → else previous snippet field → else delete the word before the cursor (like Gboard's swipe on backspace) |
+| Swipe left / right (2 fingers) | Undo / redo |
+| Swipe down (2 fingers) | Hide the keyboard |
+| Tap (2 fingers) | Command palette |
+| Pinch | Zoom the code font (saved) |
+| Tap / drag the line numbers | Select one / several lines |
+| Keys bar: **swipe up** on a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …) |
+| Keys bar: drag the **trackpad** strip | Move the cursor (with ⇧ armed: select) — works with any keyboard app |
+| Keys bar: hold an arrow | Key repeat |
+| Status bar: swipe left / right | Next / previous tab |
+| Long-press a tab, file or folder | Context menu (rename, delete, split, …) |
 
-- **Open a real folder** on your computer, browse its file tree, click a file to open it in a tab
-- **Create File / Create Folder / New Project** — New Project scaffolds `index.html` + `style.css` + `main.js` + `app.js`, already linked, into a chosen subfolder (needs a real opened folder — see `requireRootHandle` in `main.js`)
-- **Multi-tab editing** with per-tab undo history, unsaved-change dot, a properly touch-sized close button
-- **Real syntax highlighting** for JS/HTML/CSS (via CodeMirror 6 — parses on every keystroke, doesn't just color-match with regex)
-- **Save / Save As / Save All** — Ctrl+S saves the active tab, Ctrl+Shift+S saves all dirty tabs, the Save ▾ menu has both plus Save As
-- **Run JS** — executes in an isolated Web Worker with a 5-second timeout, captures `console.log`/`error`/`warn` output into the console panel (the "stuck on Running..." bug is fixed — see `run.js`'s comment for the root cause)
-- **Live HTML/CSS/JS preview** — renders the open `.html` tab (pulling CSS/JS from other open tabs in the same folder) into a sandboxed iframe
-- **Resizable console/preview panel** — drag the handle above it; height persists across sessions
-- **Tablet coding-keys bar** — symbol row + navigation/action row, auto-shows when the on-screen keyboard is up and auto-hides when a hardware keyboard seems connected (override in Settings: Auto/Always/Never). See `keysBar.js`'s top comment for why it does NOT try to simulate Ctrl-combos via a fake modifier press — that approach is fundamentally unreliable on mobile IMEs, so common Ctrl actions (Undo, Redo, Save, Select All) are their own direct buttons instead.
-- **Settings** — theme, font size, tab width, panel height, keys-bar mode — all persisted across sessions
+How false triggers are avoided (see `src/core/gestures.js`):
 
-## What's deliberately NOT here yet
+- A swipe must be **short, fast and straight**: ≥ 56 px (configurable), ≤ 450 ms,
+  ≥ 0.25 px/ms, and mostly along one axis. Slow drags stay scrolling/reading.
+- Touches that start within 20 px of the screen edge belong to Android's own
+  back gesture and are ignored.
+- **"Did it scroll?" rule**: with soft-wrap off, a horizontal flick is also how
+  you scroll a long line. If the flick actually scrolled the code, it was a
+  scroll; only a swipe that couldn't scroll anything becomes a command. With
+  wrap on (the phone default) nothing scrolls sideways, so swipes always work.
+- Two-finger touches are claimed by the editor (no page zoom/scroll) so pinch
+  and two-finger swipes are reliable. Pinch vs. two-finger swipe is decided by
+  the change in finger spread (≥ 14 % *and* ≥ 28 px).
 
-- **Git** — you said skip it for now. `fileSystem.js`'s provider pattern means adding a
-  `git-integration` module later won't require touching the editor or UI code.
-- **Python execution** — would mean pulling in Pyodide (WASM CPython, ~10-30MB). Left out of
-  the baseline so the first load stays light; add when you're ready for that tradeoff.
-- **CapacitorFSProvider** — there's a `TODO` for it in `fileSystem.js`. Until then, the app
-  runs in "Open File" fallback mode inside a Capacitor/WebView shell (still works, just
-  without live folder access — save triggers a download instead of a direct disk write).
-  See `CAPACITOR_SETUP.md` for the exact commands to wrap this with Capacitor yourself.
-- **Keys bar can visually overlap the editor/console in some layouts** — it's `position: fixed`
-  and doesn't yet reserve space by resizing the rest of the layout when it appears. Minor, but
-  worth fixing in a focused pass once you're testing on a real device — the fix is having it
-  toggle a class that adds matching `padding-bottom` to `#body`.
+---
+
+## What's in v2 (by spec phase)
+
+**Phase 1 — editing on a phone**
+- Projects in the app's private storage (works everywhere, offline), real
+  folders on desktop Chrome/Edge, and device paths in the Android build
+  (`ProjectFs` interface, spec §4.2). Import a folder or `.zip`, export `.zip`.
+- Lazy file tree that hides `.git`, `node_modules`, `build` by default.
+- Soft wrap per file, with wrapped rows indented under their line.
+- Coding-keys bar: per-language symbol rows (editable), Tab, arrows with
+  repeat, trackpad, Shift/Ctrl/Alt (one-shot, double-tap to lock), undo/redo,
+  hide keyboard, line operations, expand/shrink selection.
+- Auto-close brackets, auto-indent, line operations, undo grouping.
+- Highlighting for ~30 languages (incremental Lezer parsers for JS/TS/JSX,
+  HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for
+  Kotlin, Go, Rust, Swift, PHP, Ruby, Lua, Shell, YAML, SQL, …).
+- Find & replace (regex, case, whole word), hardware-keyboard shortcuts
+  (press **F1** or open *Keyboard shortcuts* in the palette).
+- Save keeps **encoding, BOM, line endings and final newline** exactly;
+  invalid UTF-8 opens read-only; huge/minified files degrade instead of freezing.
+- **Unsaved-buffer recovery**: dirty buffers are mirrored to IndexedDB ~1.5 s
+  after typing stops (and immediately when the app goes to the background), so
+  they come back after Android kills the app. Open tabs are restored too.
+- Read-only lock (also stops the keyboard popping up), pinch-to-zoom, settings.
+
+**Phase 2 — real editor behaviour**
+- Syntax-error underlines from the parse tree + a Problems list, bracket
+  matching, folding, **expand/shrink selection** (word → expression → block).
+- Outline panel, breadcrumbs, sticky scroll, fast-scroll thumb.
+- Quick open (fuzzy), command palette, go to line / symbol, back/forward history.
+- Project-wide search (plain/regex/case/whole word) respecting `.gitignore`.
+- Snippets with tab stops, built-in per language + your own (JSON in Settings).
+- **Git** (isomorphic-git): init, status, diff, stage/unstage/discard, commit,
+  branches, log, push/pull/clone; gutter markers; tokens stored encrypted.
+- Local history: a snapshot per save, kept N days, compare/restore.
+- External change detection on resume (reload clean files; conflict bar for
+  dirty ones; never silently overwrite on save).
+- `.editorconfig` support; indentation auto-detected otherwise.
+- Adaptive layout (phone drawer / tablet sidebar), split editor (same file in
+  both panes stays in sync), mouse right-click menu.
+
+**Phase 3 — running code**
+- Run JavaScript in a Web Worker: streamed console output, Stop button and time
+  limit (a `while(true){}` can always be stopped), `readline()` from a stdin
+  box and interactive `await input()`, clickable `file:line` in errors.
+- Live HTML/CSS/JS preview that resolves real paths: `<link>`, `<script src>`,
+  ES-module imports, images, `url()` in CSS and `fetch('data.json')` — using
+  unsaved editor content; console output from the page goes to the console.
+- Markdown preview, Prettier formatting (JS/TS/CSS/HTML/JSON/Markdown/YAML).
+
+## Not included (honest list)
+
+| Spec item | Status |
+|---|---|
+| Native Kotlin editor view / InputConnection / tree-sitter via NDK | Replaced by their web equivalents: CodeMirror 6's contenteditable input and Lezer incremental parsers |
+| Python execution (Chaquopy) | Not in the web build; it would need a bundled interpreter (Pyodide, 10+ MB) |
+| Termux bridge, LSP-lite autocomplete | Not possible from a web page without a native plugin |
+| Push/pull in a plain browser | Works, but GitHub's git servers don't send CORS headers, so requests go through the proxy configured in Settings → Git |
+| Device folders (Option B, all-files access) | `CapacitorProjectFs` is implemented and unit-tested against a fake plugin, **not yet run on a real device** — see `CAPACITOR_SETUP.md` |
+| Haptics in the APK | `navigator.vibrate` needs the `VIBRATE` permission in the Android manifest |
+| Real-device keyboard matrix (Gboard, Samsung, SwiftKey) | Tested in emulated Chromium only; real keyboards differ — please test on your phone |
+
+---
 
 ## Project structure
 
+The spec's layering (§5, §7), as web modules:
+
 ```
-codeeditor-web/
-├── src/               ← source you read/edit
-│   ├── main.js          DOM wiring — toolbar, tree, tabs, panels, dropdowns, resize handle
-│   ├── editor.js          CodeMirror setup + multi-tab manager + command wrappers for the keys bar
-│   ├── fileSystem.js       FileSystemProvider abstraction (the key seam for Capacitor later)
-│   ├── keysBar.js           Tablet coding-keys bar (symbols + nav/action buttons, auto-hide heuristic)
-│   ├── boilerplate.js        "New Project" starter file templates
-│   ├── run.js                  Worker-sandboxed JS execution
-│   ├── preview.js                iframe-based live preview
-│   ├── settings.js                 localStorage-backed settings
-│   ├── index.html
-│   └── styles.css
-├── www/                ← BUILD OUTPUT. This is what Capacitor wraps.
-│   ├── index.html   (copy of src/index.html)
-│   ├── bundle.js    (esbuild-bundled src/*.js, offline — no CDN dependency at runtime)
-│   └── styles.css   (copy of src/styles.css)
-├── capacitor.config.json   ← ready to use, see CAPACITOR_SETUP.md
-├── CAPACITOR_SETUP.md      ← exact commands to wrap this as an APK yourself
-└── package.json
+src/
+  core/      pure logic, no DOM — runs in Node unit tests (spec: editor-core)
+             gestures.js (recognizer) · textFormat.js (BOM/EOL/encoding) ·
+             editorconfig.js · lineDiff.js (Myers) · fuzzy.js · search.js ·
+             ignore.js · navHistory.js · settings.js · inspect.js · linkify.js
+  storage/   ProjectFs implementations (File System Access / OPFS handles,
+             Capacitor), IndexedDB, recovery store, local history, secrets
+  editor/    CodeMirror setup, languages, gesture layer, outline, sticky
+             scroll, expand selection, syntax lint, git gutter, snippets
+  app/       workspace (documents, panes, tabs, save, recovery), composition
+             root (app.js), chrome (tabs/status bar), preview controller
+  ui/        layout, file tree, palette, panels, keys bar, dialogs
+  run/       JS runner, preview builder, Prettier client
+  git/       isomorphic-git service + ProjectFs → fs adapter
+  workers/   run.worker.js (JS sandbox), format.worker.js (Prettier)
+docs/        BUILD OUTPUT (GitHub Pages + Capacitor webDir) — don't edit
+tests/unit   node:test — core logic, git against the real git CLI, …
+tests/e2e    Playwright — desktop, phone (touch) and tablet emulation
 ```
 
-Rebuild `www/bundle.js` after editing anything in `src/`:
+## Development
 
 ```bash
-npx esbuild src/main.js --bundle --minify --outfile=www/bundle.js --format=iife --target=es2020
-cp src/index.html src/styles.css www/
+npm install
+npm run build        # → docs/   (npm run build:dev for readable output + source maps)
+npm run serve        # http://localhost:5173  (must be http(s): modules, workers and the
+                     #  service worker don't work from file://)
+npm test             # unit tests (Node)
+npm run test:e2e     # end-to-end tests (Playwright, Chromium)
+npm run check        # all of the above
 ```
 
-(Worth turning that into an npm script — `"build": "esbuild ..."` in `package.json` — once
-you're tired of typing it. That's also usually the point where projects move to a proper
-bundler config file instead of a one-line CLI command; not necessary yet.)
+The e2e tests drive real touch input through the Chrome DevTools Protocol with
+explicit timestamps, so swipe speed in tests is exact; they also run git
+push/pull/clone against a local `git http-backend` server.
 
-## Next step: wrapping with Capacitor
-
-See **`CAPACITOR_SETUP.md`** for the exact commands, in order, including the one config edit
-(your `appId`) you need to make before running anything.
-
-## Suggested order for going deeper together
-
-1. **File tree UX** — currently a flat expand/collapse; add drag handling for touch, rename/delete
-2. **CapacitorFSProvider** — wire real Android file access once you're ready to test on-device
-3. **Preview accuracy** — resolve real `<link>`/`<script src>` paths against the open folder instead of "any open tab in the same directory"
-4. **tree-sitter-wasm** (optional) — CodeMirror 6's Lezer parser already gives you real syntax trees; only reach for tree-sitter-wasm specifically if you want grammars CodeMirror doesn't ship (e.g. a language CodeMirror doesn't support yet)
-5. **Local git** (isomorphic-git, no remote) — when you're ready to unpause this
+To wrap as an APK, see **[CAPACITOR_SETUP.md](CAPACITOR_SETUP.md)**.
