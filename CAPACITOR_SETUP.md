@@ -1,25 +1,23 @@
-# Wrapping this app with Capacitor
+# Wrapping CodeEditor v2 as an Android app (Capacitor)
 
-`capacitor.config.json` is already in the project root, pointing `webDir` at `www/` — that's
-the folder `npx esbuild ...` builds into, so Capacitor will always wrap whatever you last built.
+`capacitor.config.json` points `webDir` at `docs/` — the folder `npm run build`
+writes (the same folder GitHub Pages serves), so the APK always wraps your
+latest build.
 
 ## 1. Pick a real app ID first
 
-Open `capacitor.config.json` and change `appId` from `com.example.codeeditor` to your own
-reverse-domain identifier — e.g. `com.yourname.codeeditor`. This gets baked into the native
-Android project at creation time in step 3; changing it afterward means editing multiple native
-files by hand, so get it right now rather than later.
+Change `appId` in `capacitor.config.json` from `com.example.codeeditor` to your
+own reverse-domain id (e.g. `com.yourname.codeeditor`). It is baked into the
+native project when you add the platform; changing it later means editing
+several native files by hand.
 
-## 2. Install Capacitor
-
-From the project root:
+## 2. Install Capacitor and the filesystem plugin
 
 ```bash
-npm install @capacitor/core @capacitor/cli @capacitor/android
+npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/filesystem
 ```
 
-Skip `npx cap init` — that command *creates* a `capacitor.config.json`, and you already have
-one. Running it again would ask the same questions and likely overwrite your `appId` edit.
+Skip `npx cap init` — the config file already exists.
 
 ## 3. Add the Android platform
 
@@ -27,38 +25,57 @@ one. Running it again would ask the same questions and likely overwrite your `ap
 npx cap add android
 ```
 
-This generates a full Android Studio project in `./android/` — gradle files, manifest, the
-works. You now own that project the same way you'd own one created directly in Android Studio.
+## 4. Permissions (android/app/src/main/AndroidManifest.xml)
 
-## 4. Build the web app, then sync it into the native project
+Inside `<manifest>`:
 
-Every time you change anything in `src/`, rebuild and re-sync before testing on-device:
+```xml
+<!-- Spec §4.2 Option B: real project folders on shared storage -->
+<uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+<!-- keys-bar / gesture haptics (navigator.vibrate) -->
+<uses-permission android:name="android.permission.VIBRATE" />
+<!-- git push / pull / clone -->
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+`MANAGE_EXTERNAL_STORAGE` is granted by the user in Android settings
+(*Settings → Apps → CodeEditor → All files access*), not by a dialog. Without
+it, "Device folder" can't read shared storage; in-app projects (the default)
+need no permission at all. Note: the Play Store restricts this permission
+(spec §2 "Before a public release").
+
+## 5. Build, sync, run
 
 ```bash
-npx esbuild src/main.js --bundle --minify --outfile=www/bundle.js --format=iife --target=es2020
-cp src/index.html src/styles.css www/
+npm run build
 npx cap sync
+npx cap open android      # then Run in Android Studio, or Build → Generate Signed APK
 ```
 
-`cap sync` copies `www/` into the Android project and updates native dependencies. Worth
-turning the first two lines into an npm script (`npm run build`) so this becomes one command.
+Repeat `npm run build && npx cap sync` after every change.
 
-## 5. Open in Android Studio and run
+## How the app behaves inside the APK
 
-```bash
-npx cap open android
-```
+- **Storage**: in-app projects live in the WebView's private storage (OPFS) and
+  work immediately. With the filesystem plugin installed, the project picker
+  also shows **Device folder**, which opens a real path such as
+  `Documents/Projects/site` (`src/storage/capacitorFs.js`, spec Option B).
+  This path is unit-tested against a fake plugin but has **not yet been tested
+  on a real device** — try it on a test folder first.
+- The service worker is not registered inside Capacitor (the files are already
+  local).
+- **Git push/pull** from the WebView still needs a CORS proxy (Settings → Git),
+  because the requests are made by web code. A native HTTP plugin could remove
+  that requirement later.
+- **Keyboard**: Capacitor's default `windowSoftInputMode="adjustResize"` shrinks
+  the WebView when the keyboard opens, so the coding-keys bar sits right above
+  it.
 
-From there it's a normal Android Studio project — pick a device/emulator and hit Run, or
-Build > Generate Signed Bundle/APK when you want a real installable file.
+## Test on a real device early
 
-## What still needs work after this
-
-- **File System Access API doesn't exist in Android's WebView.** Until `CapacitorFSProvider`
-  is written (see the `TODO` in `src/fileSystem.js`), the app will run in "Open File" fallback
-  mode inside the wrapped app — usable, but no live folder access or direct disk saves. Wiring
-  in `@capacitor/filesystem` is a good focused next session.
-- **Test on a real device early.** The keys-bar visibility heuristic (`src/keysBar.js`) and the
-  visual-viewport-based layout behavior are the two things most likely to behave differently on
-  a real Android WebView than in desktop Chrome — worth checking before you build much more on
-  top of them.
+Things emulation can't fully check: each keyboard app's composing behaviour
+(Gboard, Samsung Keyboard, SwiftKey), swipe-typing next to the gesture layer,
+Android's edge back-gesture, and the keyboard-visible heuristic of the keys bar
+(Settings → Coding keys bar → Always/Never overrides it).

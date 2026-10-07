@@ -1,131 +1,126 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <!-- interactive-widget=resizes-content: when the on-screen keyboard opens,
+       Android Chrome shrinks the layout (not just the visual viewport), so the
+       coding-keys bar sits right above the keyboard instead of behind it. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="theme-color" content="#14161a" />
+  <meta name="color-scheme" content="dark light" />
+  <meta name="description" content="Offline-first code editor for Android phones and tablets." />
   <title>CodeEditor</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Apply the saved theme before first paint, so dark-mode users never see
+    // a white flash while the app script loads.
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('codeeditor:settings') || '{}');
+        var t = s.theme || 'system';
+        if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.className = 'theme-' + t;
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
-  <div id="app">
-
-    <header id="toolbar">
-      <div class="toolbar-group">
-        <button id="btn-open-folder" class="btn" title="Open a folder">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6z"/></svg>
-          Open Folder
-        </button>
-        <button id="btn-open-file" class="btn btn-ghost" title="Open individual file(s)">Open File</button>
-        <div class="dropdown">
-          <button id="btn-new-menu" class="btn btn-ghost" title="Create new">+ New</button>
-          <div id="new-menu" class="dropdown-menu hidden">
-            <button id="btn-new-file" class="dropdown-item">New File</button>
-            <button id="btn-new-folder" class="dropdown-item">New Folder</button>
-            <button id="btn-new-project" class="dropdown-item">New Project (boilerplate)</button>
-          </div>
-        </div>
-      </div>
-      <div class="toolbar-group toolbar-center">
-        <span id="project-name" class="project-name">No folder open</span>
-      </div>
-      <div class="toolbar-group">
-        <div class="dropdown">
-          <div class="btn-split">
-            <button id="btn-save" class="btn btn-ghost btn-split-main" title="Save (Ctrl+S)">Save</button>
-            <button id="btn-save-menu" class="btn btn-ghost btn-split-caret" title="More save options">&#9662;</button>
-          </div>
-          <div id="save-menu" class="dropdown-menu hidden">
-            <button id="btn-save-as" class="dropdown-item">Save As&hellip;</button>
-            <button id="btn-save-all" class="dropdown-item">Save All (Ctrl+Shift+S)</button>
-          </div>
-        </div>
-        <button id="btn-run" class="btn btn-accent" title="Run current JS file">
-          <svg viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M8 5v14l11-7z"/></svg>
-          Run
-        </button>
-        <button id="btn-split" class="btn btn-icon" title="Split editor into two panes">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M4 4h7v16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm9 0h7a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-7V4z"/></svg>
-        </button>
-        <button id="btn-settings" class="btn btn-icon" title="Settings">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19.14 12.94a7.14 7.14 0 0 0 .06-.94 7.14 7.14 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.63-.94L14.4 2.3a.5.5 0 0 0-.5-.4h-3.8a.5.5 0 0 0-.5.4l-.36 2.54a7.3 7.3 0 0 0-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.36a.5.5 0 0 0 .12.64l2.03 1.58a7.14 7.14 0 0 0 0 1.88L2.82 14a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .5.4h3.8a.5.5 0 0 0 .5-.4l.36-2.54a7.3 7.3 0 0 0 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg>
+  <div id="app" class="layout-compact">
+    <header id="titlebar" role="banner">
+      <button id="btn-sidebar" class="icon-btn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" data-icon="menu"></button>
+      <button id="btn-project" class="project-btn" title="Switch project">
+        <span id="project-name">No project</span><span class="caret" data-icon="chevronDown"></span>
+      </button>
+      <div class="spacer"></div>
+      <div class="title-actions">
+        <button id="btn-back" class="icon-btn wide-only" aria-label="Go back" title="Go back (Ctrl+Alt+-)" data-icon="back"></button>
+        <button id="btn-forward" class="icon-btn wide-only" aria-label="Go forward" title="Go forward (Ctrl+Shift+-)" data-icon="forward"></button>
+        <button id="btn-undo" class="icon-btn" aria-label="Undo" title="Undo (Ctrl+Z)" data-icon="undo"></button>
+        <button id="btn-redo" class="icon-btn" aria-label="Redo" title="Redo (Ctrl+Y)" data-icon="redo"></button>
+        <button id="btn-save" class="icon-btn" aria-label="Save" title="Save (Ctrl+S)" data-icon="save"></button>
+        <button id="btn-split" class="icon-btn wide-only" aria-label="Split editor" title="Split editor (Ctrl+\)" data-icon="split"></button>
+        <button id="btn-palette" class="icon-btn" aria-label="Command palette" title="Command palette (Ctrl+Shift+P)" data-icon="command"></button>
+        <button id="btn-run" class="run-btn" aria-label="Run" title="Run JS / preview HTML or Markdown (Ctrl+Enter)">
+          <span data-icon="play"></span><span class="run-label">Run</span>
         </button>
       </div>
     </header>
 
-    <div id="body">
-      <aside id="sidebar">
-        <div id="file-tree" class="file-tree">
-          <div class="empty-state">
-            <p>No folder open yet.</p>
-            <button id="btn-open-folder-empty" class="btn btn-accent">Open Folder</button>
-          </div>
-        </div>
-      </aside>
+    <div id="workbench">
+      <nav id="activitybar" aria-label="Side panels">
+        <button class="activity" data-panel="files" aria-label="Files" title="Files" data-icon="files"></button>
+        <button class="activity" data-panel="search" aria-label="Search" title="Search in project (Ctrl+Shift+F)" data-icon="search"></button>
+        <button class="activity" data-panel="outline" aria-label="Outline" title="Outline" data-icon="outline"></button>
+        <button class="activity" data-panel="git" aria-label="Source control" title="Source control (git)" data-icon="git"></button>
+        <button class="activity" data-panel="history" aria-label="Local history" title="Local history" data-icon="history"></button>
+        <div class="spacer"></div>
+        <button class="activity" data-panel="settings" aria-label="Settings" title="Settings" data-icon="settings"></button>
+      </nav>
 
-      <main id="main-panel">
-        <div id="pane-left" class="editor-pane active-pane" data-pane="left">
-          <div id="tab-bar-left" class="tab-bar"></div>
-          <div id="editor-mount-left" class="editor-mount"></div>
-        </div>
-        <div id="pane-divider" class="pane-divider hidden"></div>
-        <div id="pane-right" class="editor-pane hidden" data-pane="right">
-          <div id="tab-bar-right" class="tab-bar"></div>
-          <div id="editor-mount-right" class="editor-mount"></div>
-        </div>
+      <aside id="sidebar" aria-label="Sidebar">
+        <div class="sidebar-tabs" role="tablist"></div>
+        <section class="side-panel" data-panel="files"></section>
+        <section class="side-panel" data-panel="search"></section>
+        <section class="side-panel" data-panel="outline"></section>
+        <section class="side-panel" data-panel="git"></section>
+        <section class="side-panel" data-panel="history"></section>
+        <section class="side-panel" data-panel="settings"></section>
+      </aside>
+      <div id="sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
+      <div id="scrim"></div>
+
+      <main id="editor-area">
+        <section class="pane" id="pane-0" data-pane="0">
+          <div class="tab-bar" role="tablist"></div>
+          <div class="crumbs"></div>
+          <div class="conflict-bar hidden"></div>
+          <div class="editor-host"></div>
+          <div class="pane-empty"></div>
+        </section>
+        <div id="pane-divider" class="pane-divider hidden" role="separator" aria-label="Resize panes"></div>
+        <section class="pane hidden" id="pane-1" data-pane="1">
+          <div class="tab-bar" role="tablist"></div>
+          <div class="crumbs"></div>
+          <div class="conflict-bar hidden"></div>
+          <div class="editor-host"></div>
+          <div class="pane-empty"></div>
+        </section>
+        <section id="preview-side" class="hidden" aria-label="Preview"></section>
       </main>
     </div>
 
-    <section id="bottom-panel" class="bottom-panel">
-      <div id="panel-resize-handle" class="panel-resize-handle" title="Drag to resize"><span></span></div>
-      <div class="bottom-panel-tabs">
-        <button id="tab-console" class="panel-tab active">Console</button>
-        <button id="tab-preview" class="panel-tab">Preview</button>
-        <button id="btn-collapse-panel" class="btn-collapse" title="Collapse panel">&times;</button>
+    <section id="bottom-panel" class="collapsed" aria-label="Console and preview">
+      <div id="panel-resizer" role="separator" aria-label="Resize panel"><span></span></div>
+      <div class="panel-head">
+        <div class="panel-tabs" role="tablist">
+          <button class="panel-tab active" data-tab="console" role="tab">Console</button>
+          <button class="panel-tab" data-tab="preview" role="tab">Preview</button>
+          <button class="panel-tab" data-tab="problems" role="tab">Problems <span id="problems-count" class="badge hidden">0</span></button>
+        </div>
+        <div class="spacer"></div>
+        <div class="panel-actions"></div>
       </div>
-      <div id="console-output" class="console-output"></div>
-      <iframe id="preview-frame" class="preview-frame hidden" sandbox="allow-scripts"></iframe>
+      <div class="panel-body">
+        <div id="console-view" class="panel-view" data-tab="console"></div>
+        <div id="preview-view" class="panel-view hidden" data-tab="preview"></div>
+        <div id="problems-view" class="panel-view hidden" data-tab="problems"></div>
+      </div>
     </section>
 
+    <footer id="statusbar" aria-label="Status bar"></footer>
+    <div id="keys-bar" class="hidden" aria-label="Coding keys"></div>
   </div>
 
-  <!-- Settings drawer -->
-  <div id="settings-drawer" class="settings-drawer hidden">
-    <div class="settings-header">
-      <h2>Settings</h2>
-      <button id="btn-close-settings" class="btn-collapse">&times;</button>
-    </div>
-    <label class="setting-row">
-      <span>Theme</span>
-      <select id="setting-theme">
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-      </select>
-    </label>
-    <label class="setting-row">
-      <span>Font size</span>
-      <input id="setting-fontsize" type="number" min="10" max="28" step="1" />
-    </label>
-    <label class="setting-row">
-      <span>Tab width</span>
-      <input id="setting-tabwidth" type="number" min="1" max="8" step="1" />
-    </label>
-    <label class="setting-row">
-      <span>Coding keys bar</span>
-      <select id="setting-keysbar">
-        <option value="auto">Auto</option>
-        <option value="always">Always on</option>
-        <option value="never">Never</option>
-      </select>
-    </label>
-    <p class="settings-note">"Auto" shows the symbol bar when the on-screen keyboard is up, and hides it when a hardware/Bluetooth keyboard seems to be in use. If it guesses wrong, force it with Always/Never.</p>
-  </div>
+  <div id="overlay-root"></div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="gesture-hint" aria-hidden="true"></div>
+  <input type="file" id="file-input" multiple hidden />
+  <input type="file" id="zip-input" accept=".zip,application/zip" hidden />
+  <input type="file" id="folder-input" webkitdirectory multiple hidden />
 
-  <!-- Tablet coding-keys bar — see keysBar.js. Fixed-position, so its
-       location in the DOM doesn't matter for layout. -->
-  <div id="keys-bar" class="keys-bar hidden"></div>
-
-  <input type="file" id="hidden-file-input" multiple style="display:none" />
-
-  <script src="bundle.js"></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>

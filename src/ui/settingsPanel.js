@@ -1,0 +1,129 @@
+// ui/settingsPanel.js — every setting, applied live and saved immediately.
+
+import { h } from './dom.js';
+import { GESTURES, GESTURE_ACTIONS, DEFAULT_GESTURE_MAP, DEFAULTS } from '../core/settings.js';
+import { DEFAULT_LAYOUTS } from '../core/keysLayout.js';
+import { confirm } from './overlays.js';
+
+const LAYOUT_NAMES = { js: 'JavaScript / TypeScript', html: 'HTML / XML', css: 'CSS', python: 'Python', clike: 'C / C++ / Java / Kotlin', markdown: 'Markdown', json: 'JSON', plain: 'Other files' };
+
+export class SettingsPanel {
+  /**
+   * @param {HTMLElement} el
+   * @param {{get:()=>object, set:(patch:object)=>void, extras:{showShortcuts, showGestures, storageInfo:()=>Promise<string>, version:string}}} deps
+   */
+  constructor(el, deps) {
+    this.el = el;
+    this.deps = deps;
+    this.body = h('div.panel-scroll.settings');
+    el.append(h('div.panel-header', h('span.title', 'Settings')), this.body);
+  }
+
+  render() {
+    const s = this.deps.get();
+    const set = (patch) => this.deps.set(patch);
+    const b = this.body;
+    b.textContent = '';
+
+    const select = (key, options, label, desc) => {
+      const sel = h('select.select', { 'aria-label': label, onchange: (e) => set({ [key]: e.target.value }) },
+        Object.entries(options).map(([v, t]) => h('option', { value: v, selected: s[key] === v }, t)));
+      return row(label, desc, sel);
+    };
+    const num = (key, label, desc, min, max, step = 1) => {
+      const input = h('input.input', { type: 'number', min, max, step, value: s[key], 'aria-label': label,
+        onchange: (e) => set({ [key]: Number(e.target.value) }) });
+      return row(label, desc, input);
+    };
+    const toggle = (key, label, desc) => {
+      const input = h('input', { type: 'checkbox', role: 'switch', 'aria-label': label, checked: s[key], onchange: (e) => set({ [key]: e.target.checked }) });
+      return row(label, desc, h('label.switch', input, h('span')));
+    };
+    const text = (key, label, desc, placeholder = '') => {
+      const input = h('input.input', { type: 'text', value: s[key], placeholder, 'aria-label': label, spellcheck: 'false', autocapitalize: 'off',
+        onchange: (e) => set({ [key]: e.target.value }) });
+      return h('div.setting.stacked', h('div.s-text', h('div.s-label', label), desc ? h('div.s-desc', desc) : null), input);
+    };
+
+    b.append(
+      h('h4', 'Appearance'),
+      select('theme', { system: 'Follow system', dark: 'Dark', light: 'Light' }, 'Theme'),
+      num('fontSize', 'Font size', 'Pinch the code with two fingers to change it quickly.', 8, 40),
+
+      h('h4', 'Editor'),
+      num('tabWidth', 'Indent size', 'Used when neither .editorconfig nor the file itself says otherwise.', 1, 8),
+      toggle('insertSpaces', 'Indent with spaces'),
+      select('wrapDefault', { auto: 'Auto (on for narrow screens)', on: 'On', off: 'Off' }, 'Soft wrap for new tabs', 'Toggle per file from the status bar.'),
+      toggle('lineNumbers', 'Line numbers', 'Tap a number to select the line; drag down the numbers to select several.'),
+      toggle('autoCloseBrackets', 'Auto-close brackets and quotes'),
+      toggle('stickyScroll', 'Sticky scroll', 'Keep the enclosing function/class header visible at the top.'),
+      toggle('fastScroll', 'Fast-scroll thumb', 'A draggable handle on long files (touch screens).'),
+      toggle('formatOnSave', 'Format on save', 'Runs Prettier for JS/TS/CSS/HTML/JSON/Markdown/YAML.'),
+
+      h('h4', 'Saving'),
+      select('autosave', { off: 'Off', delay: 'After a pause in typing', blur: 'When leaving the app' }, 'Autosave', 'Unsaved work is always mirrored for crash recovery, whatever you choose here.'),
+      num('autosaveDelay', 'Autosave delay (ms)', null, 300, 60000, 100),
+
+      h('h4', 'Touch & gestures'),
+      toggle('gesturesEnabled', 'Gestures on the code', 'Swipe right to autocomplete, and more — see the list below.'),
+      toggle('gestureHints', 'Show a hint when a gesture runs'),
+      num('swipeDistance', 'Swipe distance (px)', 'How far a finger must travel to count as a swipe. Raise it if gestures trigger by accident.', 30, 160, 2),
+      h('div.gesture-table', Object.entries(GESTURES).flatMap(([key, label]) => [
+        h('span.g-name', label),
+        h('select.select', { 'aria-label': label, onchange: (e) => set({ gestureMap: { ...this.deps.get().gestureMap, [key]: e.target.value } }) },
+          Object.entries(GESTURE_ACTIONS).map(([v, t]) => h('option', { value: v, selected: s.gestureMap[key] === v }, t))),
+      ])),
+      h('div.setting', h('button.btn.btn-small', { type: 'button', onclick: () => set({ gestureMap: { ...DEFAULT_GESTURE_MAP } }) }, 'Reset gestures'),
+        h('button.btn.btn-small', { type: 'button', onclick: () => this.deps.extras.showGestures() }, 'Gesture guide')),
+      toggle('haptics', 'Vibrate on keys and gestures'),
+      select('keysBarMode', { auto: 'Auto (with the on-screen keyboard)', always: 'Always', never: 'Never' }, 'Coding keys bar'),
+      h('div.setting.stacked', h('div.s-text', h('div.s-label', 'Symbol keys per language'),
+        h('div.s-desc', 'Space-separated keys. "(^)" means tap → "(" and swipe up → ")".'))),
+      ...Object.keys(DEFAULT_LAYOUTS).map((g) => {
+        const ta = h('textarea.input.input-multiline', { rows: 2, 'aria-label': `Keys for ${LAYOUT_NAMES[g]}`, style: { minHeight: '56px' }, spellcheck: 'false', autocapitalize: 'off',
+          onchange: (e) => set({ keysLayouts: { ...this.deps.get().keysLayouts, [g]: e.target.value } }) });
+        ta.value = s.keysLayouts[g];
+        return h('div.setting.stacked', h('div.s-desc', LAYOUT_NAMES[g],
+          h('button.btn.btn-small.btn-ghost', { type: 'button', style: { marginLeft: '8px' }, onclick: () => { set({ keysLayouts: { ...this.deps.get().keysLayouts, [g]: DEFAULT_LAYOUTS[g] } }); this.render(); } }, 'Reset')), ta);
+      }),
+
+      h('h4', 'Running code'),
+      num('runTimeLimit', 'Time limit (seconds)', 'Runs are stopped after this long. The Stop button always works too.', 1, 300),
+      select('previewPlacement', { auto: 'Auto (side on wide screens)', bottom: 'Bottom panel', side: 'Beside the editor' }, 'Preview position'),
+      toggle('previewAutoRefresh', 'Refresh preview while typing'),
+
+      h('h4', 'Files'),
+      text('ignoreList', 'Hidden & ignored names', 'Hidden in the file tree and skipped by search / quick open (along with .gitignore).', DEFAULTS.ignoreList),
+      num('historyDays', 'Keep local history (days)', null, 1, 90),
+      num('historyMaxPerFile', 'Snapshots per file', null, 5, 500),
+
+      h('h4', 'Git'),
+      text('gitAuthorName', 'Author name'),
+      text('gitAuthorEmail', 'Author email'),
+      text('gitCorsProxy', 'CORS proxy for push / pull / clone', 'Browsers can\'t talk to GitHub\'s git servers directly. Requests go through this proxy. Leave empty in the Android app if you add a native HTTP plugin.'),
+
+      h('h4', 'Snippets'),
+      this.snippetsEditor(s, set),
+
+      h('h4', 'About'),
+      h('div.setting', h('div.s-text', h('div.s-label', `CodeEditor ${this.deps.extras.version}`), this.storageLine = h('div.s-desc', 'Storage: …'))),
+      h('div.setting', h('button.btn.btn-small', { type: 'button', onclick: () => this.deps.extras.showShortcuts() }, 'Keyboard shortcuts'),
+        h('button.btn.btn-small.btn-danger', { type: 'button', onclick: async () => {
+          if (await confirm('Reset all settings?', 'Your files are not affected.', 'Reset', 'danger')) { this.deps.set({ ...DEFAULTS, __reset: true }); this.render(); }
+        } }, 'Reset settings')),
+    );
+    this.deps.extras.storageInfo().then((t) => { if (this.storageLine) this.storageLine.textContent = t; });
+  }
+
+  snippetsEditor(s, set) {
+    const ta = h('textarea.input.input-multiline', { rows: 6, 'aria-label': 'User snippets JSON', spellcheck: 'false', autocapitalize: 'off',
+      placeholder: '{\n  "javascript": [\n    { "label": "hello", "body": "console.log(\'hello ${1:name}\');", "detail": "my snippet" }\n  ],\n  "*": []\n}' });
+    ta.value = s.userSnippets;
+    ta.addEventListener('change', () => set({ userSnippets: ta.value }));
+    return h('div.setting.stacked', h('div.s-desc', 'Your own snippets as JSON, keyed by language id (javascript, python, html, css, cpp…, or "*" for all). They show up in autocomplete; swipe right / Tab moves between ${1:fields}.'), ta);
+  }
+}
+
+function row(label, desc, control) {
+  return h('div.setting', h('div.s-text', h('div.s-label', label), desc ? h('div.s-desc', desc) : null), control);
+}
