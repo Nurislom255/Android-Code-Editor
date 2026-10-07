@@ -6,6 +6,9 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
+What's next: see **[ROADMAP.md](ROADMAP.md)** (keys bar redesign, gesture fixes,
+Emmet, VS Code look, built-in Python and C++).
+
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
 (`docs/` is the published build) and fully offline after the first visit.
