@@ -787,6 +787,14 @@ kbd {
 .switch span::after { content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; border-radius: 50%; background: var(--text-dim); transition: transform 0.15s, background 0.15s; }
 .switch input:checked + span { background: var(--accent-dim); border-color: var(--accent); }
 .switch input:checked + span::after { transform: translateX(18px); background: var(--accent); }
+.gesture-pad {
+  margin: 6px 14px 10px; min-height: 120px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 10px;
+  background: var(--bg-panel-alt); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 12px; text-align: center; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.gesture-pad-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
+.gesture-pad-result { font-size: 13px; color: var(--text-dim); font-family: var(--font-mono); }
+.gesture-pad-result.ok { color: var(--accent); }
 .gesture-table { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; align-items: center; padding: 4px 14px; }
 .gesture-table .g-name { font-size: 13px; }
 .gesture-table select { min-width: 150px; max-width: 58vw; }
@@ -933,7 +941,10 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
   display: flex;
   align-items: center;
   justify-content: center;
-  touch-action: none;
+  /* pan-x: a finger that lands on a key can still scroll the row sideways
+     (keys fire on release, and a panned press is cancelled). Only the
+     trackpad strip uses touch-action: none. */
+  touch-action: pan-x;
 }
 .key:active, .key.pressed { background: var(--accent-dim); border-color: var(--accent); }
 .key .alt { position: absolute; top: 2px; right: 4px; font-size: 9.5px; color: var(--text-faint); line-height: 1; }

@@ -4,6 +4,7 @@ import { h } from './dom.js';
 import { GESTURES, GESTURE_ACTIONS, DEFAULT_GESTURE_MAP, DEFAULTS } from '../core/settings.js';
 import { DEFAULT_LAYOUTS } from '../core/keysLayout.js';
 import { confirm } from './overlays.js';
+import { GestureRecognizer, presetOptions, describeDecision, gestureKey } from '../core/gestures.js';
 
 const LAYOUT_NAMES = { js: 'JavaScript / TypeScript', html: 'HTML / XML', css: 'CSS', python: 'Python', clike: 'C / C++ / Java / Kotlin', markdown: 'Markdown', json: 'JSON', plain: 'Other files' };
 
@@ -60,6 +61,12 @@ export class SettingsPanel {
       toggle('fastScroll', 'Fast-scroll thumb', 'A draggable handle on long files (touch screens).'),
       toggle('formatOnSave', 'Format on save', 'Runs Prettier for JS/TS/CSS/HTML/JSON/Markdown/YAML.'),
 
+      h('h4', 'Typing'),
+      toggle('autoSemicolons', 'Automatic semicolons', 'C, C++, Java, C#, JS, TS: a faded ; appears after statements like "int x = " or "return ". Type ; or press Enter to keep it, Backspace right away to drop it. Off for JS files written without semicolons.'),
+      toggle('emmet', 'Emmet in HTML and CSS', '"!" → HTML page, "ul>li*3" → list, "div" on a new line → <div></div>, CSS "m10" → margin: 10px;'),
+      toggle('linkedTags', 'Rename matching HTML tag', 'Editing <div> also edits its </div>.'),
+      h('div.setting', h('div.s-text', h('div.s-desc', '"Complete statement" (keys bar ⏎; or Ctrl+Shift+Enter) adds the missing ; — or : in Python, { } after if (…) — and starts a new line, whatever the setting above.'))),
+
       h('h4', 'Saving'),
       select('autosave', { off: 'Off', delay: 'After a pause in typing', blur: 'When leaving the app' }, 'Autosave', 'Unsaved work is always mirrored for crash recovery, whatever you choose here.'),
       num('autosaveDelay', 'Autosave delay (ms)', null, 300, 60000, 100),
@@ -67,7 +74,9 @@ export class SettingsPanel {
       h('h4', 'Touch & gestures'),
       toggle('gesturesEnabled', 'Gestures on the code', 'Swipe right to autocomplete, and more — see the list below.'),
       toggle('gestureHints', 'Show a hint when a gesture runs'),
-      num('swipeDistance', 'Swipe distance (px)', 'How far a finger must travel to count as a swipe. Raise it if gestures trigger by accident.', 30, 160, 2),
+      select('gestureSensitivity', { strict: 'Strict (long, fast, straight)', normal: 'Normal', loose: 'Loose (short or slower swipes count)' }, 'Swipe sensitivity',
+        'Strict if gestures trigger by accident, Loose if swipes are often missed. Try it on the pad below.'),
+      this.gestureTestPad(),
       h('div.gesture-table', Object.entries(GESTURES).flatMap(([key, label]) => [
         h('span.g-name', label),
         h('select.select', { 'aria-label': label, onchange: (e) => set({ gestureMap: { ...this.deps.get().gestureMap, [key]: e.target.value } }) },
@@ -113,6 +122,37 @@ export class SettingsPanel {
         } }, 'Reset settings')),
     );
     this.deps.extras.storageInfo().then((t) => { if (this.storageLine) this.storageLine.textContent = t; });
+  }
+
+  /** A touch area that reports how each swipe was read (and why not). */
+  gestureTestPad() {
+    const out = h('div.gesture-pad-result', { 'aria-live': 'polite' }, 'Swipe here with one or two fingers.');
+    const pad = h('div.gesture-pad', h('div.gesture-pad-label', 'Gesture test pad'), out);
+    const r = new GestureRecognizer({}, () => ({ width: window.innerWidth, height: window.innerHeight }));
+    const pts = (e) => [...e.changedTouches].map((t) => ({ id: t.identifier, x: t.clientX, y: t.clientY }));
+    pad.addEventListener('touchstart', (e) => {
+      if (!r.active) r.setOptions(presetOptions(this.deps.get().gestureSensitivity));
+      for (const p of pts(e)) r.pointerDown(p.id, p.x, p.y, e.timeStamp);
+    }, { passive: true });
+    pad.addEventListener('touchmove', (e) => {
+      if (e.cancelable) e.preventDefault();
+      r.pointerMoves(pts(e), e.timeStamp);
+    }, { passive: false });
+    const end = (e) => {
+      for (const p of pts(e)) {
+        const before = r.lastDecision;
+        r.pointerUp(p.id, p.x, p.y, e.timeStamp);
+        if (r.lastDecision === before) continue;
+        const d = r.lastDecision;
+        const key = d.gesture ? gestureKey(d.gesture) : null;
+        const action = key && this.deps.get().gestureMap[key];
+        out.textContent = describeDecision(d) + (action ? ` → ${GESTURE_ACTIONS[action]}` : '');
+        out.classList.toggle('ok', !!d.gesture);
+      }
+    };
+    pad.addEventListener('touchend', end, { passive: true });
+    pad.addEventListener('touchcancel', end, { passive: true });
+    return pad;
   }
 
   snippetsEditor(s, set) {

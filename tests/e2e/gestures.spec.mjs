@@ -56,6 +56,40 @@ test('swipe right expands a snippet and then jumps between its fields', async ({
   expect(sel).toBe('array');
 });
 
+test('a 30° diagonal swipe still autocompletes, and the cursor does not jump to the finger', async ({ page }) => {
+  await jsFile(page, 'const documentTitle = 1;\nlet other = 2;\nlet third = 3;\ndocumentT');
+  await page.evaluate(() => window.__app.run('autocomplete'));
+  await expect(completionOpen(page)).toBeVisible();
+  const p = await codePoint(page, 0.2, 0.1); // on the first line, far from the cursor
+  await swipe(page, { from: p, to: { x: p.x + 150, y: p.y + Math.round(150 * Math.tan(Math.PI / 6)) } });
+  expect(await editorText(page)).toBe('const documentTitle = 1;\nlet other = 2;\nlet third = 3;\ndocumentTitle');
+  const head = await page.evaluate(() => window.__app.ws.view.state.selection.main.head);
+  expect(head).toBe((await editorText(page)).length);
+});
+
+test('a horizontal drag that is not a swipe leaves the cursor where it was', async ({ page }) => {
+  await jsFile(page, 'let a = 1;\nlet b = 2;\nlet c = 3;', 3);
+  const p = await codePoint(page, 0.2, 0.1);
+  await swipe(page, { from: p, to: { x: p.x + 160, y: p.y + 30 }, duration: 1200, steps: 14 }); // too slow
+  await page.waitForTimeout(150);
+  expect(await page.evaluate(() => window.__app.ws.view.state.selection.main.head)).toBe(3);
+  expect(await editorText(page)).toBe('let a = 1;\nlet b = 2;\nlet c = 3;');
+});
+
+test('the Settings test pad explains how a swipe was read', async ({ page }) => {
+  await boot(page);
+  await page.evaluate(() => window.__app.showPanel('settings'));
+  const pad = page.locator('.gesture-pad');
+  await pad.scrollIntoViewIfNeeded();
+  const b = await pad.boundingBox();
+  const y = b.y + b.height / 2;
+  await swipe(page, { from: { x: b.x + b.width * 0.2, y }, to: { x: b.x + b.width * 0.2 + 150, y: y + 10 } });
+  await expect(page.locator('.gesture-pad-result')).toContainText('✓ Swipe right, 1 finger');
+  await expect(page.locator('.gesture-pad-result')).toContainText('Autocomplete');
+  await swipe(page, { from: { x: b.x + b.width * 0.2, y }, to: { x: b.x + b.width * 0.2 + 150, y: y + 5 }, duration: 1500, steps: 12 });
+  await expect(page.locator('.gesture-pad-result')).toContainText('too slow');
+});
+
 test('swipe left closes the list, then deletes the previous word', async ({ page }) => {
   await jsFile(page, 'let alpha = 1;\nconst beta = alp');
   await page.evaluate(() => window.__app.run('autocomplete'));

@@ -110,6 +110,7 @@ export class KeysBar {
 
     this.actionsRow.append(
       A('Tab', 'Tab / indent', () => (this.mods.shift ? this.deps.run('outdent') : this.deps.run('tab')), { consume: true }),
+      A('⏎;', 'Complete statement: add ; (or : / { }) and start a new line', () => this.deps.run('completeStatement')),
       arrow('left', '←'), arrow('right', '→'), arrow('up', '↑'), arrow('down', '↓'),
       this.trackpadKey(),
       A('', 'Undo', () => this.deps.run('undo'), { iconName: 'undo' }),

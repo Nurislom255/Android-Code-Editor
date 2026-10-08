@@ -12,15 +12,69 @@ async function setup(page, text = '', cursor = null) {
   await expect(page.locator('#keys-bar')).toBeVisible();
 }
 
+/** Swipes up on a key (types its corner symbol). */
+async function swipeUpKey(page, label) {
+  const b = await key(page, label).boundingBox();
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx, y: cy - 15 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx, y: cy - 30 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}
+
 const key = (page, label) => page.locator('#keys-bar .key', { hasText: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first();
 
-test('symbol row matches the language and auto-closes brackets', async ({ page }) => {
+test('symbol row matches the language and auto-closes brackets (plus the pending ;)', async ({ page }) => {
   await setup(page, 'call');
   await expect(page.locator('#keys-bar .keys-symbols .key').first()).toContainText('{');
   await key(page, '(').tap();
-  expect(await editorText(page)).toBe('call()');
+  // keys-bar typing goes through the same input handlers as the keyboard:
+  // auto-closed ")" and the automatic semicolon after a call
+  expect(await editorText(page)).toBe('call();');
   const cursor = await page.evaluate(() => window.__app.ws.view.state.selection.main.head);
   expect(cursor).toBe(5); // between the parentheses
+});
+
+test('the first keys row scrolls sideways when dragged on a key', async ({ page }) => {
+  await setup(page, '');
+  const row = page.locator('#keys-bar .keys-actions');
+  const max = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+  test.skip(max < 20, 'row fits on this screen');
+  // Put the "Dup" key in the middle, then drag the row from it (the
+  // trackpad strip keeps touch-action: none on purpose).
+  await row.evaluate((el) => { const k = [...el.querySelectorAll('.key')].find((b) => b.textContent === 'Dup'); el.scrollLeft = k.offsetLeft - el.clientWidth / 2; });
+  const s0 = await row.evaluate((el) => el.scrollLeft);
+  const dir = max - s0 > 80 ? -1 : 1; // finger left scrolls toward the end
+  const kb = await key(page, 'Dup').boundingBox();
+  const x0 = kb.x + kb.width / 2, y = kb.y + kb.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const t0 = Date.now() / 1000;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y }], timestamp: t0 });
+  for (let i = 1; i <= 8; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + dir * i * 18, y }], timestamp: t0 + i * 0.03 });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t0 + 0.3 });
+  await expect.poll(() => row.evaluate((el, a) => Math.abs(el.scrollLeft - a), s0)).toBeGreaterThan(40);
+  expect(await editorText(page)).toBe(''); // "Dup" under the finger did not fire
+});
+
+test('">" from the keys bar closes an HTML tag', async ({ page }) => {
+  await boot(page, { keysBarMode: 'always' });
+  await newProject(page, 'kh', 'web');
+  await openFile(page, 'index.html');
+  await setText(page, '<section');
+  await swipeUpKey(page, '<'); // ">" is the swipe-up symbol of "<" in the HTML row
+  expect(await editorText(page)).toBe('<section></section>');
+});
+
+test('⏎; completes the statement and starts a new line', async ({ page }) => {
+  await setup(page, 'function f() {\n  const total = add(1, 2\n}', 'function f() {\n  const total = add(1, 2'.length);
+  await key(page, '⏎;').tap();
+  expect(await editorText(page)).toBe('function f() {\n  const total = add(1, 2);\n  \n}');
+  const head = await page.evaluate(() => window.__app.ws.view.state.selection.main.head);
+  expect(head).toBe('function f() {\n  const total = add(1, 2);\n  '.length);
 });
 
 test('swipe up on a key types its alternate symbol', async ({ page }) => {

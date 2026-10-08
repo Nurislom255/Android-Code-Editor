@@ -23,6 +23,8 @@ import {
 } from '../storage/projects.js';
 import { LANGUAGES, PLAIN } from '../editor/languages.js';
 import * as E from '../editor/editActions.js';
+import { completeStatement } from '../editor/semicolons.js';
+import { setEditorEnv } from '../editor/context.js';
 import { attachGestures, attachStripSwipe } from '../editor/gestureLayer.js';
 import { symbolsFor } from '../editor/viewPlugins.js';
 import { flattenSymbols } from '../editor/outline.js';
@@ -116,12 +118,13 @@ export class App {
     });
 
     this.buildSidebar();
+    setEditorEnv({ projectFiles: () => this.projectFiles() });
     this.keysBar = new KeysBar($('#keys-bar'), {
       getView: () => (this.ws.activeDoc ? this.ws.view : null),
       getSettings: () => this.settings,
       run: (name) => this.run(name),
       arrow: (dir, mods) => E.arrow(this.ws.activeDoc ? this.ws.view : null, dir, mods),
-      type: (text) => E.typeText(this.editableView(), text, { autoClose: this.settings.autoCloseBrackets }),
+      type: (text) => E.typeText(this.editableView(), text),
       onLayoutChange: () => this.layoutChanged(),
     });
 
@@ -1076,6 +1079,7 @@ export class App {
       lineDown: { label: 'Move line down', key: 'Alt+↓', run: (v) => E.lineDown(v) },
       deleteLine: { label: 'Delete line', key: 'Ctrl+Shift+K', run: (v) => E.deleteLine(v) },
       newlineBelow: { label: 'Insert line below', run: (v) => E.newlineBelow(v) },
+      completeStatement: { label: 'Complete statement (add ; and new line)', key: 'Ctrl+Shift+Enter', run: (v) => completeStatement(v) },
       backspace: { label: 'Backspace', run: (v) => E.backspace(v) },
       selectAll: { label: 'Select all', key: 'Ctrl+A', run: (v) => E.selectAll(v) },
       expandSelection: { label: 'Expand selection', key: 'Alt+Shift+→', run: (v) => E.expandSelection(v) },
@@ -1191,6 +1195,9 @@ export class App {
       ['Ctrl-Tab', 'nextTab'], ['Ctrl-Shift-Tab', 'prevTab'], ['Alt-PageDown', 'nextTab'], ['Alt-PageUp', 'prevTab'],
       ['Alt-w', 'closeTab'], ['Ctrl-Alt--', 'navigateBack'], ['Ctrl-Shift--', 'navigateForward'], ['Mod-j', 'toggleConsole'],
       ['Mod-Shift-e', 'showFiles'], ['Mod-Shift-g', 'showGit'],
+      // Also bound inside the editor; listed here because on Android the
+      // editor sees Enter without its modifiers (CodeMirror re-dispatches it).
+      ['Mod-Shift-Enter', 'completeStatement'],
     ].map(([k, cmd]) => [parseKey(k), cmd]);
     this.shortcutTable = map;
     document.addEventListener('keydown', (e) => {
@@ -1221,7 +1228,7 @@ export class App {
   showShortcuts() {
     const rows = this.shortcutTable.map(([spec, cmd]) => [spec.label, this.commands()[cmd].label]);
     rows.push(['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+F', 'Find & replace'], ['Ctrl+/', 'Toggle comment'], ['Alt+↑ / Alt+↓', 'Move line'],
-      ['Shift+Alt+↓', 'Duplicate line'], ['Ctrl+Shift+K', 'Delete line'], ['Ctrl+] / Ctrl+[', 'Indent / outdent'], ['Ctrl+Space', 'Autocomplete'],
+      ['Shift+Alt+↓', 'Duplicate line'], ['Ctrl+Shift+K', 'Delete line'], ['Ctrl+] / Ctrl+[', 'Indent / outdent'], ['Ctrl+Space', 'Autocomplete'], ['Tab', 'Accept suggestion / expand Emmet'],
       ['Ctrl+D', 'Select next occurrence'], ['Alt+click / drag', 'Multiple cursors / column select'], ['Ctrl+Shift+[ / ]', 'Fold / unfold']);
     showModal('Keyboard shortcuts', h('table.help-table', h('tbody', rows.map(([k, l]) => h('tr', h('td', h('kbd', k)), h('td', l))))), { className: 'wide' });
   }
