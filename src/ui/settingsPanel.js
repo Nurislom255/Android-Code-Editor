@@ -90,7 +90,7 @@ export class SettingsPanel {
       toggle('haptics', 'Vibrate on keys and gestures'),
       select('keysBarMode', { auto: 'Auto (with the on-screen keyboard)', always: 'Always', never: 'Never' }, 'Coding keys bar'),
       h('div.setting.stacked', h('div.s-text', h('div.s-label', 'Symbol keys per language'),
-        h('div.s-desc', 'Space-separated keys. "(^)" means tap → "(" and swipe up → ")".'))),
+        h('div.s-desc', 'Space-separated keys. "(^)" means tap → "(", swipe up or hold → ")".'))),
       ...Object.keys(DEFAULT_LAYOUTS).map((g) => {
         const ta = h('textarea.input.input-multiline', { rows: 2, 'aria-label': `Keys for ${LAYOUT_NAMES[g]}`, style: { minHeight: '56px' }, spellcheck: 'false', autocapitalize: 'off',
           onchange: (e) => set({ keysLayouts: { ...this.deps.get().keysLayouts, [g]: e.target.value } }) });

@@ -32,6 +32,9 @@ pushed to the branch and this table updated.
 | Keys bar | Tab is a first-class key, always visible. Ctrl, Shift, Alt and Esc are reachable whenever they are needed. The whole bar is **customizable from Settings**. Never delete a key from the app — re-rank it into the "More" sheet instead. |
 | Settings | Split into small pages with a search box. |
 | Accent colour | VS Code blue (`#0078D4`; `#3794FF` on dark backgrounds). |
+| Arrow keys | Not on the keys bar (trackpad strip now, joystick in Phase 2). |
+| Line actions | New line, move line up/down are the important ones; they go into **one line-actions key** with gestures (2.8). **Delete line = triple-tap on the line.** |
+| Gestures **and** shortcuts | A phone or tablet is often used with a keyboard: every key-bar action and gesture also keeps a VS Code-style shortcut (2.9). Moving an action to a gesture never removes its shortcut. |
 
 ## Working rules for every phase
 
@@ -149,6 +152,7 @@ gesture test pad is the only on-device diagnostic for now):
 | Split pane stays after closing all its tabs (portrait); no button | Closing tabs never closed the split; the split button is hidden on narrow screens; the first tap on a ✕ in the unfocused pane did nothing (the tab bar was rebuilt under the finger) | Split closes when a pane is empty; "✕ Split" button in the second pane's tab bar; tab bars rebuild only when they change |
 | Code size vs. app size | Only the code had a size setting (and pinch) | Settings → Appearance → Interface size (70–160 %) for menus, tabs, panels and the keys bar |
 | Arrow keys not needed; new line / move line important; multi-line editing | — | Bar re-ranked (see Phase 2 notes); multi-cursor keys and Ctrl+D / Ctrl+Alt+↑↓ / Shift+Alt+I |
+| Long-press should type the corner symbol; swipe-up only worked when very straight | Holding did nothing; any sideways drift > 14 px cancelled the swipe | Hold or swipe up; leaning / curved swipes count (2.5) |
 
 ---
 
@@ -279,8 +283,9 @@ customization.)
 - The four arrow keys are **not wanted** on the bar (removed already; the
   trackpad strip / joystick moves the cursor).
 - Must stay close at hand: **new line below**, **move line up / down**, Tab,
-  Complete statement. **Delete line** is not a key to keep near the thumbs: it
-  becomes a gesture (to be chosen with the owner); the key stays in "More".
+  Complete statement — combined into one line-actions key (2.8). **Delete
+  line** becomes the **triple-tap** gesture (2.6); the key stays in "More" and
+  Ctrl+Shift+K stays.
 - **Multi-line editing** is needed. Shipped early as keys (`+⇣` / `+⇡` add a
   cursor below/above, `⫶` a cursor on each selected line, `Sel+` next
   occurrence); Phase 2 places them in the selection layer / context row.
@@ -369,12 +374,14 @@ rules, editable in Settings):
 - **Long-press** any key → Gboard-style popup of variants (`(` → `()` `[]` `{}`
   `<>`; `"` → `'` `` ` `` `"""`; `;` → `:` `::` `,`). **Swipe up / down** on a
   key types its 1st / 2nd alternate (shown small in the key's corners).
-- **Owner report (after Phase 1, on the phone):** long-pressing keys "does not
-  work properly". Today no key has a long-press action — the small corner
-  symbol is typed by *swiping up* on the key, which isn't discoverable, and
-  holding a key either does nothing or repeats it. Phase 2 must: give every
-  key with variants a long-press popup, show a long-press hint once, and keep
-  swipe-up as the shortcut. Confirm with the owner which keys they tried.
+- **Owner report (after Phase 1, on the phone):** the owner expected
+  long-press to type the small corner symbol; only swipe-up did, and only if
+  the swipe was very straight (any sideways drift cancelled it).
+  **Shipped early:** hold (≥ 380 ms) **or** swipe up types the corner symbol;
+  a swipe counts up to ~63° from straight up and may curve — once it is going
+  up, the key keeps the touch and the row doesn't scroll
+  (`classifyKeyDrag` in `core/keysLayout.js`). Phase 2 still adds the
+  multi-variant popup for keys with more than one alternate.
 - **⋯ More** → a sheet with every key, grouped: Brackets · Operators ·
   Navigation · Editing · Selection · Lines · Modifiers. Long-press a key in the
   sheet → "Pin to bar".
@@ -388,8 +395,14 @@ rules, editable in Settings):
   - Quick flick fully left or right → line start / end.
 - **Whole-bar trackpad:** long-press any empty part of the bar and the whole bar
   becomes a trackpad (Gboard space-bar style).
-- **In the code:** double-tap selects a word, triple-tap a line; long-press a
-  line number and drag to move line(s).
+- **In the code:** double-tap selects a word; **triple-tap on a line deletes
+  that line** (owner's decision) — with a hint "Line deleted · Undo" and a
+  normal undo step. Care needed: the browser already selects a word on the
+  2nd tap, so the 3rd tap (same line, within ~500 ms and ~24 px) must collapse
+  that selection first; it must never fire while the keyboard's own
+  selection handles are being dragged. Selecting a line stays on the line
+  numbers (tap / drag) and ⊕. Long-press a line number and drag to move
+  line(s). Shortcut stays: Ctrl+Shift+K.
 - **Selection toolbar:** while text is selected, the context row shows the
   selection actions (2.5 table, last row).
 
@@ -402,6 +415,51 @@ rules, editable in Settings):
   Java, Markdown); edit each key's long-press and swipe alternates.
 - Edit context-row rules (advanced).
 - Import / export as JSON; reset to defaults.
+
+### 2.8 One line-actions key (owner's proposal)
+
+New line below, new line above, move line up / down, duplicate, join lines
+and delete line in **one key**, instead of five keys next to each other:
+
+- **Tap** → new line below (the most used).
+- **Swipe up / down on the key** → move the line up / down; keep the finger
+  there to repeat.
+- **Open the fan:** the owner proposed **double-tap** — the other actions fan
+  out around the key and the finger **slides to one and releases** to choose
+  (a "marking menu": with practice the direction alone is enough, without
+  waiting for the fan). Trade-off to settle with the owner before building:
+  a double-tap means every single tap has to wait ~250 ms to be sure it isn't
+  the first of two, so "tap = new line" would feel slower. Long-press to
+  open the fan has no such delay. Build whichever the owner picks; offer the
+  other in Settings.
+- The same pattern then groups other related keys: cursors (`+⇣` `+⇡` `⫶`
+  `Sel+`), selection (`⊕` `⊖` Select all), indentation / comment.
+
+### 2.9 Gestures and keyboard shortcuts together
+
+A phone or tablet is often used with a Bluetooth or USB keyboard, so:
+
+- **Every keys-bar action and every gesture also has a keyboard shortcut**
+  (VS Code's where one exists), shown in its tooltip, in the command palette
+  and in the shortcuts sheet (F1). Moving an action from a key to a gesture
+  never removes its shortcut.
+- With a hardware keyboard and no on-screen keyboard, the keys bar stays
+  hidden ("Auto" mode) — the shortcuts are the way in.
+- Custom key bindings in Settings → Keyboard (VS Code style), Phase 2.7.
+
+| Action | Shortcut now | Note |
+|---|---|---|
+| Move line up / down | Alt+↑ / Alt+↓ | VS Code |
+| Copy line up / down | Shift+Alt+↑ / ↓ | VS Code |
+| Delete line | Ctrl+Shift+K | VS Code; gesture: triple-tap |
+| Add cursor above / below | Ctrl+Alt+↑ / ↓ | VS Code |
+| Select next occurrence | Ctrl+D | VS Code |
+| Cursor on each selected line | Shift+Alt+I | VS Code |
+| Complete statement | Ctrl+Shift+Enter | as JetBrains |
+| Expand / shrink selection | Shift+Alt+→ / ← | VS Code |
+| Toggle comment, indent | Ctrl+/, Ctrl+] / Ctrl+[ | VS Code |
+| New line below | **none yet** | VS Code uses Ctrl+Enter, which is **Run** here — to decide with the owner (e.g. Run → F5 / Ctrl+F5 as in VS Code, Ctrl+Enter → new line below) |
+| New line above | **none yet** | VS Code uses Ctrl+Shift+Enter, which is Complete statement here — proposal: Ctrl+Alt+Enter |
 
 Done when (Phase 2): on the owner's phone in portrait, with Gboard open, the 10
 most-used actions are reachable without moving the hands and without scrolling;

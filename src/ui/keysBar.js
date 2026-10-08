@@ -5,8 +5,8 @@
 //          app, unlike Gboard's space-bar trick), undo/redo, hide keyboard,
 //          Shift/Ctrl/Alt, multi-cursor keys, more line operations.
 //   Row 2 (symbols): per language (JS, HTML, CSS, Python, C-like…), editable
-//          in Settings. Tap = the symbol; SWIPE UP on a key = its alternate
-//          (the small character in the corner), like Gboard's long-press row.
+//          in Settings. Tap = the symbol; SWIPE UP or LONG-PRESS = its
+//          alternate (the small character in the corner).
 //
 // Every key reacts on pointer *up* (not down), because the rows scroll
 // sideways: a finger that lands on a key and then pans the row must not type.
@@ -19,9 +19,10 @@
 // "virtual Ctrl" can't be applied reliably (v1 README explains why).
 
 import { h, icon, haptic, isTouchDevice } from './dom.js';
-import { parseLayout, groupForLanguage, DEFAULT_LAYOUTS } from '../core/keysLayout.js';
+import { parseLayout, groupForLanguage, DEFAULT_LAYOUTS, classifyKeyDrag } from '../core/keysLayout.js';
 
 const SWIPE_UP_PX = 18;
+const LONG_PRESS = 380; // ms holding a symbol key before its corner symbol is chosen
 const REPEAT_DELAY = 380;
 const REPEAT_EVERY = 55;
 const TRACK_X = 11; // px of drag per character
@@ -217,30 +218,51 @@ export class KeysBar {
     return btn;
   }
 
+  /**
+   * A symbol key. Tap → the symbol. Swipe up OR long-press → the small symbol
+   * in its corner. Once a drag is going mostly upward the key keeps the touch
+   * (the row doesn't scroll), so a leaning or curved swipe still counts; a
+   * mostly sideways drag scrolls the row instead.
+   */
   symbolKey(k) {
-    const btn = h('button.key.sym', { type: 'button', 'aria-label': k.alt ? `${k.label} (swipe up: ${k.alt})` : k.label, style: { touchAction: 'pan-x' } },
-      k.label, k.alt ? h('span.alt', k.alt) : null);
-    let start = null, cancelled = false, up = false;
+    const btn = h('button.key.sym', { type: 'button', title: k.alt ? `${k.label} — swipe up or hold: ${k.alt}` : k.label,
+      'aria-label': k.alt ? `${k.label} (swipe up or hold: ${k.alt})` : k.label, style: { touchAction: 'pan-x' } },
+    k.label, k.alt ? h('span.alt', k.alt) : null);
+    let start = null, mode = 'none', up = false, held = false, timer = 0;
+    const showAlt = (on) => {
+      if (on === btn.classList.contains('swiped')) return;
+      btn.classList.toggle('swiped', on);
+      if (on) haptic(this.deps.getSettings(), 4);
+    };
+    const reset = () => { clearTimeout(timer); start = null; mode = 'none'; up = false; held = false; btn.classList.remove('swiped'); };
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
+      reset();
       start = { x: e.clientX, y: e.clientY };
-      cancelled = false; up = false;
+      if (k.alt) timer = setTimeout(() => { if (start && mode !== 'pan') { held = true; showAlt(true); } }, LONG_PRESS);
     });
     btn.addEventListener('pointermove', (e) => {
       if (!start) return;
-      if (Math.abs(e.clientX - start.x) > 14) cancelled = true;
-      const isUp = k.alt && start.y - e.clientY > SWIPE_UP_PX;
-      if (isUp !== up) { up = isUp; btn.classList.toggle('swiped', up); if (up) haptic(this.deps.getSettings(), 4); }
+      const dx = e.clientX - start.x, dyUp = start.y - e.clientY;
+      if (mode === 'none') {
+        const m = classifyKeyDrag(dx, dyUp);
+        if (m === 'pan' && !held) { mode = 'pan'; clearTimeout(timer); showAlt(false); }
+        else if (m === 'up' && k.alt) { mode = 'up'; clearTimeout(timer); }
+      }
+      if (mode === 'up') { up = dyUp > SWIPE_UP_PX; showAlt(up || held); }
     });
-    btn.addEventListener('pointercancel', () => { start = null; btn._pointerAt = Date.now(); btn.classList.remove('swiped'); });
-    btn.addEventListener('pointerup', (e) => {
+    // Pointer events come first, so the decision above is made before the
+    // browser asks whether this touch may scroll the row.
+    btn.addEventListener('touchmove', (e) => { if ((mode === 'up' || held) && e.cancelable) e.preventDefault(); }, { passive: false });
+    btn.addEventListener('pointercancel', () => { reset(); btn._pointerAt = Date.now(); });
+    btn.addEventListener('pointerup', () => {
       if (!start) return;
-      const swipedUp = k.alt && (up || start.y - e.clientY > SWIPE_UP_PX);
-      start = null;
+      const alt = k.alt && (held || (mode === 'up' && up));
+      const typed = mode === 'pan' ? null : alt ? k.alt : k.insert;
+      reset();
       btn._pointerAt = Date.now();
-      btn.classList.remove('swiped');
-      if (cancelled) return;
-      this.insertSymbol(swipedUp ? k.alt : k.insert);
+      if (typed == null) return;
+      this.insertSymbol(typed);
       this.pressFeedback(btn);
     });
     btn.addEventListener('click', () => { if (Date.now() - (btn._pointerAt || 0) > 800) this.insertSymbol(k.insert); });

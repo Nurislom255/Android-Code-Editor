@@ -91,6 +91,43 @@ test('swipe up on a key types its alternate symbol', async ({ page }) => {
   expect(await editorText(page)).toBe('x =>');
 });
 
+/** A touch path on a key, with real timestamps (ms after the start). */
+async function touchPath(page, label, points, endAt) {
+  const b = await key(page, label).boundingBox();
+  const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  const t0 = Date.now() / 1000;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: cx, y: cy }], timestamp: t0 });
+  for (const [dx, dy, t] of points) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: cx + dx, y: cy + dy }], timestamp: t0 + t / 1000 });
+  }
+  if (endAt) await page.waitForTimeout(endAt);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: Date.now() / 1000 });
+  await cdp.detach();
+}
+
+test('a leaning, curved swipe up still types the corner symbol', async ({ page }) => {
+  await setup(page, 'x ');
+  // up and to the right, curving further right at the end
+  await touchPath(page, '=', [[6, -6, 20], [14, -16, 40], [24, -26, 60], [36, -32, 80]]);
+  expect(await editorText(page)).toBe('x =>');
+});
+
+test('holding a symbol key types its corner symbol', async ({ page }) => {
+  await setup(page, 'x ');
+  await touchPath(page, '=', [], 550);
+  expect(await editorText(page)).toBe('x =>');
+  // a quick tap is still the main symbol
+  await key(page, '=').tap();
+  expect(await editorText(page)).toBe('x =>=');
+});
+
+test('a sideways drag on a symbol key types nothing (it scrolls the row)', async ({ page }) => {
+  await setup(page, 'x ');
+  await touchPath(page, '=', [[-12, 1, 20], [-30, 2, 40], [-60, 3, 60]]);
+  expect(await editorText(page)).toBe('x ');
+});
+
 test('Home/End with the Shift modifier, and Tab (no arrow keys any more)', async ({ page }) => {
   await setup(page, 'abc', 3);
   for (const arrow of ['←', '→', '↑', '↓']) await expect(page.locator('#keys-bar .key', { hasText: new RegExp(`^${arrow}$`) })).toHaveCount(0);

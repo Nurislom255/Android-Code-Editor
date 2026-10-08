@@ -30,7 +30,7 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 | Tap (2 fingers) | Command palette |
 | Pinch | Zoom the code font (saved) |
 | Tap / drag the line numbers | Select one / several lines |
-| Keys bar: **swipe up** on a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …) |
+| Keys bar: **swipe up** or **hold** a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …); leaning or curved swipes count |
 | Keys bar: drag the **trackpad** strip | Move the cursor (with ⇧ armed: select) — works with any keyboard app |
 | Keys bar: hold an arrow | Key repeat |
 | Status bar: swipe left / right | Next / previous tab |
