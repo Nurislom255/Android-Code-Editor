@@ -1,9 +1,9 @@
 // ui/keysBar.js — the coding-keys row above the soft keyboard (spec §3.1).
 //
-//   Row 1 (actions): Tab, arrows (hold = repeat), a trackpad strip (drag to
-//          move the cursor — works with ANY keyboard app, unlike Gboard's
-//          space-bar trick), undo/redo, hide keyboard, line operations,
-//          expand selection, and Shift/Ctrl/Alt modifiers.
+//   Row 1 (actions): Tab, Complete statement, new line / move line, a
+//          trackpad strip (drag to move the cursor — works with ANY keyboard
+//          app, unlike Gboard's space-bar trick), undo/redo, hide keyboard,
+//          Shift/Ctrl/Alt, multi-cursor keys, more line operations.
 //   Row 2 (symbols): per language (JS, HTML, CSS, Python, C-like…), editable
 //          in Settings. Tap = the symbol; SWIPE UP on a key = its alternate
 //          (the small character in the corner), like Gboard's long-press row.
@@ -40,7 +40,6 @@ export class KeysBar {
     this.mods = { shift: 0, ctrl: 0, alt: 0 }; // 0 off, 1 one-shot, 2 locked
     this.keyboardOpen = false;
     this.editorFocused = false;
-    this.maxHeight = { portrait: 0, landscape: 0 };
     this.build();
     this.watchKeyboard();
   }
@@ -49,17 +48,27 @@ export class KeysBar {
 
   watchKeyboard() {
     const vv = window.visualViewport;
+    // The tallest height seen *for each window width*. A soft keyboard never
+    // changes the width; rotating, split-screen or resizing the window does,
+    // and then needs a new baseline — reusing the old one made a shorter
+    // window look like an open keyboard, so the bar never went away.
+    this.baseline = new Map();
     const measure = () => {
-      const orient = window.innerWidth > window.innerHeight ? 'landscape' : 'portrait';
-      const hNow = vv ? vv.height : window.innerHeight;
-      this.maxHeight[orient] = Math.max(this.maxHeight[orient], hNow, window.outerHeight || 0);
-      // With interactive-widget=resizes-content the layout shrinks too, so
-      // compare against the tallest height seen in this orientation.
-      this.keyboardOpen = isTouchDevice() && hNow < this.maxHeight[orient] * 0.78;
+      const w = Math.round(window.innerWidth);
+      // With interactive-widget=resizes-content the layout height shrinks with
+      // the keyboard; the visual viewport also shrinks when the page is
+      // pinch-zoomed, so its height is scaled back first.
+      const h = Math.min(window.innerHeight, vv ? vv.height * vv.scale : Infinity);
+      const base = Math.max(this.baseline.get(w) || 0, h);
+      this.baseline.set(w, base);
+      // A keyboard takes well over 120 px; browser bars appearing don't.
+      this.keyboardOpen = isTouchDevice() && base - h > Math.max(120, base * 0.18);
       this.update();
     };
-    (vv || window).addEventListener('resize', measure);
-    window.addEventListener('orientationchange', () => { this.maxHeight = { portrait: 0, landscape: 0 }; setTimeout(measure, 300); });
+    window.addEventListener('resize', measure);
+    if (vv) vv.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', () => setTimeout(measure, 300));
+    if (navigator.virtualKeyboard && navigator.virtualKeyboard.addEventListener) navigator.virtualKeyboard.addEventListener('geometrychange', measure);
     measure();
     document.addEventListener('focusin', (e) => {
       this.editorFocused = !!(e.target.closest && e.target.closest('.cm-content'));
@@ -106,12 +115,15 @@ export class KeysBar {
     this.el.append(this.actionsRow, this.symbolsRow);
 
     const A = (label, title, fn, opts = {}) => this.actionKey(label, title, fn, opts);
-    const arrow = (dir, glyph) => A(glyph, `Arrow ${dir}`, () => this.deps.arrow(dir, this.consumeMods()), { repeat: true, iconName: null });
 
+    // Most-used first. The arrow keys are gone: the trackpad strip moves the
+    // cursor (with ⇧ armed it selects), Home/End jump within the line.
     this.actionsRow.append(
-      A('Tab', 'Tab / indent', () => (this.mods.shift ? this.deps.run('outdent') : this.deps.run('tab')), { consume: true }),
+      A('Tab', 'Tab / indent / accept suggestion / jump past ;', () => (this.mods.shift ? this.deps.run('outdent') : this.deps.run('tab')), { consume: true }),
       A('⏎;', 'Complete statement: add ; (or : / { }) and start a new line', () => this.deps.run('completeStatement')),
-      arrow('left', '←'), arrow('right', '→'), arrow('up', '↑'), arrow('down', '↓'),
+      A('↵Ln', 'New line below', () => this.deps.run('newlineBelow')),
+      A('⇡Ln', 'Move line up', () => this.deps.run('lineUp'), { repeat: true }),
+      A('⇣Ln', 'Move line down', () => this.deps.run('lineDown'), { repeat: true }),
       this.trackpadKey(),
       A('', 'Undo', () => this.deps.run('undo'), { iconName: 'undo' }),
       A('', 'Redo', () => this.deps.run('redo'), { iconName: 'redo' }),
@@ -119,21 +131,23 @@ export class KeysBar {
       this.modKey('shift', '⇧'),
       this.modKey('ctrl', 'Ctrl'),
       this.modKey('alt', 'Alt'),
+      // multi-line editing: type on several lines at once
+      A('+⇣', 'Add a cursor on the line below (type on several lines at once)', () => this.deps.run('addCursorDown'), { repeat: true }),
+      A('+⇡', 'Add a cursor on the line above', () => this.deps.run('addCursorUp'), { repeat: true }),
+      A('⫶', 'A cursor on each selected line (select lines by dragging the line numbers)', () => this.deps.run('cursorsOnLines')),
+      A('Sel+', 'Select the word, then each next occurrence of it', () => this.deps.run('selectNext')),
       A('//', 'Toggle comment', () => this.deps.run('toggleComment')),
       A('⊕', 'Expand selection (word → expression → block)', () => this.deps.run('expandSelection')),
       A('⊖', 'Shrink selection', () => this.deps.run('shrinkSelection')),
       A('⇤', 'Outdent', () => this.deps.run('outdent')),
       A('Dup', 'Duplicate line', () => this.deps.run('duplicateLine')),
-      A('⇡Ln', 'Move line up', () => this.deps.run('lineUp'), { repeat: true }),
-      A('⇣Ln', 'Move line down', () => this.deps.run('lineDown'), { repeat: true }),
-      A('✕Ln', 'Delete line', () => this.deps.run('deleteLine')),
-      A('↵Ln', 'New line below', () => this.deps.run('newlineBelow')),
       A('Home', 'Line start', () => this.deps.arrow('home', this.consumeMods())),
       A('End', 'Line end', () => this.deps.arrow('end', this.consumeMods())),
       A('', 'Find / replace', () => this.deps.run('find'), { iconName: 'search' }),
       A('Sel', 'Select all', () => this.deps.run('selectAll')),
       A('', 'Save', () => this.deps.run('save'), { iconName: 'save' }),
       A('⌫', 'Backspace', () => this.deps.run('backspace'), { repeat: true }),
+      A('✕Ln', 'Delete line', () => this.deps.run('deleteLine')),
     );
     this.buildSymbols();
   }

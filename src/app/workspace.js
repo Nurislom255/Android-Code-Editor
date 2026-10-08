@@ -750,7 +750,7 @@ export class Workspace {
   // ---- closing ----------------------------------------------------------------
 
   /** @returns {Promise<boolean>} false if the user cancelled */
-  async closeTab(paneIndex, docId, { force = false } = {}) {
+  async closeTab(paneIndex, docId, { force = false, collapse = true } = {}) {
     const pane = this.panes[paneIndex];
     const doc = this.docs.get(docId);
     if (!pane || !doc || !pane.tabs.includes(docId)) return true;
@@ -786,7 +786,13 @@ export class Workspace {
     }
     this.emit('docs', {});
     this.saveSessionSoon();
+    // A split whose pane has no tabs left closes (the other pane's tabs stay).
+    if (collapse) await this.collapseEmptySplit();
     return true;
+  }
+
+  async collapseEmptySplit() {
+    if (this.isSplit() && (!this.panes[0].tabs.length || !this.panes[1].tabs.length)) await this.unsplit();
   }
 
   async closeOthers(paneIndex, keepId) {
@@ -806,9 +812,10 @@ export class Workspace {
         // Dirty project buffers stay safe in the recovery store when switching
         // projects; they come back next time that project opens.
         if (doc && doc.dirty && doc.kind === 'project') await this.recovery.flush(doc.key);
-        if (!(await this.closeTab(pane.index, id, { force: force || (doc && doc.kind === 'project') }))) return false;
+        if (!(await this.closeTab(pane.index, id, { force: force || (doc && doc.kind === 'project'), collapse: false }))) return false;
       }
     }
+    await this.collapseEmptySplit();
     return true;
   }
 
@@ -834,6 +841,7 @@ export class Workspace {
   async unsplit() {
     const p1 = this.panes[1];
     if (!p1) return;
+    const keep = p1.activeId; // what the second pane showed stays in view
     // Documents only open on the right move to the left instead of prompting.
     for (const id of [...p1.tabs]) {
       if (!this.panes[0].tabs.includes(id)) {
@@ -848,7 +856,7 @@ export class Workspace {
     p1.view.setState(EditorState.create({ doc: '' }));
     p1.visible = false;
     this.activePane = 0;
-    if (this.panes[0].activeId == null && this.panes[0].tabs.length) this.showDoc(0, this.panes[0].tabs[0]);
+    if (this.panes[0].activeId == null && this.panes[0].tabs.length) this.showDoc(0, this.panes[0].tabs.includes(keep) ? keep : this.panes[0].tabs[0]);
     this.emit('split', { on: false });
     this.emit('docs', {});
     this.saveSessionSoon();

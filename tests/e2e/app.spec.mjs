@@ -87,3 +87,26 @@ test('works offline after the first visit (service worker)', async ({ browser, b
   await expect(page.locator('.pane.focused-pane .tok-keyword').first()).toHaveText('def');
   await ctx.close();
 });
+
+test('interface size zooms the menus and bars, not the code', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /Scratch file/ }).click();
+  const bar = () => page.locator('#titlebar').boundingBox();
+  const code = () => page.evaluate(() => getComputedStyle(document.querySelector('.cm-content')).fontSize);
+  const h0 = (await bar()).height, f0 = await code();
+  await page.evaluate(() => window.__app.updateSettings({ uiZoom: 130 }));
+  expect((await bar()).height).toBeCloseTo(h0 * 1.3, 0);
+  expect(await code()).toBe(f0);
+  // the command palette still fits the screen
+  await page.evaluate(() => window.__app.run('commandPalette'));
+  const pal = await page.locator('.palette').boundingBox();
+  expect(pal.x + pal.width).toBeLessThanOrEqual(page.viewportSize().width + 1);
+});
+
+test('Android: classic keyboard input by default (keeps auto-capitals off)', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /Scratch file/ }).click();
+  const usesEditContext = () => page.evaluate(() => !!window.__app.ws.view.contentDOM.editContext);
+  expect(await usesEditContext()).toBe(false);
+  expect(await page.evaluate(() => window.__app.ws.view.contentDOM.getAttribute('autocapitalize'))).toBe('off');
+});

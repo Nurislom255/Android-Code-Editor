@@ -61,6 +61,9 @@ export class App {
     hydrateIcons();
     this.applyTheme();
     this.applyFont();
+    this.applyUiZoom();
+    // Must be decided before any editor view exists (see settings.js).
+    EditorView.EDIT_CONTEXT = this.settings.androidEditContext;
 
     this.layout = new Layout({
       getSettings: () => this.settings,
@@ -151,6 +154,15 @@ export class App {
     this.saveSettings(next);
     if (prev.theme !== next.theme) this.applyTheme();
     if (prev.fontSize !== next.fontSize) this.applyFont();
+    if (prev.uiZoom !== next.uiZoom) this.applyUiZoom();
+    if (prev.androidEditContext !== next.androidEditContext) {
+      confirm('Reload to apply?', 'The keyboard input mode changes when the app reloads. Unsaved work is kept.', 'Reload').then(async (ok) => {
+        if (!ok) return;
+        await this.recovery.flushAll();
+        this.ws.saveSession();
+        location.reload();
+      });
+    }
     if (prev.sidebarWidth !== next.sidebarWidth || prev.panelHeight !== next.panelHeight) this.layout.applySizes(next);
     if (prev.historyDays !== next.historyDays || prev.historyMaxPerFile !== next.historyMaxPerFile) this.history.configure({ days: next.historyDays, maxPerFile: next.historyMaxPerFile });
     if (prev.ignoreList !== next.ignoreList) { this.fileCache = null; this.tree.refresh(); }
@@ -174,6 +186,12 @@ export class App {
       matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (this.settings.theme === 'system') this.applyTheme(); });
     }
     if (this.preview && this.preview.target && this.preview.target.kind === 'markdown') this.preview.refresh();
+  }
+
+  /** Interface size: everything around the code (see --ui-zoom in styles.css). */
+  applyUiZoom() {
+    document.documentElement.style.setProperty('--ui-zoom', String(this.settings.uiZoom / 100));
+    if (this.ws) this.layoutChanged();
   }
 
   applyFont(px = this.settings.fontSize) {
@@ -1025,6 +1043,12 @@ export class App {
     }
   }
 
+  /** Several cursors are easy to miss on a phone: say how to get back to one. */
+  multiHint(label) {
+    if (label && /cursors$/.test(label)) this.hint(`${label} — tap the text for one`);
+    return label;
+  }
+
   hint(text, muted = false) {
     if (!this.settings.gestureHints) return;
     const el = $('#gesture-hint');
@@ -1080,6 +1104,10 @@ export class App {
       deleteLine: { label: 'Delete line', key: 'Ctrl+Shift+K', run: (v) => E.deleteLine(v) },
       newlineBelow: { label: 'Insert line below', run: (v) => E.newlineBelow(v) },
       completeStatement: { label: 'Complete statement (add ; and new line)', key: 'Ctrl+Shift+Enter', run: (v) => completeStatement(v) },
+      addCursorDown: { label: 'Add cursor on the line below', key: 'Ctrl+Alt+↓', run: (v) => this.multiHint(E.addCursorDown(v)) },
+      addCursorUp: { label: 'Add cursor on the line above', key: 'Ctrl+Alt+↑', run: (v) => this.multiHint(E.addCursorUp(v)) },
+      selectNext: { label: 'Select next occurrence', key: 'Ctrl+D', run: (v) => this.multiHint(E.selectNext(v)) },
+      cursorsOnLines: { label: 'Cursor on each selected line', key: 'Shift+Alt+I', run: (v) => this.multiHint(E.cursorsOnLines(v) || (toast('Select several lines first (drag down the line numbers).', 'info'), null)) },
       backspace: { label: 'Backspace', run: (v) => E.backspace(v) },
       selectAll: { label: 'Select all', key: 'Ctrl+A', run: (v) => E.selectAll(v) },
       expandSelection: { label: 'Expand selection', key: 'Alt+Shift+→', run: (v) => E.expandSelection(v) },

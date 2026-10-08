@@ -14,13 +14,14 @@ import {
   selectLineUp, selectLineDown, cursorGroupLeft, cursorGroupRight, selectGroupLeft, selectGroupRight,
   deleteGroupBackward, deleteCharBackward, insertNewlineAndIndent, cursorLineBoundaryBackward,
   cursorLineBoundaryForward, selectLine, cursorDocStart, cursorDocEnd, selectLineBoundaryBackward,
-  selectLineBoundaryForward,
+  selectLineBoundaryForward, addCursorAbove, addCursorBelow,
 } from '@codemirror/commands';
 import {
   completionStatus, acceptCompletion, startCompletion, closeCompletion,
   hasNextSnippetField, hasPrevSnippetField, nextSnippetField, prevSnippetField,
 } from '@codemirror/autocomplete';
-import { openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
+import { openSearchPanel, closeSearchPanel, searchPanelOpen, selectNextOccurrence } from '@codemirror/search';
+import { EditorSelection } from '@codemirror/state';
 import { gotoLine } from '@codemirror/search';
 import { indentUnit, getIndentUnit } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
@@ -77,6 +78,36 @@ export const goDocStart = runRO(cursorDocStart, 'Top');
 export const goDocEnd = runRO(cursorDocEnd, 'Bottom');
 export const find = runRO((v) => (searchPanelOpen(v.state) ? closeSearchPanel(v) : openSearchPanel(v)), 'Find');
 export const goToLinePanel = runRO(gotoLine, 'Go to line');
+
+// ---- multi-line editing (several cursors) ------------------------------------
+// Everything typed then goes to every cursor; tap the text to get back to one.
+
+const cursorCount = (view) => `${view.state.selection.ranges.length} cursors`;
+export const addCursorDown = (view) => (view && addCursorBelow(view) ? cursorCount(view) : null);
+export const addCursorUp = (view) => (view && addCursorAbove(view) ? cursorCount(view) : null);
+/** Selects the word under the cursor, then each next occurrence of it (Ctrl+D). */
+export const selectNext = (view) => (view && selectNextOccurrence(view) ? (view.state.selection.ranges.length > 1 ? cursorCount(view) : 'Word selected') : null);
+
+/**
+ * A cursor at the end of every selected line (VS Code: Shift+Alt+I). Select
+ * lines by dragging down the line numbers, then type on all of them at once.
+ */
+export function cursorsOnLines(view) {
+  if (!view) return null;
+  const { state } = view;
+  const ranges = [];
+  for (const r of state.selection.ranges) {
+    if (r.empty) { ranges.push(r); continue; }
+    const first = state.doc.lineAt(r.from);
+    const last = state.doc.lineAt(r.to);
+    // a whole-line selection ends at the start of the next line: not that line
+    const lastNo = r.to === last.from && last.number > first.number ? last.number - 1 : last.number;
+    for (let n = first.number; n <= lastNo; n++) ranges.push(EditorSelection.cursor(state.doc.line(n).to));
+  }
+  if (ranges.length < 2) return null;
+  view.dispatch({ selection: EditorSelection.create(ranges, ranges.length - 1), scrollIntoView: true, userEvent: 'select' });
+  return cursorCount(view);
+}
 
 /** Arrow keys with the keys-bar modifiers (Shift extends, Ctrl jumps words, Alt moves lines). */
 export function arrow(view, dir, { shift = false, ctrl = false, alt = false } = {}) {

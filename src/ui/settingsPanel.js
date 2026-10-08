@@ -28,7 +28,7 @@ export class SettingsPanel {
 
     const select = (key, options, label, desc) => {
       const sel = h('select.select', { 'aria-label': label, onchange: (e) => set({ [key]: e.target.value }) },
-        Object.entries(options).map(([v, t]) => h('option', { value: v, selected: s[key] === v }, t)));
+        Object.entries(options).map(([v, t]) => h('option', { value: v, selected: String(s[key]) === v }, t)));
       return row(label, desc, sel);
     };
     const num = (key, label, desc, min, max, step = 1) => {
@@ -49,7 +49,9 @@ export class SettingsPanel {
     b.append(
       h('h4', 'Appearance'),
       select('theme', { system: 'Follow system', dark: 'Dark', light: 'Light' }, 'Theme'),
-      num('fontSize', 'Font size', 'Pinch the code with two fingers to change it quickly.', 8, 40),
+      num('fontSize', 'Code font size', 'Pinch the code with two fingers to change it quickly.', 8, 40),
+      select('uiZoom', Object.fromEntries([70, 80, 90, 100, 110, 120, 130, 140, 150, 160].map((v) => [v, `${v}%`])), 'Interface size',
+        'Menus, tabs, side bar, panels and the keys bar. The code keeps its own font size.'),
 
       h('h4', 'Editor'),
       num('tabWidth', 'Indent size', 'Used when neither .editorconfig nor the file itself says otherwise.', 1, 8),
@@ -65,6 +67,7 @@ export class SettingsPanel {
       toggle('autoSemicolons', 'Automatic semicolons', 'C, C++, Java, C#, JS, TS: a faded ; appears after statements like "int x = " or "return ". Type ; or press Enter to keep it, Backspace right away to drop it. Off for JS files written without semicolons.'),
       toggle('emmet', 'Emmet in HTML and CSS', '"!" → HTML page, "ul>li*3" → list, "div" on a new line → <div></div>, CSS "m10" → margin: 10px;'),
       toggle('linkedTags', 'Rename matching HTML tag', 'Editing <div> also edits its </div>.'),
+      toggle('androidEditContext', 'Android: EditContext keyboard input', 'Off (recommended): the classic input, which reliably turns off automatic capitals and autocorrect. On: Chrome\'s newer input API — try it only if letters get lost or doubled. Reloads the app.'),
       h('div.setting', h('div.s-text', h('div.s-desc', '"Complete statement" (keys bar ⏎; or Ctrl+Shift+Enter) adds the missing ; — or : in Python, { } after if (…) — and starts a new line, whatever the setting above.'))),
 
       h('h4', 'Saving'),

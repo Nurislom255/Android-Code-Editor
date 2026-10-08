@@ -14,6 +14,13 @@ export function renderTabBar(app, paneIndex) {
   const pane = ws.panes[paneIndex];
   const bar = document.querySelector(`#pane-${paneIndex} .tab-bar`);
   if (!pane || !bar) return;
+  // Rebuild only when something shown changed. Rebuilding on every focus
+  // change replaced the ✕ under the finger between touch-down and touch-up,
+  // so the first tap on a tab in the other pane did nothing.
+  const sig = JSON.stringify([pane.tabs, pane.activeId, paneIndex === 1 && ws.isSplit(),
+    pane.tabs.map((id) => { const d = ws.docs.get(id); return d ? [d.name, d.path, d.dirty, d.locked, d.kind] : null; })]);
+  if (bar._sig === sig && bar.childElementCount) return;
+  bar._sig = sig;
   bar.textContent = '';
   const names = new Map();
   for (const id of pane.tabs) { const d = ws.docs.get(id); if (d) names.set(d.name, (names.get(d.name) || 0) + 1); }
@@ -39,6 +46,12 @@ export function renderTabBar(app, paneIndex) {
     bar.append(tab);
     if (active) requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
   }
+  // The split can always be closed from the second pane (the titlebar's split
+  // button is hidden on narrow screens).
+  if (paneIndex === 1 && ws.isSplit()) {
+    bar.append(h('button.split-close', { type: 'button', title: 'Close the split view (its tabs move to the first pane)', 'aria-label': 'Close split view', onclick: () => app.toggleSplit() },
+      h('span', { html: icon('close', 13) }), 'Split'));
+  }
   if (!bar._menuBound) {
     bar._menuBound = true;
     onLongPress(bar, '.tab', (tab, at) => tabMenu(app, paneIndex, Number(tab.dataset.docId), at));
@@ -57,7 +70,7 @@ function tabMenu(app, paneIndex, docId, at) {
     { label: 'Close tabs to the right', run: async () => { for (const id of pane.tabs.slice(pane.tabs.indexOf(docId) + 1)) if (!(await ws.closeTab(paneIndex, id))) break; } },
     { label: 'Close saved', run: async () => { for (const id of [...pane.tabs]) if (!ws.docs.get(id)?.dirty) await ws.closeTab(paneIndex, id); } },
     '-',
-    { label: paneIndex === 0 ? 'Open in right pane' : 'Move to left pane', icon: 'split', run: () => app.openInPane(doc, other, paneIndex === 1) },
+    { label: paneIndex === 0 ? (app.layout.compact ? 'Open in split view (below)' : 'Open in right pane') : (app.layout.compact ? 'Move to the upper pane' : 'Move to left pane'), icon: 'split', run: () => app.openInPane(doc, other, paneIndex === 1) },
     doc.path && { label: 'Reveal in file tree', icon: 'files', run: () => app.revealInTree(doc.path) },
     doc.path && { label: 'Copy path', icon: 'copy', run: () => app.copyText(doc.path) },
     { label: doc.locked ? 'Unlock editing' : 'Lock (read-only)', icon: doc.locked ? 'unlock' : 'lock', run: () => ws.setLocked(docId, !doc.locked) },

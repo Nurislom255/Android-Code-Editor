@@ -11,7 +11,7 @@ build, and how we know it is done.
 |---|---|---|---|
 | 0 | Real-device test loop (diagnostics) | Small | Not started |
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Built; automated tests pass. Waiting for the on-phone check** (see "Phase 1 — result") |
-| 2 | Keys bar redesign, cursor & selection, Settings split | Large | Not started |
+| 2 | Keys bar redesign, cursor & selection, Settings split | Large | Not started (owner feedback recorded; arrow keys removed, multi-cursor keys added early) |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started |
 | 5 | Built-in runtimes: 5A Python, 5B C/C++ (spike first) | 5A small, 5B unknown until spike | Not started |
@@ -140,6 +140,16 @@ gesture test pad is the only on-device diagnostic for now):
 - [ ] In HTML, typing `di` shows `div`; Tab or swipe right makes `<div></div>`.
 - [ ] The first keys row scrolls when dragged starting on a key.
 
+### After Phase 1 — fixes from the owner's first test on the phone
+
+| Report | What was wrong | Fix |
+|---|---|---|
+| Words get a capital first letter while coding | On Android, CodeMirror typed through Chrome's EditContext API, which apparently doesn't pass `autocapitalize="off"` to the keyboard | Classic (contenteditable) input is the default; Settings → Typing → "Android: EditContext keyboard input" switches back (reloads) |
+| Keys bar stays after the keyboard closes (Chrome) | The "keyboard open" test compared against the tallest height seen *per orientation*, so a shorter window (split-screen, resized window) or a pinch-zoomed page looked like an open keyboard | Baseline per window width; page zoom undone; listens to window and visual-viewport resizes |
+| Split pane stays after closing all its tabs (portrait); no button | Closing tabs never closed the split; the split button is hidden on narrow screens; the first tap on a ✕ in the unfocused pane did nothing (the tab bar was rebuilt under the finger) | Split closes when a pane is empty; "✕ Split" button in the second pane's tab bar; tab bars rebuild only when they change |
+| Code size vs. app size | Only the code had a size setting (and pinch) | Settings → Appearance → Interface size (70–160 %) for menus, tabs, panels and the keys bar |
+| Arrow keys not needed; new line / move line important; multi-line editing | — | Bar re-ranked (see Phase 2 notes); multi-cursor keys and Ctrl+D / Ctrl+Alt+↑↓ / Shift+Alt+I |
+
 ---
 
 ## Phase 1 — Typing correctness (the plan)
@@ -265,6 +275,16 @@ keys now; Phase 2 replaces the layout anyway.
 (Reported issues 1 and 2, plus the owner's requests for modifiers, Tab and
 customization.)
 
+**Owner feedback after testing Phase 1 (decisions for this phase):**
+- The four arrow keys are **not wanted** on the bar (removed already; the
+  trackpad strip / joystick moves the cursor).
+- Must stay close at hand: **new line below**, **move line up / down**, Tab,
+  Complete statement. **Delete line** is not a key to keep near the thumbs: it
+  becomes a gesture (to be chosen with the owner); the key stays in "More".
+- **Multi-line editing** is needed. Shipped early as keys (`+⇣` / `+⇡` add a
+  cursor below/above, `⫶` a cursor on each selected line, `Sel+` next
+  occurrence); Phase 2 places them in the selection layer / context row.
+
 ### 2.1 Settings split into pages (foundation for the keys-bar editor)
 
 - Pages: **Appearance · Editor · Typing & autocomplete · Keys bar · Gestures ·
@@ -349,6 +369,12 @@ rules, editable in Settings):
 - **Long-press** any key → Gboard-style popup of variants (`(` → `()` `[]` `{}`
   `<>`; `"` → `'` `` ` `` `"""`; `;` → `:` `::` `,`). **Swipe up / down** on a
   key types its 1st / 2nd alternate (shown small in the key's corners).
+- **Owner report (after Phase 1, on the phone):** long-pressing keys "does not
+  work properly". Today no key has a long-press action — the small corner
+  symbol is typed by *swiping up* on the key, which isn't discoverable, and
+  holding a key either does nothing or repeats it. Phase 2 must: give every
+  key with variants a long-press popup, show a long-press hint once, and keep
+  swipe-up as the shortcut. Confirm with the owner which keys they tried.
 - **⋯ More** → a sheet with every key, grouped: Brackets · Operators ·
   Navigation · Editing · Selection · Lines · Modifiers. Long-press a key in the
   sheet → "Pin to bar".

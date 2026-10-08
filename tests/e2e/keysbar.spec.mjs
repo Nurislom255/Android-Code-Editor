@@ -91,20 +91,48 @@ test('swipe up on a key types its alternate symbol', async ({ page }) => {
   expect(await editorText(page)).toBe('x =>');
 });
 
-test('arrow keys, Shift modifier and Tab', async ({ page }) => {
+test('Home/End with the Shift modifier, and Tab (no arrow keys any more)', async ({ page }) => {
   await setup(page, 'abc', 3);
-  await key(page, '←').tap();
-  await key(page, '←').tap();
-  expect(await page.evaluate(() => window.__app.ws.view.state.selection.main.head)).toBe(1);
+  for (const arrow of ['←', '→', '↑', '↓']) await expect(page.locator('#keys-bar .key', { hasText: new RegExp(`^${arrow}$`) })).toHaveCount(0);
+  await key(page, 'Home').tap();
+  expect(await page.evaluate(() => window.__app.ws.view.state.selection.main.head)).toBe(0);
   await page.locator('#keys-bar .key.mod', { hasText: '⇧' }).tap();
-  await key(page, '→').tap();
+  await key(page, 'End').tap();
   const sel = await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; });
-  expect(sel).toEqual([1, 2]);
+  expect(sel).toEqual([0, 3]);
   // Shift was one-shot: it released after one use
   await expect(page.locator('#keys-bar .key.mod', { hasText: '⇧' })).not.toHaveClass(/armed/);
   await setText(page, 'x', 0);
   await key(page, 'Tab').tap();
   expect(await editorText(page)).toBe('  x');
+});
+
+test('the most used line keys come first', async ({ page }) => {
+  await setup(page, '');
+  const labels = await page.locator('#keys-bar .keys-actions .key').evaluateAll((els) => els.slice(0, 5).map((e) => e.textContent));
+  expect(labels).toEqual(['Tab', '⏎;', '↵Ln', '⇡Ln', '⇣Ln']);
+});
+
+test('multi-line editing: +⇣ adds cursors, typing goes to every line', async ({ page }) => {
+  await setup(page, 'let a = 1\nlet b = 2\nlet c = 3', 'let a = 1'.length);
+  const add = page.locator('#keys-bar .key[title^="Add a cursor on the line below"]');
+  await add.scrollIntoViewIfNeeded();
+  await add.tap();
+  await add.tap();
+  expect(await page.evaluate(() => window.__app.ws.view.state.selection.ranges.length)).toBe(3);
+  await page.keyboard.type(';');
+  expect(await editorText(page)).toBe('let a = 1;\nlet b = 2;\nlet c = 3;');
+});
+
+test('multi-line editing: ⫶ puts a cursor on each selected line', async ({ page }) => {
+  await setup(page, 'one\ntwo\nthree');
+  await page.evaluate(() => { const v = window.__app.ws.view; v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } }); });
+  const k = key(page, '⫶');
+  await k.scrollIntoViewIfNeeded();
+  await k.tap();
+  expect(await page.evaluate(() => window.__app.ws.view.state.selection.ranges.length)).toBe(3);
+  await page.keyboard.type('!');
+  expect(await editorText(page)).toBe('one!\ntwo!\nthree!');
 });
 
 test('trackpad strip moves the cursor by dragging', async ({ page }) => {
@@ -140,4 +168,21 @@ test('custom key layout from settings', async ({ page }) => {
   await expect(page.locator('#keys-bar .keys-symbols .key')).toHaveCount(2);
   await key(page, '$').tap();
   expect(await editorText(page)).toBe('$');
+});
+
+test('the bar hides when the keyboard closes, also after the window changes size', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'kb', 'js');
+  await openFile(page, 'main.js');
+  await page.evaluate(() => window.__app.ws.view.focus());
+  const size = page.viewportSize();
+  const bar = page.locator('#keys-bar');
+  await expect(bar).toBeHidden(); // focused, but no keyboard
+  await page.setViewportSize({ width: size.width, height: size.height - 320 }); // keyboard opens
+  await expect(bar).toBeVisible();
+  await page.setViewportSize(size); // keyboard closes
+  await expect(bar).toBeHidden();
+  // split-screen: a narrower, shorter window is not a keyboard
+  await page.setViewportSize({ width: size.width - 60, height: Math.round(size.height * 0.55) });
+  await expect(bar).toBeHidden();
 });
