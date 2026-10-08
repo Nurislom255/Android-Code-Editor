@@ -20,7 +20,7 @@ import { gitGutter } from './gitGutter.js';
 import { snippetSource } from './snippets.js';
 import { docInfo } from './context.js';
 import { openFilesWordSource, pathSource, composeCompletion } from './completions.js';
-import { emmetSource } from './emmet.js';
+import { emmetSource, tagNameSource, proseEnter } from './emmet.js';
 import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
 
@@ -52,6 +52,7 @@ export function langDataExtension(doc, userSnippets, settings) {
   const languageId = doc.lang.id;
   const sources = [];
   if (settings.emmet && EMMET_KIND[languageId]) sources.push(emmetSource(EMMET_KIND[languageId]));
+  if (settings.emmet && languageId === 'html') sources.push(tagNameSource);
   const snip = snippetSource(languageId, userSnippets);
   if (snip) sources.push(snip);
   if (!HAS_LOCAL_COMPLETION.has(languageId)) sources.push(completeAnyWord);
@@ -99,6 +100,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     editorHighlighting,
     bracketMatching(),
     comp.closeBrackets.of(closeBracketsExtension(settings.autoCloseBrackets)),
+    proseEnter, // before autocompletion(): its Enter binding has the same precedence
     autocompletion({ activateOnTyping: true, closeOnBlur: true, icons: true, maxRenderedOptions: 60 }),
     composeCompletion,
     rectangularSelection(),

@@ -17,6 +17,36 @@ export const HTML_TAGS = new Set((
   'thead time title tr track u ul var video wbr'
 ).split(' '));
 
+// Most-used tags first when several start with what was typed ("d" → div).
+const POPULAR = [
+  'div', 'p', 'span', 'a', 'img', 'ul', 'li', 'h1', 'h2', 'h3', 'button', 'input', 'section', 'header', 'footer',
+  'nav', 'main', 'form', 'label', 'table', 'tr', 'td', 'th', 'ol', 'strong', 'em', 'br', 'hr', 'script', 'link',
+  'meta', 'style', 'title', 'select', 'option', 'textarea', 'article', 'aside', 'figure', 'video', 'audio',
+  'canvas', 'iframe', 'pre', 'code', 'small', 'details', 'summary', 'dialog',
+];
+
+/**
+ * Tag names to suggest for a word typed in HTML text — "di" → div, dialog —
+ * so a tag can be written without typing "<". Each one expands to
+ * `<tag>|</tag>` (or `<img src="" alt="">` …).
+ *   word    the word before the cursor
+ *   prefix  the line before that word
+ * Not for capitalised words or words glued to other characters ("ul>li" is
+ * Emmet's job, `"di` is inside quotes); in the middle of a sentence only
+ * from two letters on, so prose isn't interrupted at every word.
+ * @returns {{tags:string[], atTagStart:boolean}}
+ */
+export function tagSuggestions(word, prefix, explicit = false) {
+  const none = { tags: [], atTagStart: false };
+  if (!/^[a-z][a-z0-9-]*$/.test(word)) return none;
+  if (prefix && !/\s$/.test(prefix) && !/<[^<>]*>$/.test(prefix)) return none;
+  const atTagStart = /^\s*$/.test(prefix) || /<[^<>]*>\s*$/.test(prefix);
+  if (word.length < 2 && !atTagStart && !explicit) return none;
+  const rank = (t) => (t === word ? -1 : POPULAR.includes(t) ? POPULAR.indexOf(t) : 100 + t.length);
+  const tags = [...HTML_TAGS].filter((t) => t.startsWith(word)).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  return { tags, atTagStart };
+}
+
 // Markers Emmet writes for tab stops (see `fieldMarker`), turned into
 // CodeMirror's ${n:placeholder} syntax by `toSnippetTemplate`.
 const F_OPEN = '\u0001', F_SEP = '\u0002', F_CLOSE = '\u0003';

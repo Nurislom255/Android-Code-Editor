@@ -1,188 +1,162 @@
 // Table-driven tests for the automatic-semicolon rules (core/semicolons.js).
-// `|` marks the cursor; text after it on the same line is what the editor
-// auto-inserted after the cursor (closing brackets/quotes).
+// `|` marks the cursor; the character just before it is the one just typed,
+// text after it is what the editor auto-inserted (closing brackets).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { wantsSemicolon, canStepOver, isBareJump, completionPlan, prefersNoSemicolons, scan } from '../../src/core/semicolons.js';
+import { autoSemicolon, scopeAt, enterStepsOver, isBareJump, codePart, completionPlan, prefersNoSemicolons } from '../../src/core/semicolons.js';
 
-function split(src) {
+function wants(src, lang, scope = 'body') {
   const i = src.indexOf('|');
   const before = src.slice(0, i);
-  const rest = src.slice(i + 1);
-  const nl = rest.indexOf('\n');
-  return { before, after: nl < 0 ? rest : rest.slice(0, nl) };
+  return autoSemicolon(before, src.slice(i + 1), before.slice(-1), lang, scope);
 }
-const wants = (src, lang) => { const { before, after } = split(src); return wantsSemicolon(before, after, lang); };
 
-const CPP_FN = (body) => `#include <iostream>\nint main() {\n    ${body}\n}`;
-const JAVA_FN = (body) => `public class Main {\n  public static void main(String[] args) {\n    ${body}\n  }\n}`;
-const CS_FN = (body) => `namespace App {\n  class P {\n    static void Main() {\n      ${body}\n    }\n  }\n}`;
-
-// [description, language, source with |, expected]
+// [source with |, language, scope, expected]
 const CASES = [
-  // ---- C++: statements in a function body that need `;`
-  ['C++ declaration with initializer', 'cpp', CPP_FN('int x = |'), true],
-  ['C++ declaration, value typed', 'cpp', CPP_FN('int total = a + b|'), true],
-  ['C++ declaration without initializer', 'cpp', CPP_FN('std::string name |'), true],
-  ['C++ template type declaration', 'cpp', CPP_FN('std::vector<int> v = |'), true],
-  ['C++ pointer declaration', 'cpp', CPP_FN('const char* p = |'), true],
-  ['C++ return', 'cpp', CPP_FN('return |'), true],
-  ['C++ return value', 'cpp', CPP_FN('return a * 2|'), true],
-  ['C++ break', 'cpp', 'int f() {\n  while (1) {\n    break|\n  }\n}', true],
-  ['C++ continue', 'cpp', 'int f() {\n  for (;;) {\n    continue|\n  }\n}', true],
-  ['C++ throw', 'cpp', CPP_FN('throw std::runtime_error(|)'), true],
-  ['C++ call with auto-closed paren', 'cpp', CPP_FN('printf(|)'), true],
-  ['C++ call, cursor inside auto-closed string', 'cpp', CPP_FN('printf("hello|")'), true],
-  ['C++ method call', 'cpp', CPP_FN('v.push_back(|)'), true],
-  ['C++ assignment', 'cpp', CPP_FN('x = |'), true],
-  ['C++ compound assignment', 'cpp', CPP_FN('x += |'), true],
-  ['C++ increment', 'cpp', CPP_FN('i++|'), true],
-  ['C++ cout chain', 'cpp', CPP_FN('std::cout << "x" << |'), true],
-  ['C++ cin', 'cpp', CPP_FN('cin >> n|'), true],
-  ['C++ using namespace (top level)', 'cpp', 'using namespace |', true],
-  ['C++ using alias in body', 'cpp', CPP_FN('using T = |'), true],
-  ['C++ brace initializer {|}', 'cpp', CPP_FN('int a[] = {|}'), true],
-  ['C++ global with initializer', 'cpp', 'int counter = |', true],
-  ['C++ struct field', 'cpp', 'struct Point {\n  int x |\n};', true],
-  ['C++ pure virtual', 'cpp', 'class A {\n  virtual void f() = 0|\n};', true],
-  ['C++ single-line if body', 'cpp', CPP_FN('if (x) return |'), true],
-  ['C++ lambda assigned (statement continues after the body)', 'cpp', CPP_FN('auto f = [](int a) { return a; }|'), true],
-  ['C++ call with a lambda argument', 'cpp', CPP_FN('std::sort(v.begin(), v.end(), [](int a, int b) { return a < b; }|)'), true],
-  // ---- C++: never
-  ['C++ #include', 'cpp', '#include <iostream>|', false],
-  ['C++ #define', 'cpp', '#define MAX 10|', false],
-  ['C++ function header (top level)', 'cpp', 'int main(|)', false],
-  ['C++ method header in a class', 'cpp', 'class A {\n  void run(|)\n};', false],
-  ['C++ global without initializer', 'cpp', 'int counter |', false],
-  ['C++ if header', 'cpp', CPP_FN('if (x > 0|)'), false],
-  ['C++ for header (semicolons inside)', 'cpp', CPP_FN('for (int i = 0; i < n; i++|)'), false],
-  ['C++ while header', 'cpp', CPP_FN('while (running|)'), false],
-  ['C++ else', 'cpp', CPP_FN('} else |'), false],
-  ['C++ switch header', 'cpp', CPP_FN('switch (c|)'), false],
-  ['C++ case label', 'cpp', CPP_FN('switch (c) {\n    case 1:|'), false],
-  ['C++ access specifier', 'cpp', 'class A {\npublic:|\n};', false],
-  ['C++ class header', 'cpp', 'class Shape : public Base |', false],
-  ['C++ struct header', 'cpp', 'struct Point |', false],
-  ['C++ namespace header', 'cpp', 'namespace geo |', false],
-  ['C++ template header', 'cpp', 'template <typename T|>', false],
-  ['C++ inside a line comment', 'cpp', CPP_FN('// return x|'), false],
-  ['C++ inside a block comment', 'cpp', CPP_FN('/* int x = |'), false],
-  ['C++ inside an unterminated string', 'cpp', CPP_FN('s = "abc|'), false],
-  ['C++ line ending with a comma (multi-line args)', 'cpp', CPP_FN('foo(a,|'), false],
-  ['C++ already has a semicolon', 'cpp', CPP_FN('x = 1;|'), false],
-  ['C++ label', 'cpp', CPP_FN('retry:|'), false],
-  ['C++ text after cursor that is not a closer', 'cpp', CPP_FN('x = |y'), false],
-  ['C++ inside an initializer list on a new line', 'cpp', CPP_FN('int a[] = {\n      1, 2|\n    };'), false],
-  ['C++ the cursor is inside a nested block', 'cpp', CPP_FN('if (x) { y = 1|}'), false],
-  // ---- C
-  ['C declaration', 'c', 'int main(void) {\n  int n = |\n}', true],
-  ['C struct variable', 'c', 'int main(void) {\n  struct Point p = {|}\n}', true],
-  ['C typedef', 'c', 'typedef unsigned long |', true],
-  // ---- Java
-  ['Java println', 'java', JAVA_FN('System.out.println(|)'), true],
-  ['Java generic declaration', 'java', JAVA_FN('List<String> names = new ArrayList<>(|)'), true],
-  ['Java field', 'java', 'public class A {\n  private int count |\n}', true],
-  ['Java field with initializer', 'java', 'public class A {\n  private final int max = |\n}', true],
-  ['Java import', 'java', 'import java.util.List|', true],
-  ['Java package', 'java', 'package com.example|', true],
-  ['Java method header', 'java', 'public class A {\n  public void run(|)\n}', false],
-  ['Java annotation', 'java', 'public class A {\n  @Override|\n}', false],
-  ['Java class header', 'java', 'public class Main |', false],
-  ['Java lambda body continues the statement', 'java', JAVA_FN('list.forEach(x -> { print(x); }|)'), true],
-  // ---- C#
-  ['C# using directive', 'csharp', 'using System|', true],
-  ['C# var declaration', 'csharp', CS_FN('var x = |'), true],
-  ['C# call', 'csharp', CS_FN('Console.WriteLine(|)'), true],
-  ['C# using statement header', 'csharp', CS_FN('using (var f = Open(|))'), false],
-  ['C# foreach header', 'csharp', CS_FN('foreach (var x in xs|)'), false],
-  ['C# property header', 'csharp', 'class P {\n  public int X |\n}', true],
-  // ---- JavaScript / TypeScript
-  ['JS const', 'javascript', 'const a = |', true],
-  ['JS let without value', 'javascript', 'let count |', true],
-  ['JS call at top level', 'javascript', 'console.log(|)', true],
-  ['JS object literal {|}', 'javascript', 'const obj = {|}', true],
-  ['JS arrow function with block body', 'javascript', 'const f = () => {}|', true],
-  ['JS await', 'javascript', 'async function f() {\n  await load(|)\n}', true],
-  ['JS import', 'javascript', "import x from 'y'|", true],
-  ['JS export default value', 'javascript', 'export default config|', true],
-  ['JS class field', 'javascript', 'class A {\n  count = |\n}', true],
-  ['JS return in a callback', 'javascript', 'items.map((x) => {\n  return x * 2|\n});', true],
-  ['JS template literal call', 'javascript', 'log(`a ${b}|`)', true],
-  ['JS function declaration', 'javascript', 'function foo(|)', false],
-  ['JS class method header', 'javascript', 'class A {\n  render(|)\n}', false],
-  ['JS inside an object literal', 'javascript', 'const o = {\n  a: 1|\n};', false],
-  ['JS inside a template literal', 'javascript', 'const s = `line ${x} |', false],
-  ['JS if header', 'javascript', 'if (ready|)', false],
-  ['JS export function', 'javascript', 'export function run(|)', false],
-  ['JS label', 'javascript', 'outer:|', false],
-  ['JS destructuring {|}', 'javascript', 'const {|} = obj', false],
-  ['TS type alias', 'typescript', 'type Id = |', true],
-  ['TS interface member', 'typescript', 'interface User {\n  name: string|\n}', true],
-  ['TS interface header', 'typescript', 'export interface User |', false],
-  ['TS typed let', 'typescript', 'let n: number = |', true],
-  ['TSX return (|)', 'tsx', 'function App() {\n  return (|)\n}', true],
-  ['TSX inside JSX parens', 'tsx', 'function App() {\n  return (\n    <div>|\n  );\n}', false],
+  // ---- obvious statements in a function body
+  ['    int x =|', 'cpp', 'body', true],
+  ['    std::vector<int> v =|', 'cpp', 'body', true],
+  ['    const char* p =|', 'cpp', 'body', true],
+  ['    auto it =|', 'cpp', 'body', true],
+  ['    unsigned long long n =|', 'cpp', 'body', true],
+  ['    int arr[3] =|', 'cpp', 'body', true],
+  ['    x =|', 'cpp', 'body', true],
+  ['    x +=|', 'cpp', 'body', true],
+  ['    mask <<=|', 'cpp', 'body', true],
+  ['    this->n =|', 'cpp', 'body', true],
+  ['    arr[i] =|', 'cpp', 'body', true],
+  ['    *p =|', 'cpp', 'body', true],
+  ['    returnValue =|', 'cpp', 'body', true],
+  ['    struct Point p =|', 'c', 'body', true],
+  ['    return |', 'cpp', 'body', true],
+  ['    throw |', 'cpp', 'body', true],
+  ['    foo(|)', 'cpp', 'body', true],
+  ['    v.push_back(|)', 'cpp', 'body', true],
+  ['    std::sort(|)', 'cpp', 'body', true],
+  ['    p->run(|)', 'cpp', 'body', true],
+  ['    std::cout <<|', 'cpp', 'body', true],
+  ['    cin >>|', 'cpp', 'body', true],
+  ['    i++|', 'cpp', 'body', true],
+  ['    n--|', 'cpp', 'body', true],
+  ['    using T =|', 'cpp', 'body', true],
+  ['    printf(|)', 'c', 'body', true],
+  // ---- globals and class fields: only with an initializer
+  ['int counter =|', 'cpp', 'top', true],
+  ['  int x =|', 'cpp', 'class', true],
+  ['  private int count =|', 'java', 'class', true],
+  ['  count =|', 'javascript', 'class', true],
+  // ---- never
+  ['    if (|)', 'cpp', 'body', false],
+  ['    for (int i =|', 'cpp', 'body', false],
+  ['    for (int i = 0; i < n; i++|)', 'cpp', 'body', false],
+  ['    while (|)', 'cpp', 'body', false],
+  ['    switch (|)', 'cpp', 'body', false],
+  ['    } else if (|)', 'cpp', 'body', false],
+  ['    x ==|', 'cpp', 'body', false],
+  ['    a <=|', 'cpp', 'body', false],
+  ['    a !=|', 'cpp', 'body', false],
+  ['int main(|)', 'cpp', 'top', false],
+  ['Foo::Foo(|)', 'cpp', 'top', false],
+  ['foo(|)', 'cpp', 'top', false],
+  ['  void run(|)', 'cpp', 'class', false],
+  ['  render(|)', 'javascript', 'class', false],
+  ['  return |', 'cpp', 'class', false],
+  ['    int b =|', 'cpp', 'none', false],        // a default argument on its own line
+  ['  a: foo(|)', 'javascript', 'none', false],  // inside an object literal
+  ['    // x =|', 'cpp', 'body', false],
+  ['#define X =|', 'cpp', 'top', false],
+  ['    x =|y', 'cpp', 'body', false],           // text after the cursor
+  ['    T& operator=|', 'cpp', 'class', false],
+  ['    else x =|', 'cpp', 'body', false],
+  ['    return x =|', 'cpp', 'body', false],
+  ['    retur |', 'cpp', 'body', false],
+  ['    foo(a, |)', 'cpp', 'body', false],       // a space inside the call
+  ['    int x;|', 'cpp', 'body', false],
+  ['    if (x) foo(|)', 'cpp', 'body', false],
+  // ---- JS / TS
+  ['const a =|', 'javascript', 'body', true],
+  ['let { a, b } =|', 'javascript', 'body', true],
+  ['export const x =|', 'javascript', 'body', true],
+  ['console.log(|)', 'javascript', 'body', true],
+  ['document.querySelector("#x").addEventListener(|)', 'javascript', 'body', true],
+  ['  .then(|)', 'javascript', 'body', true],
+  ['await load(|)', 'javascript', 'body', true],
+  ['function foo(|)', 'javascript', 'body', false],
+  ['let n: number =|', 'typescript', 'body', true],
+  ['type Id =|', 'typescript', 'body', true],
+  // ---- Java / C#
+  ['    System.out.println(|)', 'java', 'body', true],
+  ['    String s =|', 'java', 'body', true],
+  ['    Console.WriteLine(|)', 'csharp', 'body', true],
+  ['    var x =|', 'csharp', 'body', true],
   // ---- languages without semicolons
-  ['Python never', 'python', 'x = |', false],
-  ['Kotlin never', 'kotlin', 'val x = |', false],
-  ['Go never', 'go', 'x := |', false],
+  ['x =|', 'python', 'body', false],
+  ['val x =|', 'kotlin', 'body', false],
+  ['x :=|', 'go', 'body', false],
 ];
 
-test(`semicolon rules: ${CASES.length} cases`, () => {
+test(`automatic semicolon rules: ${CASES.length} cases`, () => {
   const failures = [];
-  for (const [name, lang, src, expected] of CASES) {
-    let got;
-    try { got = wants(src, lang); } catch (err) { got = `threw ${err.message}`; }
-    if (got !== expected) failures.push(`${name} [${lang}]: expected ${expected}, got ${got}\n      ${JSON.stringify(src)}`);
+  for (const [src, lang, scope, expected] of CASES) {
+    const got = wants(src, lang, scope);
+    if (got !== expected) failures.push(`${JSON.stringify(src)} [${lang}, ${scope}]: expected ${expected}, got ${got}`);
   }
   assert.equal(failures.length, 0, '\n' + failures.join('\n'));
 });
 
-test('Enter steps over the pending ; only when the statement is complete', () => {
+test('Enter steps over the pending ; unless the line continues', () => {
   const cases = [
-    // [before cursor, between cursor and the pending ;, lang, expected]
-    ['  int x = 5', '', 'cpp', true],
-    ['  int x = ', '', 'cpp', false],               // ends with =
-    ['  std::cout << ', '', 'cpp', false],          // ends with <<
-    ['  obj.', '', 'javascript', false],            // ends with .
-    ['  p->', '', 'cpp', false],                    // ends with ->
-    ['  total = a +', '', 'cpp', false],            // ends with an operator
-    ['  foo(a', ')', 'cpp', true],                  // auto-closed paren counts
-    ['  foo(', ')', 'cpp', false],                  // empty parens: Enter splits them
-    ['  foo(a, ', ')', 'cpp', false],               // after a comma
-    ['  printf("hi', '")', 'cpp', true],            // cursor inside an auto-closed string
-    ['  const o = {', '}', 'javascript', false],    // Enter opens the block
-    ['  i++', '', 'cpp', true],
-    ['  return', '', 'cpp', true],
-    ['  x = foo(bar(1', '))', 'javascript', true],
+    // [line before the cursor, text between cursor and ;, expected]
+    ['    int x = 5', '', true],
+    ['    int x = ', '', false],
+    ['    std::cout << ', '', false],
+    ['    obj.', '', false],
+    ['    p->', '', false],
+    ['    total = a +', '', false],
+    ['    foo(a', ')', true],
+    ['    foo(', ')', false],
+    ['    foo(a, ', ')', false],
+    ['    printf("hi', '")', true],
+    ['    i++', '', true],
+    ['    return', '', true],
+    ['    ', '', false],
   ];
-  for (const [before, between, lang, expected] of cases) {
-    assert.equal(canStepOver(before, between, lang), expected, `${JSON.stringify(before)} | ${JSON.stringify(between)}`);
-  }
+  for (const [before, between, expected] of cases) assert.equal(enterStepsOver(before, between), expected, `${JSON.stringify(before)} | ${JSON.stringify(between)}`);
 });
 
-test('break / continue / return alone + Enter get their ;', () => {
-  assert.equal(isBareJump('void f() {\n  while (1) {\n    break', 'cpp'), true);
-  assert.equal(isBareJump('function f() {\n  return', 'javascript'), true);
-  assert.equal(isBareJump('void f() {\n  breakpoint', 'cpp'), false);
-  assert.equal(isBareJump('def f():\n  return', 'python'), false);
+test('break / continue / return alone get their ; on Enter', () => {
+  assert.equal(isBareJump('        break'), true);
+  assert.equal(isBareJump('  return  '), true);
+  assert.equal(isBareJump('  breakpoint'), false);
+  assert.equal(isBareJump('  return x'), false);
+});
+
+test('code part of a line', () => {
+  assert.equal(codePart('  x = 1 // set x  '), '  x = 1');
+  assert.equal(codePart('  url = "http://x" // c'), '  url = "http://x"');
+  assert.equal(codePart('  foo();   '), '  foo();');
 });
 
 test('complete statement plans', () => {
-  const plan = (before, lang) => completionPlan(before, lang);
-  assert.deepEqual(plan('int main() {\n  int x = 5', 'cpp'), { append: ';', block: false });
-  assert.deepEqual(plan('int main() {\n  foo(a, b', 'cpp'), { append: ');', block: false });
-  assert.deepEqual(plan('int main() {\n  if (x > 0)', 'cpp'), { append: ' {}', block: true });
-  assert.deepEqual(plan('int main() {\n  for (int i = 0; i < n; i++)', 'cpp'), { append: ' {}', block: true });
-  assert.deepEqual(plan('int main() {\n  x = 1;', 'cpp'), { append: '', block: false });
-  assert.deepEqual(plan('int square(int x)', 'cpp'), { append: ' {}', block: true });
-  assert.deepEqual(plan('struct Point', 'cpp'), { append: ' {};', block: true });
-  assert.deepEqual(plan('class A {\n  render()', 'javascript'), { append: ' {}', block: true });
-  assert.deepEqual(plan('const f = () =>', 'javascript'), { append: ' {};', block: true });
-  assert.deepEqual(plan('if x > 0', 'python'), { append: ':', block: false });
-  assert.deepEqual(plan('def run(self):', 'python'), { append: '', block: false });
-  assert.deepEqual(plan('x = 1', 'python'), { append: '', block: false });
-  assert.deepEqual(plan('x <- 1', 'r'), { append: '', block: false });
+  const plan = completionPlan;
+  assert.deepEqual(plan('    int x = 5', 'cpp', 'body'), { append: ';', block: false });
+  assert.deepEqual(plan('    foo(a, b', 'cpp', 'body'), { append: ');', block: false });
+  assert.deepEqual(plan('    foo(a, [b', 'javascript', 'body'), { append: ']);', block: false });
+  assert.deepEqual(plan('    if (x > 0)', 'cpp', 'body'), { append: ' {}', block: true });
+  assert.deepEqual(plan('    } else if (x)', 'cpp', 'body'), { append: ' {}', block: true });
+  assert.deepEqual(plan('    for (int i = 0; i < n; i++)', 'cpp', 'body'), { append: ' {}', block: true });
+  assert.deepEqual(plan('    x = 1;', 'cpp', 'body'), { append: '', block: false });
+  assert.deepEqual(plan('int square(int x)', 'cpp', 'top'), { append: ' {}', block: true });
+  assert.deepEqual(plan('int x = foo(1)', 'cpp', 'top'), { append: ';', block: false });
+  assert.deepEqual(plan('struct Point', 'cpp', 'top'), { append: ' {};', block: true });
+  assert.deepEqual(plan('  render()', 'javascript', 'class'), { append: ' {}', block: true });
+  assert.deepEqual(plan('const f = () =>', 'javascript', 'body'), { append: ' {};', block: true });
+  assert.deepEqual(plan('    if (x) return y', 'cpp', 'body'), { append: ';', block: false });
+  assert.deepEqual(plan('if x > 0', 'python', 'body'), { append: ':', block: false });
+  assert.deepEqual(plan('def run(self):', 'python', 'body'), { append: '', block: false });
+  assert.deepEqual(plan('x = 1', 'python', 'body'), { append: '', block: false });
+  assert.deepEqual(plan('#include <vector>', 'cpp', 'top'), { append: '', block: false });
+  assert.deepEqual(plan('x <- 1', 'r', 'body'), { append: '', block: false });
 });
 
 test('semicolon-less JS files are detected', () => {
@@ -191,12 +165,32 @@ test('semicolon-less JS files are detected', () => {
   assert.equal(prefersNoSemicolons('const x = 1\n'), false, 'too little evidence');
 });
 
-test('scanner: scope and statement text', () => {
-  const s = scan('class A {\n  int x;\n  void f() {\n    int y = 1;\n    foo(', 'cpp');
-  assert.equal(s.scope, 'body');
-  assert.equal(s.stmt.trim(), 'foo(');
-  assert.equal(scan('class A {\n  ', 'cpp').scope, 'class');
-  assert.equal(scan('namespace n {\n  ', 'cpp').scope, 'top');
-  assert.equal(scan('', 'javascript').scope, 'body');
-  assert.equal(scan('const s = "a { b', 'javascript').mode, 'string');
+test('where a line sits: function body, class body, top level or none', () => {
+  const cases = [
+    // [code above the line, language, expected]
+    ['int main() {\n', 'cpp', 'body'],
+    ['int main() {\n    int a = 1;\n', 'cpp', 'body'],
+    ['', 'cpp', 'top'],
+    ['#include <vector>\n', 'cpp', 'top'],
+    ['struct Point {\n', 'cpp', 'class'],
+    ['class A : public B {\npublic:\n', 'cpp', 'class'],
+    ['namespace geo {\n', 'cpp', 'top'],
+    ['void f(int a,\n', 'cpp', 'none'],                    // parameter list
+    ['int a[] = {\n', 'cpp', 'none'],                      // initializer
+    ['enum Color {\n', 'cpp', 'none'],
+    ['void A::run() const {\n    if (x) {\n', 'cpp', 'body'],
+    ['int main() {\n    auto f = [](int x) {\n', 'cpp', 'body'],
+    ['int main() {\n    std::sort(v.begin(), v.end(), [](int a, int b) {\n', 'cpp', 'body'],
+    ['int main() {\n    // a { in a comment\n    s = "}";\n', 'cpp', 'body'],
+    ['', 'javascript', 'body'],
+    ['class A {\n', 'javascript', 'class'],
+    ['class A {\n  render() {\n', 'javascript', 'body'],
+    ['const o = {\n', 'javascript', 'none'],
+    ['items.forEach((x) => {\n', 'javascript', 'body'],
+    ['const s = `\n', 'javascript', 'body'],                // (inside a template literal: the line itself is text)
+    ['public class Main {\n', 'java', 'class'],
+    ['public class Main {\n  void run() {\n', 'java', 'body'],
+    ['class A {\n  void m() {\n    t = new Thread(new Runnable() {\n', 'java', 'class'],
+  ];
+  for (const [text, lang, expected] of cases) assert.equal(scopeAt(text, lang), expected, `${JSON.stringify(text)} [${lang}]`);
 });

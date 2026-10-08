@@ -1,45 +1,42 @@
-// editor/semicolons.js — automatic ("pending") semicolons and the "Complete
-// statement" command. The rules — which statements want a `;` — are in
-// core/semicolons.js; this file is the editing behaviour around them:
+// editor/semicolons.js — automatic semicolons and "Complete statement".
+// The rules (which lines get a `;`) are in core/semicolons.js; this is the
+// editing behaviour around them, kept cheap:
 //
-//   • Typing a statement that needs `;` at the end of a line (`int x = `,
-//     `return `, `foo(`, `std::cout << `…) inserts a faded `;` after the
-//     cursor, in the same undo step as the typing.
-//   • The `;` is re-checked on every edit of its statement, and removed if
-//     the statement turns out not to need one (`int main(` → a function
-//     header). Once the cursor leaves the line it is an ordinary `;`.
-//   • Typing `;` steps over it (also over auto-closed `)`/`]` before it).
-//   • Enter steps over it and opens a new line — only when the statement is
-//     complete. Otherwise Enter breaks the line and the `;` stays at the end.
-//   • Backspace right after it appeared removes it, and no `;` is added on
-//     that line again until the cursor leaves it.
-//   • A chain continued on the next line (`.then(…)`, `<< x`) removes the
-//     `;` Enter just stepped over.
+//   • Only when a trigger character (space, `=`, `(`, `<`, `>`, `+`, `-`) is
+//     typed at the end of a line is the line looked at — one regex on the
+//     line; only if that matches, a short look at the code above (is this a
+//     function body?). Nothing else runs while typing.
+//   • The `;` goes at the end of the line, faded, with the cursor before it.
+//     It is a tab stop: Tab, swipe right or the keys-bar Tab jump past it
+//     (like the end of a snippet); typing `;` steps over it; Enter steps over
+//     it unless the line ends with something that continues (`=`, `,`, `<<`…).
+//   • Backspace right after it appears removes it, and that line gets no
+//     other one. Once the cursor leaves the line it's an ordinary `;`.
+//   • A chain continued on the next line (`.then(…)`, `<< x`) takes back the
+//     `;` that Enter just stepped over.
 //
 // Android keyboards type words in "composition" mode; changing text next to
-// a word being composed can confuse them, so during composition nothing is
-// inserted — a small plugin catches up once the composition ends.
+// a word being composed can confuse them, so nothing is added during a
+// composition — a small plugin catches up when it ends.
 
 import { EditorView, Decoration, ViewPlugin, keymap } from '@codemirror/view';
 import { EditorState, StateField, StateEffect, Prec } from '@codemirror/state';
 import { insertNewlineAndIndent } from '@codemirror/commands';
-import { completionStatus } from '@codemirror/autocomplete';
+import { completionStatus, hasNextSnippetField } from '@codemirror/autocomplete';
 import { docInfo } from './context.js';
 import {
-  SEMICOLON_LANGS, isJsLike, wantsSemicolon, canStepOver, isBareJump, completionPlan, prefersNoSemicolons,
+  SEMICOLON_LANGS, TRIGGERS, isJsLike, autoSemicolon, scopeAt, enterStepsOver, isBareJump, codePart, completionPlan, prefersNoSemicolons,
 } from '../core/semicolons.js';
 
-const WINDOW = 20000; // chars of code before the cursor the rules look at
-
-const setPending = StateEffect.define();   // {pos, fresh}
-const dismissLine = StateEffect.define();  // pos on the line
+const setPending = StateEffect.define();   // {pos, fresh} | null
+const dismissLine = StateEffect.define();  // a position on the line
 const setStepped = StateEffect.define();   // pos of a `;` Enter stepped over
 
 /**
  * {pos, fresh, dismissed, stepped, noSemi}
  *   pos       the pending `;` (null if none)
- *   fresh     it was inserted by the previous transaction (for Backspace)
- *   dismissed a position on a line where the user removed it with Backspace
+ *   fresh     it was added by the previous edit (for Backspace)
+ *   dismissed a position on a line where Backspace removed it
  *   stepped   the `;` Enter stepped over (for chain continuation)
  *   noSemi    the file is JS written without semicolons
  */
@@ -63,19 +60,18 @@ const semiField = StateField.define({
       else if (e.is(dismissLine)) dismissed = e.value;
       else if (e.is(setStepped)) stepped = e.value;
     }
+    if (pos == null && dismissed == null && stepped == null && v.pos == null && v.dismissed == null && v.stepped == null && noSemi === v.noSemi) return v;
     const { doc, selection } = tr.state;
     const head = selection.main.head;
     const headLine = doc.lineAt(head).number;
-    if (pos != null && (pos >= doc.length || doc.sliceString(pos, pos + 1) !== ';' || pos < head || doc.lineAt(pos).number !== headLine)) {
-      pos = null; // removed, or the cursor moved on: it's an ordinary `;` now
-    }
+    const isSemi = (p) => p != null && p < doc.length && doc.sliceString(p, p + 1) === ';';
+    if (pos != null && (!isSemi(pos) || pos < head || doc.lineAt(pos).number !== headLine)) pos = null;
     if (dismissed != null && doc.lineAt(Math.min(dismissed, doc.length)).number !== headLine) dismissed = null;
     if (stepped != null) {
-      // valid while the cursor is on the stepped line (Enter is about to
-      // open the next one) or on the next line, before it has real content
-      const ok = stepped < doc.length && doc.sliceString(stepped, stepped + 1) === ';';
-      const line = ok ? doc.lineAt(stepped).number : -1;
-      if (!ok || (line !== headLine && (line !== headLine - 1 || doc.lineAt(head).text.trim().length > 3))) stepped = null;
+      // valid on its own line (Enter is about to open the next one) and on
+      // the next line until that line has real content
+      const line = isSemi(stepped) ? doc.lineAt(stepped).number : -1;
+      if (line !== headLine && (line !== headLine - 1 || doc.lineAt(head).text.trim().length > 3)) stepped = null;
     }
     if (pos === v.pos && fresh === v.fresh && dismissed === v.dismissed && stepped === v.stepped && noSemi === v.noSemi) return v;
     return { pos, fresh, dismissed, stepped, noSemi };
@@ -83,7 +79,7 @@ const semiField = StateField.define({
   provide: (f) => EditorView.decorations.from(f, (v) => (v.pos == null ? Decoration.none : Decoration.set([pendingMark.range(v.pos, v.pos + 1)]))),
 });
 
-const pendingMark = Decoration.mark({ class: 'cm-pending-semi', attributes: { title: 'Added automatically — type ; or press Enter to keep, Backspace to remove' } });
+const pendingMark = Decoration.mark({ class: 'cm-pending-semi' });
 
 function detectNoSemi(state) {
   const info = state.facet(docInfo);
@@ -91,73 +87,73 @@ function detectNoSemi(state) {
 }
 
 const langOf = (state) => (state.facet(docInfo) || {}).langId;
-const before = (state, pos) => state.sliceDoc(Math.max(0, pos - WINDOW), pos);
 
-/** A `;` to add after the cursor in this state, or null. */
-function insertionFor(state) {
-  const f = state.field(semiField, false);
-  if (!f || f.pos != null || f.dismissed != null || f.noSemi) return null;
-  const sel = state.selection;
-  if (sel.ranges.length > 1 || !sel.main.empty) return null;
-  const head = sel.main.head;
-  const line = state.doc.lineAt(head);
-  const after = state.sliceDoc(head, line.to);
-  if (!wantsSemicolon(before(state, head), after, langOf(state))) return null;
+const SCOPE_WINDOW = 4000; // chars above the line that scopeAt reads
+
+/** 'body' | 'class' | 'top' | 'none' for the statement starting the line at `lineFrom`. */
+function statementScope(state, lineFrom, lang) {
+  return scopeAt(state.sliceDoc(Math.max(0, lineFrom - SCOPE_WINDOW), lineFrom), lang);
+}
+
+/**
+ * Where to add a `;` after typing `typed` with the cursor at `head` in `doc`
+ * (`scopeState` is a state with the same text above the line), or null.
+ */
+function insertionAt(doc, head, typed, lang, scopeState) {
+  const line = doc.lineAt(head);
+  const before = doc.sliceString(line.from, head);
+  const after = doc.sliceString(head, line.to);
+  // the line's own regex first; the code above only when it matched
+  if (!autoSemicolon(before, after, typed, lang, 'body')) return null;
+  if (!autoSemicolon(before, after, typed, lang, statementScope(scopeState, line.from, lang))) return null;
   return head + after.trimEnd().length;
 }
 
 const CONTINUATION = /^(?:\.|\?\.|->|<<|>>|&&|\|\||\?\?|\?|:)$/;
 
 const filter = EditorState.transactionFilter.of((tr) => {
-  if (!tr.docChanged || !(tr.isUserEvent('input') || tr.isUserEvent('delete'))) return tr;
-  const state = tr.state;
-  const f = state.field(semiField, false);
-  if (!f) return tr;
-  const sel = state.selection;
+  if (!tr.docChanged || !tr.isUserEvent('input.type') || tr.isUserEvent('input.type.compose')) return tr;
+  const start = tr.startState;
+  const f = start.field(semiField, false);
+  if (!f || f.noSemi) return tr;
+  const sel = tr.newSelection;
   if (sel.ranges.length > 1 || !sel.main.empty) return tr;
-  const lang = langOf(state);
+  let typed = '', count = 0;
+  tr.changes.iterChanges((_a, _b, _c, _d, text) => { count++; typed = text.length ? text.sliceString(0, 1) : ''; });
+  if (count !== 1) return tr;
   const head = sel.main.head;
+  const doc = tr.newDoc;
 
-  // 1. Re-check the pending `;`: does its statement still want one?
-  if (f.pos != null) {
-    if (!wantsSemicolon(before(state, f.pos), '', lang)) {
-      return [tr, { changes: { from: f.pos, to: f.pos + 1 }, effects: setPending.of(null), sequential: true }];
-    }
-    return tr;
-  }
-
-  const typing = tr.isUserEvent('input.type') && !tr.isUserEvent('input.type.compose');
-  if (!typing) return tr;
-
-  // 2. A chain continued on the next line: take back the `;` Enter added.
+  // A chain continued on the next line: take back the `;` Enter added.
   if (f.stepped != null) {
-    const line = state.doc.lineAt(head);
-    const typed = state.sliceDoc(line.from, head).trim();
-    if (CONTINUATION.test(typed) && state.sliceDoc(f.stepped + 1, state.doc.lineAt(f.stepped).to).trim() === '') {
-      return [tr, { changes: { from: f.stepped, to: f.stepped + 1 }, effects: setStepped.of(null), sequential: true }];
+    const stepped = tr.changes.mapPos(f.stepped, 1);
+    const line = doc.lineAt(head);
+    if (CONTINUATION.test(doc.sliceString(line.from, head).trim()) && doc.sliceString(stepped, stepped + 1) === ';'
+      && doc.sliceString(stepped + 1, doc.lineAt(stepped).to).trim() === '') {
+      return [tr, { changes: { from: stepped, to: stepped + 1 }, effects: setStepped.of(null), sequential: true }];
     }
   }
 
-  // 3. Add a pending `;` — only after a non-word character, so it doesn't
-  //    flicker while a name is being typed (`int m` → `int main(`).
-  let last = '';
-  tr.changes.iterChanges((_a, _b, _c, _d, text) => { if (text.length) last = text.sliceString(text.length - 1); });
-  if (!last || /[\w$]/.test(last)) return tr;
-  const at = insertionFor(state);
+  if (!TRIGGERS.has(typed) || f.pos != null || f.dismissed != null) return tr;
+  const at = insertionAt(doc, head, typed, langOf(start), start);
   if (at == null) return tr;
   return [tr, { changes: { from: at, insert: ';' }, selection: { anchor: head }, effects: setPending.of({ pos: at, fresh: true }), sequential: true }];
 });
+
+/** Tab / swipe right / keys-bar Tab: jump past the pending `;`. */
+export function jumpPastSemicolon(view) {
+  const f = view && view.state.field(semiField, false);
+  if (!f || f.pos == null || view.state.selection.main.head > f.pos) return false;
+  view.dispatch({ selection: { anchor: f.pos + 1 }, effects: setPending.of(null), userEvent: 'select', scrollIntoView: true });
+  return true;
+}
 
 /** Typing `;` steps over the pending one (and over auto-closed `)` `]` before it). */
 const stepOverInput = EditorView.inputHandler.of((view, from, to, text) => {
   if (text !== ';' || from !== to || view.state.selection.ranges.length > 1) return false;
   const f = view.state.field(semiField, false);
-  if (!f || f.pos == null || from > f.pos) return false;
-  const between = view.state.sliceDoc(from, f.pos);
-  if (!/^[)\]]*$/.test(between)) return false;
-  if (between && !canStepOver(before(view.state, from), between, langOf(view.state))) return false;
-  view.dispatch({ selection: { anchor: f.pos + 1 }, effects: setPending.of(null), userEvent: 'select', scrollIntoView: true });
-  return true;
+  if (!f || f.pos == null || from > f.pos || !/^[)\]]*$/.test(view.state.sliceDoc(from, f.pos))) return false;
+  return jumpPastSemicolon(view);
 });
 
 function enter(view) {
@@ -167,18 +163,16 @@ function enter(view) {
   const sel = state.selection;
   if (sel.ranges.length > 1 || !sel.main.empty) return false;
   const head = sel.main.head;
-  const lang = langOf(state);
+  const line = state.doc.lineAt(head);
   if (f.pos != null && f.pos >= head) {
-    if (!canStepOver(before(state, head), state.sliceDoc(head, f.pos), lang)) return false;
+    if (!enterStepsOver(state.sliceDoc(line.from, head), state.sliceDoc(head, f.pos))) return false;
     view.dispatch({ selection: { anchor: f.pos + 1 }, effects: [setPending.of(null), setStepped.of(f.pos)] });
     return insertNewlineAndIndent(view);
   }
-  if (f.pos == null && f.dismissed == null && !f.noSemi) {
-    const line = state.doc.lineAt(head);
-    if (state.sliceDoc(head, line.to).trim() === '' && isBareJump(before(state, head), lang)) {
-      view.dispatch({ changes: { from: head, insert: ';' }, selection: { anchor: head + 1 }, userEvent: 'input.type' });
-      return insertNewlineAndIndent(view);
-    }
+  if (f.pos == null && f.dismissed == null && !f.noSemi && head === line.to && isBareJump(line.text)
+    && statementScope(state, line.from, langOf(state)) === 'body') {
+    view.dispatch({ changes: { from: head, insert: ';' }, selection: { anchor: head + 1 }, userEvent: 'input.type' });
+    return insertNewlineAndIndent(view);
   }
   return false;
 }
@@ -204,10 +198,12 @@ const composeCatchUp = ViewPlugin.fromClass(class {
   check() {
     const v = this.view;
     if (v.composing) { this.timer = setTimeout(() => this.check(), 150); return; }
-    const head = v.state.selection.main.head;
-    const prev = v.state.sliceDoc(Math.max(0, head - 1), head);
-    if (!prev || /[\w$]/.test(prev)) return;
-    const at = insertionFor(v.state);
+    const f = v.state.field(semiField, false);
+    const sel = v.state.selection;
+    if (!f || f.noSemi || f.pos != null || f.dismissed != null || sel.ranges.length > 1 || !sel.main.empty) return;
+    const head = sel.main.head;
+    const typed = v.state.sliceDoc(Math.max(0, head - 1), head);
+    const at = insertionAt(v.state.doc, head, typed, langOf(v.state), v.state);
     if (at == null) return;
     v.dispatch({ changes: { from: at, insert: ';' }, selection: { anchor: head }, effects: setPending.of({ pos: at, fresh: true }), userEvent: 'input.type' });
   }
@@ -222,28 +218,34 @@ export function semicolonExtension(langId, enabled) {
     filter,
     stepOverInput,
     composeCatchUp,
-    Prec.high(keymap.of([{ key: 'Enter', run: enter }, { key: 'Backspace', run: backspace }])),
+    Prec.high(keymap.of([
+      { key: 'Enter', run: enter },
+      { key: 'Backspace', run: backspace },
+      { key: 'Tab', run: (v) => completionStatus(v.state) !== 'active' && !hasNextSnippetField(v.state) && jumpPastSemicolon(v) },
+    ])),
   ];
 }
 
 /**
  * "Complete statement" (⏎; key, Ctrl+Shift+Enter) — works with automatic
  * semicolons on or off: adds `;` if missing (`:` after a Python block
- * header, ` {}` after `if (…)` or a function header) and starts a new line.
+ * header, ` {}` after `if (…)` or a function header), closes a `(` left
+ * open on the line, and starts a new line.
  */
 export function completeStatement(view) {
   if (!view || view.state.readOnly) return null;
   const { state } = view;
   const lang = langOf(state);
-  const head = state.selection.main.head;
-  const line = state.doc.lineAt(head);
-  let end = line.from + line.text.trimEnd().length;
+  const line = state.doc.lineAt(state.selection.main.head);
+  let code = codePart(line.text);
   const f = state.field(semiField, false);
-  if (f && f.pos != null && f.pos === end - 1) end = f.pos; // the pending `;` counts as present
-  const plan = completionPlan(before(state, end), lang);
+  const pending = f && f.pos != null && f.pos === line.from + code.length - 1;
+  if (pending) code = code.slice(0, -1);
+  const end = line.from + code.length;
+  const plan = completionPlan(code, lang, statementScope(state, line.from, lang));
   let append = plan.append;
-  if (f && f.pos != null && f.pos === end && append.endsWith(';')) append = append.slice(0, -1);
-  const cursor = plan.block ? end + append.indexOf('}') : end + append.length + (f && f.pos === end ? 1 : 0);
+  if (pending && append.endsWith(';')) append = append.slice(0, -1);
+  const cursor = plan.block ? end + append.indexOf('}') : end + append.length + (pending ? 1 : 0);
   view.dispatch({
     changes: append ? { from: end, insert: append } : undefined,
     selection: { anchor: cursor },

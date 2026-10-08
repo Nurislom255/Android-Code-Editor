@@ -64,10 +64,24 @@ test.describe('automatic semicolons', () => {
     expect(await head(page)).toBe('int main() {\n    foo(1);'.length);
   });
 
-  test('a function header loses its ; as soon as it is recognised', async ({ page }) => {
+  test('a function header never gets a ;', async ({ page }) => {
     await cppFile(page, '|');
     await page.keyboard.type('int square(int x) {');
     expect(await editorText(page)).toBe('int square(int x) {}');
+  });
+
+  test('Tab and swipe right jump past the ;, like the end of a snippet', async ({ page }) => {
+    await cppFile(page, 'int main() {\n    |\n}');
+    await page.keyboard.type('foo(1');
+    expect(await editorText(page)).toBe('int main() {\n    foo(1);\n}');
+    await page.keyboard.press('Tab');
+    expect(await head(page)).toBe('int main() {\n    foo(1);'.length);
+    // swipe right runs the same "autocomplete" action
+    await setText(page, 'int main() {\n    \n}', 'int main() {\n    '.length);
+    await page.keyboard.type('bar(2');
+    expect(await page.evaluate(() => window.__app.run('autocomplete'))).toBe('Past ;');
+    expect(await editorText(page)).toBe('int main() {\n    bar(2);\n}');
+    expect(await head(page)).toBe('int main() {\n    bar(2);'.length);
   });
 
   test('Backspace right after the ; appears removes it for that line', async ({ page, isMobile }) => {
@@ -196,12 +210,38 @@ test.describe('HTML & CSS', () => {
     expect(await head(page)).toBe('<section>'.length);
   });
 
-  test('plain words in a sentence do not get Emmet suggestions', async ({ page }) => {
-    await htmlFile(page, '<p>Meet me at the time');
+  test('typing "di" in text suggests div; Tab makes the tag', async ({ page }) => {
+    await htmlFile(page, '<body>\n  \n</body>');
+    await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 9 } }));
+    await page.keyboard.type('di');
+    await expect(page.locator('.cm-completionLabel').first()).toHaveText('div');
+    await expect(page.locator('.cm-completionLabel', { hasText: 'dialog' })).toBeVisible();
+    await settle(page);
+    await page.keyboard.press('Tab');
+    expect(await editorText(page)).toBe('<body>\n  <div></div>\n</body>');
+    expect(await head(page)).toBe('<body>\n  <div>'.length);
+  });
+
+  test('in a sentence, tag suggestions show but Enter still starts a new line', async ({ page, isMobile }) => {
+    test.skip(isMobile, ANDROID_KEYS);
+    await htmlFile(page, '<p>Meet me at the');
     await page.evaluate(() => window.__app.ws.view.focus());
-    await page.keyboard.type(' table');
+    await page.keyboard.type(' time');
+    await expect(page.locator('.cm-completionLabel', { hasText: 'time' })).toBeVisible();
+    await settle(page);
+    await press(page, 'Enter');
+    expect(await editorText(page)).toMatch(/^<p>Meet me at the time\n\s*$/);
+  });
+
+  test('no tag suggestions inside attribute values or capitalised words', async ({ page }) => {
+    await htmlFile(page, '');
+    await page.keyboard.type('<div class="di');
     await page.waitForTimeout(250);
-    await expect(page.locator('.cm-completionIcon-emmet')).toHaveCount(0);
+    await expect(page.locator('.cm-completionIcon-tag')).toHaveCount(0);
+    await setText(page, '<p>Meet me at the');
+    await page.keyboard.type(' Table');
+    await page.waitForTimeout(250);
+    await expect(page.locator('.cm-completionIcon-tag')).toHaveCount(0);
   });
 
   test('renaming an open tag renames its closing tag', async ({ page }) => {

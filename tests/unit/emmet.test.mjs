@@ -70,3 +70,21 @@ test('inside a CSS block?', () => {
   assert.equal(insideCssBlock('.a[title="}"] {\n '), true);
   assert.equal(insideCssBlock('@media (x) {\n  .a {\n    '), true);
 });
+
+test('tag names while typing plain HTML text', async () => {
+  const { tagSuggestions } = await import('../../src/core/emmetRules.js');
+  const s = (word, prefix, explicit) => tagSuggestions(word, prefix, explicit);
+  assert.deepEqual(s('di', '').tags.slice(0, 2), ['div', 'dialog']);
+  assert.equal(s('di', '').atTagStart, true);
+  assert.equal(s('d', '    ').tags[0], 'div', 'one letter is enough at the start of a line');
+  assert.equal(s('sec', '<main>').tags[0], 'section');
+  assert.equal(s('di', 'some text ').atTagStart, false, 'in a sentence');
+  assert.deepEqual(s('di', 'some text ').tags.slice(0, 1), ['div']);
+  assert.deepEqual(s('a', 'some text ').tags, [], 'one letter in a sentence: no list');
+  assert.equal(s('a', 'some text ', true).tags[0], 'a', '…unless asked for');
+  assert.deepEqual(s('Ta', '').tags, [], 'capitalised words are prose');
+  assert.deepEqual(s('li', 'ul>').tags, [], 'part of an Emmet abbreviation');
+  assert.deepEqual(s('di', '"').tags, [], 'inside quotes');
+  assert.deepEqual(s('xyz', '').tags, []);
+  assert.equal(s('h', '').tags[0], 'h1');
+});

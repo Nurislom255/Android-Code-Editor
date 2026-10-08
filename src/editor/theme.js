@@ -73,6 +73,7 @@ export const editorTheme = EditorView.theme({
   '.cm-tooltip-autocomplete > ul > li': { padding: '6px 10px !important', lineHeight: '1.3' },
   '.cm-tooltip-autocomplete > ul > li[aria-selected]': { backgroundColor: 'var(--accent-dim)', color: 'var(--text)' },
   '.cm-completionIcon-emmet::after': { content: "'⚡'" },
+  '.cm-completionIcon-tag::after': { content: "'<>'", fontSize: '11px' },
   '.cm-completionIcon-file::after': { content: "'📄'" },
   '.cm-completionInfo': { whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: '12px', maxWidth: 'min(420px, 70vw)' },
   '.cm-pending-semi': { opacity: '0.4' },

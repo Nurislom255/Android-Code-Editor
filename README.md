@@ -64,20 +64,25 @@ How false triggers are avoided (see `src/core/gestures.js`):
 
 ## Typing (ROADMAP Phase 1)
 
-- **Automatic semicolons** (C, C++, Java, C#, JS, TS; never Python/Kotlin):
-  typing `int x = `, `return `, `foo(`, `std::cout << `… at the end of a line
-  adds a faded `;` after the cursor. Type `;` or press **Enter** to step over
-  it (Enter only when the statement is complete — after `=`, `,`, `<<`, `.`
-  it just breaks the line and the `;` moves along). **Backspace** right after
-  it appears removes it. Never in `for (…;…;…)`, `if`/`while`/function/class
-  headers, `#include`, strings or comments. JS files written without
-  semicolons are detected and left alone. Settings → Typing.
+- **Automatic semicolons** (C, C++, Java, C#, JS, TS; never Python/Kotlin),
+  only for obvious statements at the start of a line: `int x =`, `x +=`,
+  `return `, `foo(`, `obj.run(`, `cout <<`, `i++` get a faded `;` at the end
+  of the line with the cursor before it. The `;` is a tab stop: **Tab** or
+  **swipe right** jumps past it, typing `;` steps over it, **Enter** steps
+  over it unless the line ends with `=`, `,`, `<<`, `.`… **Backspace** right
+  after it appears removes it. The check runs only when one of a few
+  trigger characters is typed, so it costs nothing while you type normally.
+  JS files written without semicolons are left alone. Settings → Typing.
 - **Complete statement**: keys-bar `⏎;` or **Ctrl+Shift+Enter** — adds the
   missing `;` (`:` after a Python header, ` {}` after `if (…)` or a function
   header), closes an open `(`, and starts a new indented line.
-- **Emmet** in HTML and CSS: `!` → HTML5 page, `ul>li*3`, `div.card>p`,
-  `div` on a new line → `<div></div>` (no `<` needed); CSS `m10`, `df`,
-  `p10-20`. Accept with **Tab**, Enter or swipe right.
+- **Tags without typing `<`**: in HTML text, typing `di` suggests `div`,
+  `dialog`…; accept with **Tab**, swipe right or Enter → `<div>|</div>`. Not
+  in attribute values, comments, `<script>`/`<style>` or capitalised words;
+  in the middle of a sentence the list appears from two letters on and
+  Enter still starts a new line (Tab / swipe right accept).
+- **Emmet** in HTML and CSS: `!` → HTML5 page, `ul>li*3`, `div.card>p`;
+  CSS `m10`, `df`, `p10-20`.
 - **Renaming `<div>` renames `</div>`**.
 - Suggestions for **file paths** in `src=""`, `href=""`, `url()`, `import '…'`,
   `#include "…"` and for **words from your other open files**.

@@ -11,10 +11,12 @@
 // lives in core/emmetRules.js.
 
 import { syntaxTree } from '@codemirror/language';
-import { snippet } from '@codemirror/autocomplete';
+import { keymap } from '@codemirror/view';
+import { Prec } from '@codemirror/state';
+import { snippet, completionStatus, selectedCompletion, closeCompletion } from '@codemirror/autocomplete';
 import {
   HTML_TAGS, fieldMarker, toSnippetTemplate, plainExpansion, simplifyBoilerplate,
-  markupAbbreviationOk, stylesheetAbbreviationOk, insideCssBlock,
+  markupAbbreviationOk, stylesheetAbbreviationOk, insideCssBlock, tagSuggestions,
 } from '../core/emmetRules.js';
 
 let loading = null;
@@ -22,7 +24,12 @@ function loadEmmet() {
   if (!loading) {
     loading = import('emmet').then((m) => {
       const aliases = new Set(Object.keys(m.resolveConfig({ type: 'markup', syntax: 'html' }).snippets));
-      return { expand: m.default, extract: m.extract, isKnown: (name) => HTML_TAGS.has(name) || aliases.has(name) };
+      const templates = new Map();
+      const tagTemplate = (tag) => {
+        if (!templates.has(tag)) templates.set(tag, toSnippetTemplate(m.default(tag, { options: OPTIONS })));
+        return templates.get(tag);
+      };
+      return { expand: m.default, extract: m.extract, tagTemplate, isKnown: (name) => HTML_TAGS.has(name) || aliases.has(name) };
     });
   }
   return loading;
@@ -73,6 +80,7 @@ export function emmetSource(kind) {
     if (!found || !found.abbreviation) return null;
     const abbr = found.abbreviation;
     const prefix = before.slice(0, found.start);
+    if (type === 'markup' && HTML_TAGS.has(abbr)) return null; // plain tag names: tagNameSource
     if (type === 'markup' && !markupAbbreviationOk(abbr, prefix, em.isKnown, context.explicit)) return null;
     let out;
     try {
@@ -99,3 +107,48 @@ export function emmetSource(kind) {
     };
   };
 }
+
+/**
+ * Tag names while typing plain HTML text: "di" → div, dialog…, accepted with
+ * Tab / swipe right / Enter into `<div>|</div>`. Not inside attribute values,
+ * comments, <script> or <style> (see htmlMode) or quoted text.
+ */
+export async function tagNameSource(context) {
+  const word = context.matchBefore(/[A-Za-z][\w-]*/);
+  if (!word) return null;
+  const { state, pos } = context;
+  const line = state.doc.lineAt(pos);
+  const { tags, atTagStart } = tagSuggestions(word.text, state.sliceDoc(line.from, word.from), context.explicit);
+  if (!tags.length || htmlMode(state, pos) !== 'markup') return null;
+  const em = await loadEmmet();
+  if (context.aborted) return null;
+  return {
+    from: word.from,
+    to: pos,
+    options: tags.map((tag, i) => ({
+      label: tag,
+      detail: `<${tag}>`,
+      type: 'tag',
+      boost: 60 - Math.min(i, 59),
+      apply: snippet(em.tagTemplate(tag)),
+      // In the middle of a sentence Enter keeps meaning "new line" (below).
+      prose: !atTagStart,
+    })),
+  };
+}
+
+/**
+ * Typing a sentence in HTML that ends in "time" or "table" and pressing Enter
+ * should start a new line, not create <time></time>: for suggestions made
+ * in the middle of text, Enter closes the list instead of accepting
+ * (Tab and swipe right still accept).
+ */
+export const proseEnter = Prec.highest(keymap.of([{
+  key: 'Enter',
+  run: (view) => {
+    if (completionStatus(view.state) !== 'active') return false;
+    const c = selectedCompletion(view.state);
+    if (c && c.prose) closeCompletion(view);
+    return false;
+  },
+}]));

@@ -85,7 +85,8 @@ shows the cause.
 ## Phase 1 — result (what shipped, and what still needs the phone)
 
 Built on branch `claude/android-editor-v2-gestures-5gpnqo`. Unit tests: the
-recognizer, 99 table-driven semicolon cases, Emmet rules. E2E (desktop, Pixel 7
+recognizer, 74 table-driven semicolon cases plus scope/Enter/plan tables,
+Emmet and tag-suggestion rules. E2E (desktop, Pixel 7
 and Galaxy Tab emulation): `tests/e2e/typing.spec.mjs`, new cases in
 `gestures.spec.mjs` and `keysbar.spec.mjs`.
 
@@ -93,26 +94,30 @@ and Galaxy Tab emulation): `tests/e2e/typing.spec.mjs`, new cases in
 |---|---|---|
 | 1.1 | Angle from the fitted finger path (≤ 35° Normal), direction lock after 8 px, horizontal touches claimed (`preventDefault`) when the code can't scroll sideways, selection + scroll restored before every gesture action, long-press (≥ 400 ms rest) never a swipe, Strict / Normal / Loose presets, **test pad** in Settings that prints why a touch was or wasn't a swipe | `core/gestures.js`, `editor/gestureLayer.js`, `ui/settingsPanel.js` |
 | 1.2 | Keys-bar text goes through every `EditorView.inputHandler` (auto-close, `>` closes tags, `;` steps over); suggestions forced open ~110 ms after an IME composition edit if CodeMirror didn't open them; words from all open files | `editor/editActions.js` `typeText`, `editor/completions.js` |
-| 1.3 | Emmet (lazy-loaded chunk) for HTML and CSS; bare tag names (`div` → `<div></div>`) only at the start of a line or right after a tag, one-letter tags only on swipe right / Ctrl+Space (so prose isn't hijacked); linked tag rename, also through an empty name `<>`; path suggestions in `src`/`href`, `url()`, `@import`, `import`/`require`/`fetch`, `#include "…"`, Markdown links | `core/emmetRules.js`, `editor/emmet.js`, `editor/linkedTags.js`, `editor/completions.js` |
-| 1.4 | Pending `;` with every rule and exclusion listed below; Complete statement on the keys bar (`⏎;`), Ctrl+Shift+Enter and the gesture map; setting Settings → Typing | `core/semicolons.js`, `editor/semicolons.js` |
+| 1.3 | Tag suggestions while typing HTML text (`di` → div, dialog… → `<div>|</div>`), not in attributes/comments/script/style/capitalised words; in a sentence from 2 letters and Enter keeps meaning "new line"; Emmet (lazy-loaded chunk) for abbreviations (`!`, `ul>li*3`) and CSS; linked tag rename, also through an empty name `<>`; path suggestions in `src`/`href`, `url()`, `@import`, `import`/`require`/`fetch`, `#include "…"`, Markdown links | `core/emmetRules.js`, `editor/emmet.js`, `editor/linkedTags.js`, `editor/completions.js` |
+| 1.4 | Automatic `;` for obvious statements only (simplified at the owner's request, see below); Complete statement on the keys bar (`⏎;`), Ctrl+Shift+Enter and the gesture map; setting Settings → Typing | `core/semicolons.js`, `editor/semicolons.js` |
 | 1.5 | Keys use `touch-action: pan-x` (only the trackpad strip keeps `none`) | `src/styles.css` |
 
 Decisions taken while building (differences from the plan above):
-- **No flicker:** the pending `;` is added after a non-word character (space,
-  `=`, `(`, `"`…), so typing `int main(` never shows a `;` in between. It is
-  still re-checked (and removed) after every edit of its statement.
-- **Enter counts auto-closed brackets:** in `foo(a|);` Enter steps over `);`
-  (the statement is complete once the `)` is counted). With nothing typed yet
-  (`foo(|);`) or after a comma, Enter splits the brackets as usual.
+- **Semicolons simplified (owner's review):** performance and predictability
+  over coverage. The line is only looked at when a trigger character is typed
+  (space, `=`, `(`, `<`, `>`, `+`, `-`), only statements that start the line
+  count (`int x =`, `x +=`, `return `, `foo(`, `obj.run(`, `.then(`,
+  `cout <<`, `i++`), and only if a regex on that line matches is the code
+  above read (≤ 4 000 chars) to check it's a function body (calls, `return`)
+  or a class body (fields with `=`). The `;` is added once and **never
+  re-checked**. It is a tab stop: Tab / swipe right / keys-bar Tab jump past
+  it, `;` steps over it, Enter steps over it unless the line ends with
+  something that continues. Multi-line statements, globals without `=`,
+  single-line `if (x) foo()` etc. are left to the user (or ⏎;).
+- The syntax tree is not used for that check: a statement still being typed
+  (`foo` in `int main() { foo }`) parses as a brace initializer in C++.
 - `break` / `continue` / `return` alone + Enter add their `;`.
 - **Chains:** if the next line starts with `.`, `?.`, `->`, `<<`, `>>`, `&&`,
   `||`, `??`, `?` or `:`, the `;` Enter just added on the line above is taken
   back (method chains, `cout` continuation lines).
-- C/C++ globals get a `;` only with an initializer (`int count = 0`), not for
-  a bare `int count` (too often the start of a function); fields in a
-  class/struct always do.
 - **Tab accepts a suggestion** (keyboard and keys bar), which is how Emmet
-  expands, like VS Code.
+  and tag names expand, like VS Code.
 - Ctrl+Shift+Enter is also a global shortcut: on Android, CodeMirror
   re-dispatches Enter **without modifiers**, so an editor-only binding never
   fires with a hardware keyboard.
@@ -130,8 +135,9 @@ gesture test pad is the only on-device diagnostic for now):
 - [ ] 20 swipes right at 0–30° all autocomplete; the cursor never jumps.
 - [ ] Vertical scrolls and slow drags never trigger commands.
 - [ ] Typing `doc` with Gboard shows suggestions within ~150 ms.
-- [ ] Enter steps over the pending `;` with Gboard (and Backspace right after
-      it appears removes it).
+- [ ] Tab / swipe right / Enter jump past the faded `;` with Gboard (and
+      Backspace right after it appears removes it).
+- [ ] In HTML, typing `di` shows `div`; Tab or swipe right makes `<div></div>`.
 - [ ] The first keys row scrolls when dragged starting on a key.
 
 ---
@@ -206,6 +212,10 @@ Done when: `!` + swipe right produces the boilerplate; `ul>li*3` expands
 correctly; renaming an open tag updates its closing tag.
 
 ### 1.4 Automatic semicolons and "complete statement" (reported issue 4)
+
+> **Superseded in part.** After review the owner asked for a smaller, cheaper
+> version (obvious statements only, `;` as a tab stop). What shipped is in
+> "Phase 1 — result" above; the full rule set below is kept for reference.
 
 This is subtle, so it is specified fully here. (VS Code does not do this;
 JetBrains has a similar "complete current statement" command.)

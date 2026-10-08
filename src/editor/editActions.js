@@ -25,15 +25,18 @@ import { gotoLine } from '@codemirror/search';
 import { indentUnit, getIndentUnit } from '@codemirror/language';
 import { EditorView } from '@codemirror/view';
 import { expandSelection as cmExpand, shrinkSelection as cmShrink } from './selection.js';
+import { jumpPastSemicolon } from './semicolons.js';
 
 const run = (cmd, label) => (view) => (view && !view.state.readOnly && cmd(view) ? label : null);
 const runRO = (cmd, label) => (view) => (view && cmd(view) ? label : null);
 
-/** Swipe right: accept the suggestion → else next snippet field → else open suggestions. */
+/** Swipe right: accept the suggestion → else next snippet field → else jump
+ * past an automatic `;` → else open suggestions. */
 export function autocomplete(view) {
   if (!view || view.state.readOnly) return null;
   if (completionStatus(view.state) === 'active' && acceptCompletion(view)) return 'Completed';
   if (hasNextSnippetField(view.state) && nextSnippetField(view)) return 'Next field';
+  if (jumpPastSemicolon(view)) return 'Past ;';
   if (startCompletion(view)) return 'Suggestions';
   return null;
 }
@@ -116,7 +119,8 @@ export function hideKeyboard(view) {
   return 'Keyboard hidden';
 }
 
-/** The keys-bar Tab: accepts a suggestion or moves to the next snippet field;
+/** The keys-bar Tab: accepts a suggestion, moves to the next snippet field or
+ * past an automatic `;`;
  * otherwise indents a selection, or inserts one indent step
  * (spaces up to the next tab stop, or a real tab — per the file's settings). */
 export function tabKey(view) {
@@ -124,6 +128,7 @@ export function tabKey(view) {
   // Like a keyboard Tab: accept the suggestion / go to the next snippet field first.
   if (completionStatus(view.state) === 'active' && acceptCompletion(view)) return 'Completed';
   if (hasNextSnippetField(view.state) && nextSnippetField(view)) return 'Next field';
+  if (jumpPastSemicolon(view)) return 'Past ;';
   const { state } = view;
   if (state.selection.ranges.some((r) => !r.empty)) return indent(view);
   const unit = state.facet(indentUnit);
