@@ -143,6 +143,29 @@ test('split editor: the same file in two panes stays in sync, undo is per pane',
   await expect(page.locator('#pane-1')).toBeHidden();
 });
 
+test('closing the last tab of a split pane closes the split; a Close split button is always there', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'sp2', 'web');
+  await openFile(page, 'index.html');
+  await runCommand(page, 'split');
+  await expect(page.locator('#pane-1')).toBeVisible();
+  // close the only tab of the second pane → back to one pane
+  await page.locator('#pane-1 .tab .tab-close').click();
+  await expect(page.locator('#pane-1')).toBeHidden();
+  await expect(page.locator('#pane-0 .tab.active .tab-name')).toHaveText('index.html');
+  // the other way round: first pane emptied → the second pane's tabs move up
+  await runCommand(page, 'split');
+  await page.evaluate(() => window.__app.ws.openPath('style.css'));
+  await expect(page.locator('#pane-1 .tab.active .tab-name')).toHaveText('style.css');
+  for (const tab of await page.locator('#pane-0 .tab .tab-close').all()) await tab.click();
+  await expect(page.locator('#pane-1')).toBeHidden();
+  await expect(page.locator('#pane-0 .tab.active .tab-name')).toHaveText('style.css');
+  // the button
+  await runCommand(page, 'split');
+  await page.locator('#pane-1 .split-close').click();
+  await expect(page.locator('#pane-1')).toBeHidden();
+});
+
 test('read-only lock and soft wrap toggles in the status bar', async ({ page }) => {
   await boot(page);
   await newProject(page, 'lk', 'js');

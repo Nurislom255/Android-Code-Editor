@@ -52,7 +52,8 @@ export const DEFAULT_GESTURE_MAP = Object.freeze({
 export const DEFAULTS = Object.freeze({
   version: SETTINGS_VERSION,
   theme: 'system',            // 'system' | 'dark' | 'light'
-  fontSize: 14,
+  fontSize: 14,               // the code (pinch on the code changes it)
+  uiZoom: 100,                // % — menus, tabs, panels, keys bar (not the code)
   tabWidth: 2,
   insertSpaces: true,
   wrapDefault: 'auto',        // 'auto' (on for narrow screens) | 'on' | 'off'
@@ -72,6 +73,10 @@ export const DEFAULTS = Object.freeze({
   autoSemicolons: true,       // C-like languages and JS/TS (editor/semicolons.js)
   emmet: true,                // HTML/CSS abbreviations in autocomplete
   linkedTags: true,           // renaming <div> also renames </div>
+  // Android: Chrome's EditContext input API. Off = the classic contenteditable
+  // input, which reliably passes "no auto-capitals / no autocorrect" to the
+  // keyboard (with EditContext, Gboard capitalised words in code).
+  androidEditContext: false,
   userSnippets: '',           // JSON: {"javascript": [{"label": "..", "body": ".."}]}
   runTimeLimit: 10,           // seconds; every run is also stoppable
   historyDays: 7,
@@ -116,6 +121,7 @@ export function normalizeSettings(raw) {
     // v1 only had 'dark' | 'light'; both are still valid.
     theme: oneOf(r.theme, ['system', 'dark', 'light'], d.theme),
     fontSize: clamp(r.fontSize, 8, 40, d.fontSize),
+    uiZoom: clamp(r.uiZoom, 70, 160, d.uiZoom),
     tabWidth: clamp(r.tabWidth, 1, 8, d.tabWidth),
     insertSpaces: bool(r.insertSpaces, d.insertSpaces),
     wrapDefault: oneOf(r.wrapDefault, ['auto', 'on', 'off'], d.wrapDefault),
@@ -137,6 +143,7 @@ export function normalizeSettings(raw) {
     autoSemicolons: bool(r.autoSemicolons, d.autoSemicolons),
     emmet: bool(r.emmet, d.emmet),
     linkedTags: bool(r.linkedTags, d.linkedTags),
+    androidEditContext: bool(r.androidEditContext, d.androidEditContext),
     userSnippets: str(r.userSnippets, d.userSnippets, 50000),
     runTimeLimit: clamp(r.runTimeLimit, 1, 300, d.runTimeLimit),
     historyDays: clamp(r.historyDays, 1, 90, d.historyDays),

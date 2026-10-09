@@ -6,7 +6,7 @@
 // A new deploy has a new VERSION → a new cache; the old one is deleted once
 // the new worker takes over (on the next launch, never mid-session).
 
-const VERSION = '2.0.0-acd25bd592';
+const VERSION = '2.0.0-12b931e395';
 const ASSETS = ["./","chunks/browser-DYQWO4C2.js","chunks/chunk-5VEMRWQW.js","chunks/chunk-6GD2FNE7.js","chunks/chunk-B23A3BYV.js","chunks/chunk-BIX5Q65Y.js","chunks/chunk-M2VQLL4G.js","chunks/chunk-N3DL7XEY.js","chunks/chunk-OCOVWAGX.js","chunks/chunk-S6BMAXLK.js","chunks/chunk-ZDMPTY3A.js","chunks/clike-IPBPKYRK.js","chunks/css-PTV2WPKK.js","chunks/diff-7UJ2JNQW.js","chunks/dist-3R7YVFRR.js","chunks/dist-575HORQF.js","chunks/dist-E53S5INY.js","chunks/dist-GSCG4SD4.js","chunks/dist-HURD4VNH.js","chunks/dist-QFK2MQE7.js","chunks/dist-TH6ZPNKF.js","chunks/dist-TQ7NWDTU.js","chunks/dockerfile-74HXQQ3L.js","chunks/emmet.es-IZMNQZDX.js","chunks/gitService-KUPMQSKV.js","chunks/go-BF6FJ6SI.js","chunks/lua-5VHOUJYM.js","chunks/marked.esm-CST3UKEQ.js","chunks/properties-2OMSV6II.js","chunks/ruby-XHQFHHDW.js","chunks/rust-AF5N33M4.js","chunks/shell-U674A2Q4.js","chunks/sql-VNHXXUV6.js","chunks/swift-66CUN4T3.js","chunks/toml-Y6PYX4D3.js","chunks/xml-KKDBUW2H.js","chunks/yaml-V62K2PD3.js","format-worker.js","icons/icon-192.png","icons/icon-512.png","icons/icon-maskable-512.png","icons/icon.svg","index.html","main.js","manifest.webmanifest","run-worker.js","styles.css"];
 const CACHE = `codeeditor-${VERSION}`;
 

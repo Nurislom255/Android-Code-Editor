@@ -30,7 +30,7 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 | Tap (2 fingers) | Command palette |
 | Pinch | Zoom the code font (saved) |
 | Tap / drag the line numbers | Select one / several lines |
-| Keys bar: **swipe up** on a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …) |
+| Keys bar: **swipe up** or **hold** a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …); leaning or curved swipes count |
 | Keys bar: drag the **trackpad** strip | Move the cursor (with ⇧ armed: select) — works with any keyboard app |
 | Keys bar: hold an arrow | Key repeat |
 | Status bar: swipe left / right | Next / previous tab |
@@ -88,6 +88,13 @@ How false triggers are avoided (see `src/core/gestures.js`):
   `#include "…"` and for **words from your other open files**.
 - The keys bar types through the same pipeline as the keyboard, so `(` from
   the bar auto-closes and `>` from the bar closes an HTML tag.
+- **Several cursors at once:** keys bar `+⇣` / `+⇡`, or select lines (drag
+  down the line numbers) and tap `⫶`; whatever you type goes to every line.
+  Tap the text to get back to one cursor. Keyboard: Ctrl+Alt+↑/↓, Ctrl+D,
+  Shift+Alt+I.
+- **No automatic capitals in code:** on Android the editor uses the classic
+  input method by default, which passes "no capitals, no autocorrect" to the
+  keyboard (Settings → Typing to switch).
 
 ---
 
@@ -99,10 +106,12 @@ How false triggers are avoided (see `src/core/gestures.js`):
   (`ProjectFs` interface, spec §4.2). Import a folder or `.zip`, export `.zip`.
 - Lazy file tree that hides `.git`, `node_modules`, `build` by default.
 - Soft wrap per file, with wrapped rows indented under their line.
-- Coding-keys bar: per-language symbol rows (editable), Tab, Complete
-  statement (`⏎;`), arrows with repeat, trackpad, Shift/Ctrl/Alt (one-shot,
-  double-tap to lock), undo/redo, hide keyboard, line operations,
-  expand/shrink selection. Both rows scroll sideways from any key.
+- Coding-keys bar: per-language symbol rows (editable), then Tab, Complete
+  statement (`⏎;`), new line below, move line up/down first; a trackpad strip
+  for the cursor (no arrow keys), Shift/Ctrl/Alt (one-shot, double-tap to
+  lock), undo/redo, hide keyboard, **multi-line editing** (`+⇣`/`+⇡` add a
+  cursor below/above, `⫶` a cursor on each selected line, `Sel+` next
+  occurrence), more line operations. Both rows scroll sideways from any key.
 - Auto-close brackets, auto-indent, line operations, undo grouping.
 - Highlighting for ~30 languages (incremental Lezer parsers for JS/TS/JSX,
   HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for
@@ -114,7 +123,8 @@ How false triggers are avoided (see `src/core/gestures.js`):
 - **Unsaved-buffer recovery**: dirty buffers are mirrored to IndexedDB ~1.5 s
   after typing stops (and immediately when the app goes to the background), so
   they come back after Android kills the app. Open tabs are restored too.
-- Read-only lock (also stops the keyboard popping up), pinch-to-zoom, settings.
+- Read-only lock (also stops the keyboard popping up), pinch-to-zoom the
+  code, a separate **interface size** for menus/tabs/panels/keys bar, settings.
 
 **Phase 2 — real editor behaviour**
 - Syntax-error underlines from the parse tree + a Problems list, bracket

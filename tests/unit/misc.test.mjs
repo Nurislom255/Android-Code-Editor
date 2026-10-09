@@ -137,3 +137,14 @@ test('ignore rules: names + nested .gitignore', () => {
   assert.ok(!rules.isIgnored('secret.txt'), 'nested .gitignore only applies below its folder');
   assert.ok(!rules.isIgnored('web/sub/secret.txt'), 'leading slash anchors to that folder');
 });
+
+test('keys bar: which drags on a symbol key are a swipe up', async () => {
+  const { classifyKeyDrag } = await import('../../src/core/keysLayout.js');
+  assert.equal(classifyKeyDrag(2, 3), 'none', 'a small wobble is still a tap');
+  assert.equal(classifyKeyDrag(0, 30), 'up');
+  assert.equal(classifyKeyDrag(20, 30), 'up', 'leaning ~34°');
+  assert.equal(classifyKeyDrag(-28, 20), 'up', 'leaning ~54° to the left');
+  assert.equal(classifyKeyDrag(40, 12), 'pan', 'mostly sideways scrolls the row');
+  assert.equal(classifyKeyDrag(-30, 0), 'pan');
+  assert.equal(classifyKeyDrag(3, -20), 'none', 'downward: no alternate');
+});

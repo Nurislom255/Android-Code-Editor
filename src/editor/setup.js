@@ -23,6 +23,7 @@ import { openFilesWordSource, pathSource, composeCompletion } from './completion
 import { emmetSource, tagNameSource, proseEnter } from './emmet.js';
 import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
+import { cursorsOnLines } from './editActions.js';
 
 export const comp = {
   language: new Compartment(),
@@ -129,6 +130,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     ...extra,
     keymap.of([
       { key: 'Mod-Shift-Enter', run: (v) => !!completeStatement(v), preventDefault: true },
+      { key: 'Shift-Alt-i', run: (v) => !!cursorsOnLines(v) }, // a cursor on each selected line
       // Tab accepts the highlighted suggestion (expands Emmet), like VS Code
       { key: 'Tab', run: acceptCompletion },
       ...defaultKeymap,

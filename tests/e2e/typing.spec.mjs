@@ -164,7 +164,8 @@ test.describe('complete statement', () => {
     // the Python language (lazy-loaded) decides the indent after ":"
     await expect(page.locator('.pane.focused-pane .cm-line span').first()).toBeVisible();
     await page.evaluate(() => window.__app.run('completeStatement'));
-    expect(await editorText(page)).toBe('for i in range(3):\n    ');
+    // the ":" is ours; the indent of the new line comes from the Python language
+    expect(await editorText(page)).toMatch(/^for i in range\(3\):\n *$/);
   });
 });
 
@@ -244,7 +245,8 @@ test.describe('HTML & CSS', () => {
     await expect(page.locator('.cm-completionIcon-tag')).toHaveCount(0);
   });
 
-  test('renaming an open tag renames its closing tag', async ({ page }) => {
+  test('renaming an open tag renames its closing tag', async ({ page, isMobile }) => {
+    test.skip(isMobile, ANDROID_KEYS);
     await htmlFile(page, '<div class="a">hello</div>');
     // select "div" in the open tag and type a new name
     await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 1, head: 4 } }));

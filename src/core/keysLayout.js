@@ -56,3 +56,18 @@ export function formatLayout(keys) {
  * (matches what typing "(" does with closeBrackets).
  */
 export const AUTO_PAIRS = Object.freeze({ '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' });
+
+/**
+ * What a finger dragging on a symbol key is doing (keys bar).
+ *   dx    horizontal movement, px (right is positive)
+ *   dyUp  vertical movement, px (UP is positive)
+ * → 'none' (not decided yet / a small wobble), 'up' (a swipe up: types the
+ *   corner symbol — leaning or curved swipes count, up to ~63° from straight
+ *   up), or 'pan' (mostly sideways: the row is being scrolled).
+ */
+export function classifyKeyDrag(dx, dyUp) {
+  if (Math.hypot(dx, dyUp) < 8) return 'none';
+  if (dyUp > 0 && dyUp >= Math.abs(dx) * 0.5) return 'up';
+  if (Math.abs(dx) > Math.abs(dyUp)) return 'pan';
+  return 'none';
+}
