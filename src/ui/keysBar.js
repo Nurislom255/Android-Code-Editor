@@ -136,7 +136,6 @@ export class KeysBar {
       A('+⇣', 'Add a cursor on the line below (type on several lines at once)', () => this.deps.run('addCursorDown'), { repeat: true }),
       A('+⇡', 'Add a cursor on the line above', () => this.deps.run('addCursorUp'), { repeat: true }),
       A('⫶', 'A cursor on each selected line (select lines by dragging the line numbers)', () => this.deps.run('cursorsOnLines')),
-      A('Sel+', 'Select the word, then each next occurrence of it', () => this.deps.run('selectNext')),
       A('//', 'Toggle comment', () => this.deps.run('toggleComment')),
       A('⊕', 'Expand selection (word → expression → block)', () => this.deps.run('expandSelection')),
       A('⊖', 'Shrink selection', () => this.deps.run('shrinkSelection')),
@@ -229,17 +228,19 @@ export class KeysBar {
       'aria-label': k.alt ? `${k.label} (swipe up or hold: ${k.alt})` : k.label, style: { touchAction: 'pan-x' } },
     k.label, k.alt ? h('span.alt', k.alt) : null);
     let start = null, mode = 'none', up = false, held = false, timer = 0;
-    const showAlt = (on) => {
+    // Visible and felt: the key turns blue, a bubble shows the symbol that
+    // will be typed (like a phone keyboard's key preview), and a vibration.
+    const showAlt = (on, strong = false) => {
       if (on === btn.classList.contains('swiped')) return;
       btn.classList.toggle('swiped', on);
-      if (on) haptic(this.deps.getSettings(), 4);
+      if (on) { this.showPreview(btn, k.alt); haptic(this.deps.getSettings(), strong ? 20 : 8); } else this.hidePreview();
     };
-    const reset = () => { clearTimeout(timer); start = null; mode = 'none'; up = false; held = false; btn.classList.remove('swiped'); };
+    const reset = () => { clearTimeout(timer); start = null; mode = 'none'; up = false; held = false; btn.classList.remove('swiped'); this.hidePreview(); };
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       reset();
       start = { x: e.clientX, y: e.clientY };
-      if (k.alt) timer = setTimeout(() => { if (start && mode !== 'pan') { held = true; showAlt(true); } }, LONG_PRESS);
+      if (k.alt) timer = setTimeout(() => { if (start && mode !== 'pan') { held = true; showAlt(true, true); } }, LONG_PRESS);
     });
     btn.addEventListener('pointermove', (e) => {
       if (!start) return;
@@ -267,6 +268,21 @@ export class KeysBar {
     });
     btn.addEventListener('click', () => { if (Date.now() - (btn._pointerAt || 0) > 800) this.insertSymbol(k.insert); });
     return btn;
+  }
+
+  /** The bubble above a key showing the symbol a hold / swipe up will type. */
+  showPreview(btn, text) {
+    this.hidePreview();
+    const r = btn.getBoundingClientRect();
+    const el = h('div.key-preview', { role: 'status', 'aria-live': 'polite' }, h('span.key-preview-char', text), h('span.key-preview-hint', 'release'));
+    el.style.left = `${r.left + r.width / 2}px`;
+    el.style.top = `${r.top - 6}px`;
+    document.body.append(el); // outside the zoomed bar, so fixed coordinates stay exact
+    this.preview = el;
+  }
+
+  hidePreview() {
+    if (this.preview) { this.preview.remove(); this.preview = null; }
   }
 
   insertSymbol(text) {

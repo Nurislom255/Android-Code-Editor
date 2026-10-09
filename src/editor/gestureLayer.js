@@ -12,6 +12,7 @@
 //   swipe down, 2 fingers   hide the keyboard
 //   tap, 2 fingers          command palette
 //   pinch                   zoom the code font (spec §2: pinch-to-zoom)
+//   triple-tap a line       delete that line (undo: 2-finger swipe left)
 //   tap / drag line numbers select one / several lines (spec §3.2)
 //
 // WHY TOUCH EVENTS, NOT POINTER EVENTS: once the browser decides a touch is a
@@ -135,6 +136,13 @@ export function attachGestures(host, { getView, getSettings, runGesture, onPinch
     const key = gestureKey(g);
     if (!key) return false;
     restore(session);
+    if (g.type === 'tap' && g.fingers === 1) {
+      // Triple-tap acts on the tapped line (the browser selected a word on
+      // the second tap; that selection is replaced).
+      const pos = view.posAtCoords({ x: g.x, y: g.y });
+      if (pos == null) return false;
+      view.dispatch({ selection: { anchor: pos } });
+    }
     runGesture(key, view, g);
     return true;
   }

@@ -17,7 +17,8 @@ test('markup abbreviations that are offered', () => {
     ['!', ''], ['div', ''], ['div', '  '], ['section', '<main>'], ['ul>li*3', ''], ['div.card>ul>li*3', '    '],
     ['.row>.col*3', ''], ['#app', ''], ['p{Hello}', ''], ['a[href=#]', ''], ['link:css', ''], ['input:email', ''],
     ['ul>li*3', 'some text '], ['nav>ul>li.item$*4>a', ''], ['h1', ''], ['btn', ''],
-  ]) assert.equal(markupAbbreviationOk(abbr, prefix, isKnown), true, `${abbr} after ${JSON.stringify(prefix)}`);
+    ['lorem', ''], ['lorem20', '  '], ['lorem200', 'some text '], ['p>lorem5', ''], ['ul>li*3>lorem4', ''],
+  ]) assert.equal(markupAbbreviationOk(abbr, prefix, (n) => isKnown(n) || /^lorem\d*$/.test(n)), true, `${abbr} after ${JSON.stringify(prefix)}`);
 });
 
 test('markup abbreviations that are not offered', () => {
@@ -82,7 +83,10 @@ test('tag names while typing plain HTML text', async () => {
   assert.deepEqual(s('di', 'some text ').tags.slice(0, 1), ['div']);
   assert.deepEqual(s('a', 'some text ').tags, [], 'one letter in a sentence: no list');
   assert.equal(s('a', 'some text ', true).tags[0], 'a', '…unless asked for');
-  assert.deepEqual(s('Ta', '').tags, [], 'capitalised words are prose');
+  assert.deepEqual(s('Ta', 'some text ').tags, [], 'capitalised words in a sentence are prose');
+  assert.equal(s('P', '').tags[0], 'p', 'a keyboard capital at the start of a line is fine');
+  assert.deepEqual(s('H1', '  ').tags, ['h1']);
+  assert.deepEqual(s('h', '').tags.slice(0, 6), ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
   assert.deepEqual(s('li', 'ul>').tags, [], 'part of an Emmet abbreviation');
   assert.deepEqual(s('di', '"').tags, [], 'inside quotes');
   assert.deepEqual(s('xyz', '').tags, []);

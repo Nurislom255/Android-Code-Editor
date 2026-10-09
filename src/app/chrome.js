@@ -132,7 +132,7 @@ export function renderStatus(app) {
   const ws = app.ws;
   const items = [];
   const add = (key, content, opts = {}) => items.push({ key, content, ...opts });
-  if (app.gitBranch) add('branch', [h('span', { html: icon('branch', 14) }), app.gitBranch], { title: 'Git branch', onclick: () => app.showPanel('git') });
+  if (app.gitBranch) add('branch', [h('span', { html: icon('branch', 14) }), app.gitBranch], { title: 'Git branch', menu: `Git branch: ${app.gitBranch}`, onclick: () => app.showPanel('git') });
   const { errors, warnings } = app.problemCounts || { errors: 0, warnings: 0 };
   add('problems', `✖ ${errors}  ⚠ ${warnings}`, { cls: errors ? 'err' : warnings ? 'warn' : '', title: 'Problems', onclick: () => app.bottom.toggle('problems') });
   add('spacer', null, { spacer: true });
@@ -145,19 +145,66 @@ export function renderStatus(app) {
     const line = state.doc.lineAt(head);
     const selLen = state.selection.ranges.reduce((n, r) => n + r.to - r.from, 0);
     const locked = doc.locked || !!doc.readOnlyReason;
-    add('pos', `Ln ${line.number}, Col ${head - line.from + 1}${selLen ? ` (${selLen} sel)` : ''}${state.selection.ranges.length > 1 ? ` · ${state.selection.ranges.length} cursors` : ''}`, { title: 'Go to line', onclick: () => app.palette.open(':') });
-    add('indent', doc.indent.insertSpaces ? `Spaces: ${doc.indent.indentSize}` : `Tabs: ${doc.indent.tabWidth}`, { title: `Indentation (from ${doc.indentSource})`, onclick: (e) => indentMenu(app, doc, e) });
-    add('eol', eolLabel(doc.format.eol), { title: 'Line endings (kept as in the file)', onclick: (e) => eolMenu(app, doc, e) });
-    add('enc', doc.format.encoding === 'unknown' ? 'Unknown encoding' : `${doc.format.encoding.toUpperCase()}${doc.format.bom ? ' BOM' : ''}`, { title: 'Encoding' });
-    add('lang', doc.lang.name, { title: 'Language mode', onclick: () => app.pickLanguage() });
-    add('wrap', [h('span', { html: icon('wrap', 14) }), 'Wrap'], { cls: doc.wrap ? 'on' : '', title: 'Toggle soft wrap', label: `Soft wrap ${doc.wrap ? 'on' : 'off'}`, onclick: () => ws.setWrap(doc.id, !doc.wrap) });
+    const pos = `Ln ${line.number}, Col ${head - line.from + 1}`;
+    add('pos', `${pos}${selLen ? ` (${selLen} sel)` : ''}${state.selection.ranges.length > 1 ? ` · ${state.selection.ranges.length} cursors` : ''}`, { title: 'Go to line', menu: `Go to line… (${pos})`, onclick: () => app.palette.open(':') });
+    const indent = doc.indent.insertSpaces ? `Spaces: ${doc.indent.indentSize}` : `Tabs: ${doc.indent.tabWidth}`;
+    add('indent', indent, { title: `Indentation (from ${doc.indentSource})`, menu: `Indentation: ${indent}…`, onclick: (e) => indentMenu(app, doc, e) });
+    add('eol', eolLabel(doc.format.eol), { title: 'Line endings (kept as in the file)', menu: `Line endings: ${eolLabel(doc.format.eol)}…`, onclick: (e) => eolMenu(app, doc, e) });
+    const enc = doc.format.encoding === 'unknown' ? 'Unknown encoding' : `${doc.format.encoding.toUpperCase()}${doc.format.bom ? ' BOM' : ''}`;
+    add('enc', enc, { title: 'Encoding', menu: `Encoding: ${enc}` });
+    add('lang', doc.lang.name, { title: 'Language mode', menu: `Language: ${doc.lang.name}…`, onclick: () => app.pickLanguage() });
+    // On a phone the wrap toggle is just its icon (it is coloured when on).
+    add('wrap', app.layout && app.layout.compact ? h('span', { html: icon('wrap', 14) }) : [h('span', { html: icon('wrap', 14) }), 'Wrap'], {
+      cls: doc.wrap ? 'on' : '', title: 'Toggle soft wrap', label: `Soft wrap ${doc.wrap ? 'on' : 'off'}`,
+      menu: `Soft wrap: ${doc.wrap ? 'on' : 'off'}`, onclick: () => ws.setWrap(doc.id, !doc.wrap),
+    });
     add('lock', h('span', { html: icon(locked ? 'lock' : 'unlock', 14) }), {
+      menu: doc.readOnlyReason ? 'Read-only file' : doc.locked ? 'Unlock editing' : 'Lock editing',
       cls: locked ? 'on' : '', title: doc.readOnlyReason || (doc.locked ? 'Read-only (tap to unlock)' : 'Lock to prevent accidental edits'),
       label: doc.locked ? 'Unlock editing' : 'Lock editing',
       onclick: () => (doc.readOnlyReason ? app.toast(doc.readOnlyReason, 'warn') : ws.setLocked(doc.id, !doc.locked)),
     });
   }
-  reconcile(document.getElementById('statusbar'), items);
+  // Always last; shown only when some items had to make room (see fitStatus).
+  add('more', '⋯', { title: 'More', label: 'More status items', onclick: (e) => overflowMenu(e, items) });
+  const bar = document.getElementById('statusbar');
+  reconcile(bar, items);
+  if (!bar._fitQueued) {
+    bar._fitQueued = true;
+    requestAnimationFrame(() => { bar._fitQueued = false; fitStatus(bar); });
+  }
+}
+
+/** Least needed first: these move into the ⋯ menu when the bar is too narrow. */
+const OVERFLOW_ORDER = ['enc', 'eol', 'indent', 'lang', 'branch', 'wrap', 'lock', 'pos'];
+
+/** One line, never scrolling: hide items (into ⋯) until the rest fits. */
+function fitStatus(bar) {
+  const more = bar.querySelector('[data-key="more"]');
+  if (!more) return;
+  for (const el of bar.children) el.classList.remove('sb-overflowed');
+  more.classList.add('sb-overflowed');
+  const fits = () => bar.scrollWidth <= bar.clientWidth + 1;
+  if (fits()) return;
+  more.classList.remove('sb-overflowed');
+  for (const key of OVERFLOW_ORDER) {
+    const el = bar.querySelector(`[data-key="${key}"]`);
+    if (!el) continue;
+    el.classList.add('sb-overflowed');
+    if (fits()) break;
+  }
+}
+
+function overflowMenu(e, items) {
+  const bar = document.getElementById('statusbar');
+  const hidden = new Set([...bar.querySelectorAll('.sb-overflowed')].map((el) => el.dataset.key));
+  const btn = e.currentTarget;
+  const r = btn.getBoundingClientRect();
+  popupMenu(items.filter((it) => hidden.has(it.key) && it.menu).map((it) => ({
+    label: it.menu,
+    disabled: !it.onclick,
+    run: () => it.onclick && it.onclick({ currentTarget: btn }),
+  })), { x: r.left, y: r.top - 8 });
 }
 
 function reconcile(bar, items) {

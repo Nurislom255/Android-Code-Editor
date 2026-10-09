@@ -29,7 +29,8 @@ function loadEmmet() {
         if (!templates.has(tag)) templates.set(tag, toSnippetTemplate(m.default(tag, { options: OPTIONS })));
         return templates.get(tag);
       };
-      return { expand: m.default, extract: m.extract, tagTemplate, isKnown: (name) => HTML_TAGS.has(name) || aliases.has(name) };
+      const isKnown = (name) => HTML_TAGS.has(name) || aliases.has(name) || /^lorem\d*$/.test(name);
+      return { expand: m.default, extract: m.extract, tagTemplate, isKnown };
     });
   }
   return loading;
@@ -78,7 +79,8 @@ export function emmetSource(kind) {
       return null;
     }
     if (!found || !found.abbreviation) return null;
-    const abbr = found.abbreviation;
+    // "Lorem20" (a keyboard's automatic capital) is still Emmet's lorem20
+    const abbr = /^lorem\d*$/i.test(found.abbreviation) ? found.abbreviation.toLowerCase() : found.abbreviation;
     const prefix = before.slice(0, found.start);
     if (type === 'markup' && HTML_TAGS.has(abbr)) return null; // plain tag names: tagNameSource
     if (type === 'markup' && !markupAbbreviationOk(abbr, prefix, em.isKnown, context.explicit)) return null;
@@ -98,7 +100,7 @@ export function emmetSource(kind) {
       filter: false,
       options: [{
         label: abbr,
-        detail: abbr === '!' ? 'HTML5 page' : 'Emmet',
+        detail: abbr === '!' ? 'HTML5 page' : /^lorem\d*$/.test(abbr) ? `${abbr.slice(5) || 30} words of placeholder text` : 'Emmet',
         type: 'emmet',
         boost: 10,
         info: lines.length > 14 ? lines.slice(0, 14).join('\n') + '\n…' : preview,

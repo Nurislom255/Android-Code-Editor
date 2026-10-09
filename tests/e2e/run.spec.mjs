@@ -58,7 +58,13 @@ test('an infinite loop is stopped by the time limit, and Stop works', async ({ p
 test('stdin: readline() from the box, input() asks interactively', async ({ page }) => {
   await jsProject(page, "const a = readline();\nconst b = readline();\nconsole.log('sum', Number(a) + Number(b));\nconst name = await input('name? ');\nconsole.log('hello ' + name);\n");
   await runCommand(page, 'toggleConsole');
-  await page.locator('#bottom-panel .panel-actions button', { hasText: 'stdin' }).click();
+  // "Program input" is a button on wide screens, in ⋯ on a phone
+  const inputBtn = page.locator('#bottom-panel .panel-actions button', { hasText: 'Input' });
+  if (await inputBtn.isVisible()) await inputBtn.click();
+  else {
+    await page.locator('#bottom-panel [aria-label="More console actions"]').click();
+    await page.locator('.menu-item', { hasText: 'Program input' }).click();
+  }
   await page.locator('.stdin-box textarea').fill('2\n40\n');
   await runCommand(page, 'run');
   await expect(consoleLines(page).filter({ hasText: 'sum 42' })).toHaveCount(1);

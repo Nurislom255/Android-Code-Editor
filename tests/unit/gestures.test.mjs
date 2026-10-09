@@ -241,3 +241,33 @@ test('the test pad text explains every decision', () => {
   oneFinger(r, 5, 300, 200, 300, 100);
   assert.match(describeDecision(r.lastDecision), /screen edge/);
 });
+
+/** A quick tap at (x, y) at time t. */
+function tap(r, x, y, t, ms = 60) {
+  r.pointerDown(1, x, y, t);
+  return r.pointerUp(1, x + 1, y, t + ms);
+}
+
+test('three quick taps at one spot are a triple tap (delete line)', () => {
+  const r = new GestureRecognizer({}, VIEW);
+  assert.equal(tap(r, 200, 300, 0), null, 'a single tap stays the browser\'s (caret)');
+  assert.equal(tap(r, 202, 301, 200), null, 'a double tap stays the browser\'s (select word)');
+  const g = tap(r, 201, 299, 400);
+  assert.equal(gestureKey(g), 'tap-3x');
+  assert.deepEqual([g.x, g.y], [201, 299]);
+  assert.equal(describeDecision(r.lastDecision), '✓ Triple tap');
+  // and a fourth tap starts counting again
+  assert.equal(tap(r, 201, 299, 550), null);
+});
+
+test('slow, spread out or long taps are not a triple tap', () => {
+  const slow = new GestureRecognizer({}, VIEW);
+  tap(slow, 200, 300, 0); tap(slow, 200, 300, 600);
+  assert.equal(tap(slow, 200, 300, 1200), null);
+  const spread = new GestureRecognizer({}, VIEW);
+  tap(spread, 200, 300, 0); tap(spread, 260, 300, 200);
+  assert.equal(tap(spread, 320, 300, 400), null);
+  const long = new GestureRecognizer({}, VIEW);
+  tap(long, 200, 300, 0); tap(long, 200, 300, 200);
+  assert.equal(tap(long, 200, 300, 400, 500), null, 'a long press is not a tap');
+});

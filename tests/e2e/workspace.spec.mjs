@@ -170,14 +170,22 @@ test('read-only lock and soft wrap toggles in the status bar', async ({ page }) 
   await boot(page);
   await newProject(page, 'lk', 'js');
   await openFile(page, 'main.js');
-  await page.locator('#statusbar [aria-label="Lock editing"]').click();
-  expect(await page.evaluate(() => window.__app.ws.view.state.readOnly)).toBe(true);
+  // On a phone, items that don't fit are in the status bar's ⋯ menu.
+  const statusItem = async (key, menuText) => {
+    const direct = page.locator(`#statusbar [data-key="${key}"]`);
+    await page.waitForTimeout(50); // the bar is fitted on the next frame
+    if (await direct.isVisible()) return direct.click();
+    await page.locator('#statusbar [data-key="more"]').click();
+    await page.locator('.menu-item', { hasText: menuText }).click();
+  };
+  await statusItem('lock', 'Lock editing');
+  await expect.poll(() => page.evaluate(() => window.__app.ws.view.state.readOnly)).toBe(true);
   await expect(page.locator('.pane.focused-pane .cm-content')).toHaveAttribute('contenteditable', 'false');
-  await page.locator('#statusbar [aria-label="Unlock editing"]').click();
-  expect(await page.evaluate(() => window.__app.ws.view.state.readOnly)).toBe(false);
+  await statusItem('lock', 'Unlock editing');
+  await expect.poll(() => page.evaluate(() => window.__app.ws.view.state.readOnly)).toBe(false);
   const wrapBefore = await page.evaluate(() => window.__app.ws.view.lineWrapping);
-  await page.locator('#statusbar button', { hasText: 'Wrap' }).click();
-  expect(await page.evaluate(() => window.__app.ws.view.lineWrapping)).toBe(!wrapBefore);
+  await statusItem('wrap', 'Soft wrap');
+  await expect.poll(() => page.evaluate(() => window.__app.ws.view.lineWrapping)).toBe(!wrapBefore);
 });
 
 test('syntax errors are underlined and counted in Problems', async ({ page }) => {

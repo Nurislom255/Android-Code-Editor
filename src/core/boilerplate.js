@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
 export const CONSOLE_STARTER = [
   {
     name: 'main.js',
-    content: `// main.js — press Run (▶) or Ctrl+Enter. Output appears in the console below.
+    content: `// main.js — press Run (▶) or F5. Output appears in the console below.
 
 function greet(name) {
   return \`Hello, \${name}!\`;

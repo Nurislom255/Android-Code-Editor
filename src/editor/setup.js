@@ -54,7 +54,7 @@ export function langDataExtension(doc, userSnippets, settings) {
   const sources = [];
   if (settings.emmet && EMMET_KIND[languageId]) sources.push(emmetSource(EMMET_KIND[languageId]));
   if (settings.emmet && languageId === 'html') sources.push(tagNameSource);
-  const snip = snippetSource(languageId, userSnippets);
+  const snip = snippetSource(languageId, userSnippets, { builtins: !(settings.emmet && languageId === 'html') });
   if (snip) sources.push(snip);
   if (!HAS_LOCAL_COMPLETION.has(languageId)) sources.push(completeAnyWord);
   sources.push(openFilesWordSource, pathSource);

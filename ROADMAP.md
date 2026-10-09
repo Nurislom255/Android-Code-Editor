@@ -153,6 +153,12 @@ gesture test pad is the only on-device diagnostic for now):
 | Code size vs. app size | Only the code had a size setting (and pinch) | Settings → Appearance → Interface size (70–160 %) for menus, tabs, panels and the keys bar |
 | Arrow keys not needed; new line / move line important; multi-line editing | — | Bar re-ranked (see Phase 2 notes); multi-cursor keys and Ctrl+D / Ctrl+Alt+↑↓ / Shift+Alt+I |
 | Long-press should type the corner symbol; swipe-up only worked when very straight | Holding did nothing; any sideways drift > 14 px cancelled the swipe | Hold or swipe up; leaning / curved swipes count (2.5) |
+| Hold had no feedback | Only the key's colour changed | Preview bubble above the key, key turns blue and grows, strong vibration |
+| Sel+ duplicates other keys | — | Removed from the bar (Ctrl+D stays) |
+| Triple-tap selects the line instead of deleting it | Not built yet (was planned for Phase 2) | Triple-tap deletes the tapped line (remappable gesture) |
+| Console/Preview/Problems bar: tiny resize handle; ✕ off-screen in portrait; what is "stdin"? | 12 px handle; the actions row could not shrink | The whole bar drags to resize (drag to the bottom closes it); tabs scroll, actions never; on phones the rarer actions are in ⋯; "stdin" is now "Program input" with an explanation |
+| Status bar: Wrap / Lock cut off | One scrolling line, too many items for a phone | Items that don't fit move into a ⋯ menu (least needed first); Wrap is icon-only on phones |
+| Autocomplete: `p`, `h1`–`h3`, `lorem20` | `lorem` was not offered at all; a keyboard's capital ("P", "H1") hid tag suggestions | `lorem`, `loremN` (N **words**, as in Emmet/VS Code) anywhere in text; capitals accepted where a tag starts; h1–h6 grouped; duplicate snippet entries removed |
 
 ---
 
@@ -396,8 +402,9 @@ rules, editable in Settings):
 - **Whole-bar trackpad:** long-press any empty part of the bar and the whole bar
   becomes a trackpad (Gboard space-bar style).
 - **In the code:** double-tap selects a word; **triple-tap on a line deletes
-  that line** (owner's decision) — with a hint "Line deleted · Undo" and a
-  normal undo step. Care needed: the browser already selects a word on the
+  that line** (owner's decision; **shipped early**, remappable in Settings →
+  Touch & gestures) — with a hint "Line deleted · Undo" and a normal undo
+  step. Care needed: the browser already selects a word on the
   2nd tap, so the 3rd tap (same line, within ~500 ms and ~24 px) must collapse
   that selection first; it must never fire while the keyboard's own
   selection handles are being dragged. Selecting a line stays on the line
@@ -424,14 +431,12 @@ and delete line in **one key**, instead of five keys next to each other:
 - **Tap** → new line below (the most used).
 - **Swipe up / down on the key** → move the line up / down; keep the finger
   there to repeat.
-- **Open the fan:** the owner proposed **double-tap** — the other actions fan
-  out around the key and the finger **slides to one and releases** to choose
-  (a "marking menu": with practice the direction alone is enough, without
-  waiting for the fan). Trade-off to settle with the owner before building:
-  a double-tap means every single tap has to wait ~250 ms to be sure it isn't
-  the first of two, so "tap = new line" would feel slower. Long-press to
-  open the fan has no such delay. Build whichever the owner picks; offer the
-  other in Settings.
+- **Open the fan: long-press** (owner's decision — a double-tap would delay
+  every single tap by ~250 ms). The other actions fan out around the key and
+  the finger **slides to one and releases** to choose (a "marking menu": with
+  practice the direction alone is enough). The moment the fan opens must be
+  **felt and seen**: strong vibration, the key changes colour, the fan
+  animates in — same style as the symbol-key hold.
 - The same pattern then groups other related keys: cursors (`+⇣` `+⇡` `⫶`
   `Sel+`), selection (`⊕` `⊖` Select all), indentation / comment.
 
@@ -458,7 +463,8 @@ A phone or tablet is often used with a Bluetooth or USB keyboard, so:
 | Complete statement | Ctrl+Shift+Enter | as JetBrains |
 | Expand / shrink selection | Shift+Alt+→ / ← | VS Code |
 | Toggle comment, indent | Ctrl+/, Ctrl+] / Ctrl+[ | VS Code |
-| New line below | **none yet** | VS Code uses Ctrl+Enter, which is **Run** here — to decide with the owner (e.g. Run → F5 / Ctrl+F5 as in VS Code, Ctrl+Enter → new line below) |
+| New line below | **Ctrl+Enter** | VS Code (owner's decision; done) |
+| Run file / preview | **F5** | as VS Code (owner's decision; done — Ctrl+Enter used to run) |
 | New line above | **none yet** | VS Code uses Ctrl+Shift+Enter, which is Complete statement here — proposal: Ctrl+Alt+Enter |
 
 Done when (Phase 2): on the owner's phone in portrait, with Gboard open, the 10
@@ -482,6 +488,23 @@ listed in 2.3; the customization survives a reload.
   keys bar); the title bar auto-hides while scrolling. In the APK, also hide
   Android's status and navigation bars (immersive mode; small native plugin).
 - Redesigned welcome screen; small, quick animations (respect "reduce motion").
+- **Interaction states (owner's request):** one consistent look and feel for
+  *pressed*, *held / long-press armed*, *active / toggled on*, *disabled* and
+  *busy*, across keys, buttons, tabs, list rows and menus — colour (from the
+  theme tokens), a short scale/press animation, and a matching vibration
+  strength (tap light, hold-activated strong). Today each control does its own
+  thing; the symbol-key hold (blue key + preview bubble + strong vibration,
+  shipped after Phase 1) is the reference for "armed".
+- **No text selection on UI chrome (owner's request):** status bar, title bar
+  (project name), tab bar, panel heads, keys bar, side-panel headers and
+  menus get `user-select: none` so a long-press doesn't start selecting their
+  text; the code, the console output, inputs and dialogs' messages stay
+  selectable.
+- **Project name → project actions (owner's request):** tapping the project
+  name in the title bar opens: **Rename project** (missing today — there is no
+  way to rename one), Switch project, New project, Import, Export as .zip,
+  Project settings. Rename must also rename the stored project record and, for
+  a device folder, offer to rename the folder.
 
 ---
 

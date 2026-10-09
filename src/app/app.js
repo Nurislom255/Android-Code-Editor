@@ -106,6 +106,8 @@ export class App {
       onRerun: () => this.run('run'),
       getSettings: () => this.settings,
       layoutChanged: () => this.layoutChanged(),
+      savePanelHeight: (px) => { const st = this.settings; st.panelHeight = px; this.saveSettings(st); },
+      isCompact: () => !!(this.layout && this.layout.compact),
     });
     this.bottom.onShowProblems = () => this.updateProblems();
     this.runner = new JsRunner('run-worker.js');
@@ -202,6 +204,10 @@ export class App {
   // ---- layout -------------------------------------------------------------------
 
   layoutChanged() {
+    if (this.bottom && this.layout && this.bottom._compact !== this.layout.compact) {
+      this.bottom._compact = this.layout.compact;
+      this.bottom.renderActions(); // phone vs. tablet action set
+    }
     const split = !!(this.ws && this.ws.panes[1] && this.ws.panes[1].visible);
     const side = !$('#preview-side').classList.contains('hidden');
     $('#app').classList.toggle('split', split);
@@ -1022,6 +1028,7 @@ export class App {
     const label = this.run(action, view);
     if (label) {
       haptic(this.settings, 12);
+      if (action === 'deleteLine') { this.hint('Line deleted · Undo brings it back'); return; }
       this.hint(typeof label === 'string' ? label : GESTURE_ACTIONS[action]);
     } else {
       this.hint(`${GESTURE_ACTIONS[action].split(' (')[0]} — nothing to do`, true);
@@ -1102,7 +1109,7 @@ export class App {
       lineUp: { label: 'Move line up', key: 'Alt+↑', run: (v) => E.lineUp(v) },
       lineDown: { label: 'Move line down', key: 'Alt+↓', run: (v) => E.lineDown(v) },
       deleteLine: { label: 'Delete line', key: 'Ctrl+Shift+K', run: (v) => E.deleteLine(v) },
-      newlineBelow: { label: 'Insert line below', run: (v) => E.newlineBelow(v) },
+      newlineBelow: { label: 'Insert line below', key: 'Ctrl+Enter', run: (v) => E.newlineBelow(v) },
       completeStatement: { label: 'Complete statement (add ; and new line)', key: 'Ctrl+Shift+Enter', run: (v) => completeStatement(v) },
       addCursorDown: { label: 'Add cursor on the line below', key: 'Ctrl+Alt+↓', run: (v) => this.multiHint(E.addCursorDown(v)) },
       addCursorUp: { label: 'Add cursor on the line above', key: 'Ctrl+Alt+↑', run: (v) => this.multiHint(E.addCursorUp(v)) },
@@ -1167,7 +1174,7 @@ export class App {
       shortcuts: { label: 'Keyboard shortcuts', key: 'F1', run: () => this.showShortcuts() },
       gestureGuide: { label: 'Touch gestures guide', run: () => this.showGestureGuide() },
       // run
-      run: { label: 'Run file / preview', key: 'Ctrl+Enter', run: () => (this.runner.running ? this.runner.stop('stopped') : this.runActive()) },
+      run: { label: 'Run file / preview', key: 'F5', run: () => (this.runner.running ? this.runner.stop('stopped') : this.runActive()) },
       stop: { label: 'Stop running script', run: () => this.runner.stop('stopped') },
       preview: { label: 'Preview HTML / Markdown', run: docOr((d) => this.preview.open(d.path || d.name)) },
       navigatePrevProblem: { label: 'Show problems panel', run: () => this.bottom.show('problems') },
@@ -1217,15 +1224,15 @@ export class App {
   bindShortcuts() {
     const map = [
       ['Mod-s', 'save'], ['Mod-Shift-s', 'saveAll'], ['Mod-p', 'quickOpen'], ['Mod-Shift-p', 'commandPalette'], ['F1', 'commandPalette'],
-      ['Mod-g', 'goToLine'], ['Mod-Shift-o', 'goToSymbol'], ['Mod-Enter', 'run'], ['Mod-Shift-f', 'searchProject'],
+      ['Mod-g', 'goToLine'], ['Mod-Shift-o', 'goToSymbol'], ['F5', 'run'], ['Mod-Shift-f', 'searchProject'],
       ['Mod-b', 'toggleSidebar'], ['Mod-\\', 'split'], ['Alt-Shift-ArrowRight', 'expandSelection'], ['Alt-Shift-ArrowLeft', 'shrinkSelection'],
       ['Alt-Shift-f', 'format'], ['Mod-=', 'zoomIn'], ['Mod-+', 'zoomIn'], ['Mod--', 'zoomOut'], ['Mod-0', 'zoomReset'],
       ['Ctrl-Tab', 'nextTab'], ['Ctrl-Shift-Tab', 'prevTab'], ['Alt-PageDown', 'nextTab'], ['Alt-PageUp', 'prevTab'],
       ['Alt-w', 'closeTab'], ['Ctrl-Alt--', 'navigateBack'], ['Ctrl-Shift--', 'navigateForward'], ['Mod-j', 'toggleConsole'],
       ['Mod-Shift-e', 'showFiles'], ['Mod-Shift-g', 'showGit'],
-      // Also bound inside the editor; listed here because on Android the
-      // editor sees Enter without its modifiers (CodeMirror re-dispatches it).
-      ['Mod-Shift-Enter', 'completeStatement'],
+      // Editor-only, but listed here because on Android the editor sees
+      // Enter without its modifiers (CodeMirror re-dispatches it).
+      ['Mod-Enter', 'newlineBelow'], ['Mod-Shift-Enter', 'completeStatement'],
     ].map(([k, cmd]) => [parseKey(k), cmd]);
     this.shortcutTable = map;
     document.addEventListener('keydown', (e) => {
@@ -1243,6 +1250,7 @@ export class App {
       for (const [spec, cmd] of map) {
         if (keyMatches(e, spec)) {
           if (inField && !FIELD_SAFE.has(cmd)) return;
+          if (EDITOR_ONLY.has(cmd) && !(t && t.closest && t.closest('.cm-editor'))) return;
           e.preventDefault();
           e.stopPropagation();
           if (this.palette.isOpen && cmd !== 'commandPalette' && cmd !== 'quickOpen') this.palette.close();
@@ -1343,6 +1351,8 @@ export class App {
 // ---- key matching ---------------------------------------------------------------------------
 
 const FIELD_SAFE = new Set(['save', 'saveAll', 'quickOpen', 'commandPalette', 'toggleSidebar', 'searchProject']);
+/** Shortcuts that only mean something while typing in the editor. */
+const EDITOR_ONLY = new Set(['newlineBelow', 'completeStatement']);
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 

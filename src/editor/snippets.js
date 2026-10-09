@@ -102,10 +102,11 @@ export function parseUserSnippets(json) {
   }
 }
 
-/** Completion source for a language: built-ins + user snippets ("*" = every language). */
-export function snippetSource(languageId, userSnippets = {}) {
+/** Completion source for a language: built-ins + user snippets ("*" = every language).
+ * `builtins: false` when Emmet already covers them (HTML: div, a, img, ul…). */
+export function snippetSource(languageId, userSnippets = {}, { builtins = true } = {}) {
   const list = [
-    ...(SNIPPETS[GROUP[languageId]] || []),
+    ...(builtins ? SNIPPETS[GROUP[languageId]] || [] : []),
     ...(userSnippets[languageId] || []),
     ...(userSnippets['*'] || []),
   ];
