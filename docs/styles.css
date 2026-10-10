@@ -924,7 +924,9 @@ kbd {
 .sb-item.on { color: var(--accent); }
 .sb-item svg { width: 14px; height: 14px; }
 
-/* ---- Coding keys bar ------------------------------------------------------- */
+/* ---- Coding keys bar (ui/keysBar.js) --------------------------------------
+   Rows of equal keys (≥ 44 px on a 360 px phone), no sideways scrolling;
+   only the Ctrl shortcut strip and the "More" sheet scroll. */
 #keys-bar {
   display: flex;
   flex-direction: column;
@@ -936,37 +938,51 @@ kbd {
   user-select: none;
   -webkit-user-select: none;
 }
-.keys-row { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
-.keys-row::-webkit-scrollbar { display: none; }
+.keys-row { display: flex; gap: 4px; min-width: 0; }
+.keys-row > .key, .keys-cluster > .key { flex: 1 1 0; min-width: 0; }
+.keys-cluster { display: contents; }
+.keys-gap { flex: 0 0 14px; }
+.keys-region { display: flex; gap: 4px; flex: 6 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+#keys-bar[data-profile="tablet"] .keys-region { flex: 12 1 0; }
+.keys-region::-webkit-scrollbar { display: none; }
+.keys-region > .key { flex: 0 0 auto; min-width: 52px; touch-action: pan-x; }
 .key {
   position: relative;
-  flex-shrink: 0;
-  min-width: 40px;
-  height: 40px;
-  padding: 0 8px;
-  border-radius: 7px;
+  height: 44px;
+  padding: 0 3px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-panel-alt);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 16px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* pan-x: a finger that lands on a key can still scroll the row sideways
-     (keys fire on release, and a panned press is cancelled). Only the
-     trackpad strip uses touch-action: none. */
-  touch-action: pan-x;
+  overflow: hidden;
+  /* rows don't scroll: a finger on a key is the key's (swipes, holds) */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  transition: transform 80ms, background 80ms;
 }
-.key:active, .key.pressed { background: var(--accent-dim); border-color: var(--accent); }
+.key-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
+.key-sub { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-family: var(--font-ui); font-size: 9.5px; font-weight: 500; color: var(--text-faint); line-height: 1; margin-top: 2px; white-space: nowrap; }
 .key .alt { position: absolute; top: 2px; right: 4px; font-size: 9.5px; color: var(--text-faint); line-height: 1; }
-.key.action { font-family: var(--font-ui); font-size: 12.5px; font-weight: 600; color: var(--text-dim); }
-.key.action svg { width: 18px; height: 18px; }
-.key.mod.armed { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 0 10px var(--accent-glow); }
-.key.trackpad { min-width: 86px; background: repeating-linear-gradient(90deg, var(--bg-panel-alt) 0 6px, var(--bg-hover) 6px 7px); color: var(--text-faint); font-family: var(--font-ui); font-size: 11.5px; }
-.key.trackpad.active { border-color: var(--accent); color: var(--accent); }
-.key.swiped { background: var(--accent); color: var(--on-accent); transform: scale(1.06); }
-.key.swiped .alt { color: var(--on-accent); }
+.key .alt.alt-down { top: auto; bottom: 2px; }
+.key.pressed { background: var(--accent-dim); border-color: var(--accent); }
+.key.action { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.key.ctx-text { font-size: 13.5px; }
+.key.empty { visibility: hidden; }
+.key.mod.armed, .key.mod-key.armed, .key.mod-key.has-mods { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 0 10px var(--accent-glow); }
+.key.mod.locked { outline: 2px solid var(--on-accent); outline-offset: -5px; }
+/* a held / swiped key: the same "armed" look everywhere */
+.key.swiped, .key.holding { background: var(--accent); border-color: var(--accent); color: var(--on-accent); transform: scale(1.06); }
+.key.swiped .alt, .key.holding .alt, .key.holding .key-sub { color: var(--on-accent); }
+.key.joystick { background: radial-gradient(circle, var(--bg-hover) 0 30%, var(--bg-panel-alt) 31%); }
+.key.joystick .knob { width: 16px; height: 16px; border-radius: 50%; background: var(--text-faint); box-shadow: 0 0 0 4px var(--bg-panel-alt); transition: transform 70ms; pointer-events: none; }
+.key.joystick.active .knob { background: var(--accent); transition: none; }
+.key.joystick.selecting { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .key-preview {
   position: fixed; z-index: 95; transform: translate(-50%, -100%); pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
@@ -977,6 +993,26 @@ kbd {
 .key-preview-char { font-family: var(--font-mono); font-size: calc(26px * var(--ui-zoom, 1)); line-height: 1.1; font-weight: 600; }
 .key-preview-hint { font-size: calc(10px * var(--ui-zoom, 1)); opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; }
 @keyframes key-pop { from { transform: translate(-50%, -80%) scale(0.7); opacity: 0.4; } }
+/* the choices above a held key (variants, the line fan): slide and release */
+.key-chooser {
+  position: fixed; z-index: 95; display: flex; gap: 4px; padding: calc(5px * var(--ui-zoom, 1));
+  border-radius: 12px; background: var(--bg-panel); border: 1px solid var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); animation: key-fan 110ms ease-out; pointer-events: none;
+}
+.key-choice {
+  min-width: calc(46px * var(--ui-zoom, 1)); height: calc(46px * var(--ui-zoom, 1)); padding: 0 calc(8px * var(--ui-zoom, 1));
+  display: flex; align-items: center; justify-content: center; border-radius: 8px;
+  font-family: var(--font-mono); font-size: calc(16px * var(--ui-zoom, 1)); color: var(--text); background: var(--bg-panel-alt); white-space: nowrap;
+}
+.key-choice.on { background: var(--accent); color: var(--on-accent); transform: scale(1.08); }
+@keyframes key-fan { from { transform: translateY(10px) scale(0.9); opacity: 0.3; } }
+/* the "More" sheet: every key, grouped */
+.keys-sheet { max-height: calc(45vh / var(--ui-zoom, 1)); overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--border); padding: 0 2px 6px; }
+.keys-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 4px; font-family: var(--font-ui); font-weight: 600; font-size: 13px; color: var(--text-dim); }
+.keys-sheet-head .key { flex: 0 0 44px; }
+.keys-sheet-title { font-family: var(--font-ui); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 8px 2px 4px; }
+.keys-sheet-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; }
+.keys-sheet .key { touch-action: pan-y; }
 
 /* ---- Drag to move (tabs, file tree; ui/dragMove.js) ------------------------ */
 .tab, .tree-row { -webkit-touch-callout: none; }

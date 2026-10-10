@@ -67,7 +67,8 @@ test('file tree: drag a file into a folder and a folder to the project root', as
   // the empty space below the rows is the project root
   await dragItem(page, hasTouch, row('src/lib'), page.locator('#sidebar .tree'), { x: 0.5, y: 0.97 });
   await expect.poll(() => exists('lib/util.js')).toBe(true);
-  expect(await exists('src/lib')).toBe(false);
+  // (a folder moves as copy, then delete: wait for both)
+  await expect.poll(() => exists('src/lib')).toBe(false);
 });
 
 test('tabs: drag to reorder and into the other pane', async ({ page, hasTouch }) => {

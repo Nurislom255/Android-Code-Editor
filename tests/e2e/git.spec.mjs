@@ -63,7 +63,8 @@ test('diff view and discard', async ({ page }) => {
   await page.locator('.modal [aria-label="Close"]').click();
   await panel.getByRole('button', { name: 'Discard changes to main.js' }).click();
   await page.locator('.modal').getByRole('button', { name: 'Discard' }).click();
-  await expect(panel.locator('.git-section-title', { hasText: 'Changes (0)' })).toBeVisible();
+  // (exact: a case-insensitive "Changes (0)" also matches "Staged changes (0)")
+  await expect(panel.locator('.git-section-title span', { hasText: /^Changes \(0\)$/ })).toBeVisible();
   // the open editor picks up the restored file
   await expect.poll(() => page.evaluate(() => window.__app.ws.view.state.doc.toString())).toContain('readline()');
 });

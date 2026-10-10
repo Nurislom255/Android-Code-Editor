@@ -174,6 +174,7 @@ test.describe('HTML & CSS', () => {
     await boot(page);
     await newProject(page, 'w', 'web');
     await openFile(page, 'index.html');
+    await page.waitForFunction(() => window.__app.ws.activeDoc.languageReady); // Emmet needs the HTML parser
     await setText(page, text);
   }
 

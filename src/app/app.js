@@ -140,6 +140,9 @@ export class App {
       run: (name) => this.run(name),
       arrow: (dir, mods) => E.arrow(this.ws.activeDoc ? this.ws.view : null, dir, mods),
       type: (text) => E.typeText(this.editableView(), text),
+      // label + shortcut, for the keys' tooltips
+      describe: (name) => { const c = this.commands()[name]; return c ? { label: c.label, key: c.key } : null; },
+      isEscapable: () => $('#bottom-panel').classList.contains('maximized'),
       onLayoutChange: () => this.layoutChanged(),
     });
 
@@ -316,8 +319,9 @@ export class App {
       if (doc && doc.path) this.rememberRecent(doc.path);
       this.problemsLater();
     });
-    ws.on('selection', ({ state }) => {
+    ws.on('selection', ({ state, docChanged }) => {
       statusLater();
+      this.keysBar.editorChanged(!!docChanged);
       if (this.activePanel === 'outline') this.outline.setCursor(state.selection.main.head);
     });
     ws.on('change', ({ doc }) => {
@@ -1141,13 +1145,31 @@ export class App {
       lineDown: { label: 'Move line down', key: 'Alt+↓', run: (v) => E.lineDown(v) },
       deleteLine: { label: 'Delete line', key: 'Ctrl+Shift+K', run: (v) => E.deleteLine(v) },
       newlineBelow: { label: 'Insert line below', key: 'Ctrl+Enter', run: (v) => E.newlineBelow(v) },
+      newlineAbove: { label: 'Insert line above', key: 'Ctrl+Alt+Enter', run: (v) => E.newlineAbove(v) },
+      copyLineUp: { label: 'Copy line up', key: 'Shift+Alt+↑', run: (v) => E.copyLineUp(v) },
+      joinLines: { label: 'Join with the next line', run: (v) => E.joinLines(v) },
       completeStatement: { label: 'Complete statement (add ; and new line)', key: 'Ctrl+Shift+Enter', run: (v) => completeStatement(v) },
       addCursorDown: { label: 'Add cursor on the line below', key: 'Ctrl+Alt+↓', run: (v) => this.multiHint(E.addCursorDown(v)) },
       addCursorUp: { label: 'Add cursor on the line above', key: 'Ctrl+Alt+↑', run: (v) => this.multiHint(E.addCursorUp(v)) },
       selectNext: { label: 'Select next occurrence', key: 'Ctrl+D', run: (v) => this.multiHint(E.selectNext(v)) },
       cursorsOnLines: { label: 'Cursor on each selected line', key: 'Shift+Alt+I', run: (v) => this.multiHint(E.cursorsOnLines(v) || (toast('Select several lines first (drag down the line numbers).', 'info'), null)) },
+      selectAllMatches: { label: 'Select all occurrences', key: 'Ctrl+Shift+L', run: (v) => this.multiHint(E.selectAllMatches(v)) },
+      escape: { label: 'Escape (close list / panel, one cursor)', key: 'Esc', run: (v) => E.escape(v) || this.escapeApp() },
       backspace: { label: 'Backspace', run: (v) => E.backspace(v) },
+      deleteForward: { label: 'Delete', key: 'Del', run: (v) => E.deleteForward(v) },
       selectAll: { label: 'Select all', key: 'Ctrl+A', run: (v) => E.selectAll(v) },
+      selectLine: { label: 'Select line', key: 'Ctrl+L', run: (v) => E.selectLineCmd(v) },
+      selectWord: { label: 'Select word', run: (v) => E.selectWord(v) },
+      cut: { label: 'Cut', key: 'Ctrl+X', run: (v) => this.clipboard('cut', v) },
+      copy: { label: 'Copy', key: 'Ctrl+C', run: (v) => this.clipboard('copy', v) },
+      paste: { label: 'Paste', key: 'Ctrl+V', run: (v) => this.clipboard('paste', v) },
+      lineStart: { label: 'Line start', key: 'Home', run: (v) => E.goLineStart(v) },
+      lineEnd: { label: 'Line end', key: 'End', run: (v) => E.goLineEnd(v) },
+      docStart: { label: 'Start of the file', key: 'Ctrl+Home', run: (v) => E.goDocStart(v) },
+      docEnd: { label: 'End of the file', key: 'Ctrl+End', run: (v) => E.goDocEnd(v) },
+      pageUp: { label: 'Page up', key: 'PgUp', run: (v) => E.pageUp(v) },
+      pageDown: { label: 'Page down', key: 'PgDn', run: (v) => E.pageDown(v) },
+      matchingBracket: { label: 'Go to matching bracket', key: 'Ctrl+Shift+\\', run: (v) => E.matchingBracket(v) },
       expandSelection: { label: 'Expand selection', key: 'Alt+Shift+→', run: (v) => E.expandSelection(v) },
       shrinkSelection: { label: 'Shrink selection', key: 'Alt+Shift+←', run: (v) => E.shrinkSelection(v) },
       find: { label: 'Find / replace in file', key: 'Ctrl+F', run: (v) => E.find(v) },
@@ -1263,7 +1285,7 @@ export class App {
       ['Mod-Shift-e', 'showFiles'], ['Mod-Shift-g', 'showGit'],
       // Editor-only, but listed here because on Android the editor sees
       // Enter without its modifiers (CodeMirror re-dispatches it).
-      ['Mod-Enter', 'newlineBelow'], ['Mod-Shift-Enter', 'completeStatement'],
+      ['Mod-Enter', 'newlineBelow'], ['Mod-Shift-Enter', 'completeStatement'], ['Mod-Alt-Enter', 'newlineAbove'],
     ].map(([k, cmd]) => [parseKey(k), cmd]);
     this.shortcutTable = map;
     document.addEventListener('keydown', (e) => {
@@ -1382,6 +1404,39 @@ export class App {
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (this._updating) location.reload(); });
   }
 
+  /** Esc outside the editor's own state: a maximized panel. */
+  escapeApp() {
+    const panel = $('#bottom-panel');
+    if (panel.classList.contains('maximized')) { panel.classList.remove('maximized'); this.bottom.renderActions(); return 'Panel restored'; }
+    return null;
+  }
+
+  /**
+   * Cut / copy / paste for the keys bar (the keyboard's own shortcuts keep
+   * working natively). With nothing selected, cut and copy take the whole
+   * line, as in VS Code.
+   */
+  async clipboard(kind, v) {
+    if (!v) return null;
+    const { state } = v;
+    if (kind === 'paste') {
+      if (state.readOnly) return null;
+      let text;
+      try { text = await navigator.clipboard.readText(); } catch { toast('This browser blocked reading the clipboard: use the keyboard\'s paste instead.', 'warn'); return null; }
+      v.dispatch(v.state.replaceSelection(text), { userEvent: 'input.paste', scrollIntoView: true });
+      return 'Pasted';
+    }
+    const ranges = state.selection.ranges.filter((r) => !r.empty);
+    const whole = !ranges.length;
+    const text = whole ? state.doc.lineAt(state.selection.main.head).text + state.lineBreak : ranges.map((r) => state.sliceDoc(r.from, r.to)).join(state.lineBreak);
+    try { await navigator.clipboard.writeText(text); } catch { toast('This browser blocked the clipboard.', 'warn'); return null; }
+    if (kind === 'cut' && !state.readOnly) {
+      if (whole) E.deleteLine(v);
+      else v.dispatch(v.state.replaceSelection(''), { userEvent: 'delete.cut', scrollIntoView: true });
+    }
+    return kind === 'cut' ? 'Cut' : 'Copied';
+  }
+
   /**
    * A newer build is downloaded and waiting. Without this it would only start
    * once every tab of the app is closed (a reload isn't enough), which is
@@ -1432,7 +1487,7 @@ export class App {
 
 const FIELD_SAFE = new Set(['save', 'saveAll', 'quickOpen', 'commandPalette', 'toggleSidebar', 'searchProject']);
 /** Shortcuts that only mean something while typing in the editor. */
-const EDITOR_ONLY = new Set(['newlineBelow', 'completeStatement']);
+const EDITOR_ONLY = new Set(['newlineBelow', 'completeStatement', 'newlineAbove']);
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 
