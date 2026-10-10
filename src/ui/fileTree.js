@@ -3,11 +3,14 @@
 //
 // Folders load their children only when expanded (one directory listing per
 // expand), so opening a project with a huge node_modules costs nothing.
-// Touch: tap opens, long-press opens the context menu (rename, delete, …).
+// Touch: tap opens, long-press opens the context menu (rename, delete, …);
+// keep moving after the long-press to drag the entry into another folder
+// (with a mouse: just drag).
 
-import { h, icon, onLongPress } from './dom.js';
+import { h, icon } from './dom.js';
 import { popupMenu } from './overlays.js';
-import { extname } from '../core/paths.js';
+import { dragMove } from './dragMove.js';
+import { extname, dirname, basename } from '../core/paths.js';
 
 const TYPE_BADGES = {
   '.js': ['JS', '#e8c547', '#1a1a1a'], '.mjs': ['JS', '#e8c547', '#1a1a1a'], '.cjs': ['JS', '#e8c547', '#1a1a1a'],
@@ -42,7 +45,14 @@ export class FileTree {
     this.rows = new Map();  // path -> row element
     this.el.classList.add('tree');
     this.el.setAttribute('role', 'tree');
-    onLongPress(this.el, '.tree-row', (row, at) => this.menu(row.dataset.path, row.dataset.kind, at));
+    dragMove(this.el, '.tree-row', {
+      axis: 'y',
+      getSettings: deps.getSettings,
+      menu: (row, at) => this.menu(row.dataset.path, row.dataset.kind, at),
+      label: (row) => basename(row.dataset.path),
+      find: (row, el) => this.dropTarget(row, el),
+      drop: (row, t) => deps.actions.move(row.dataset.path, row.dataset.kind, t.dir),
+    });
   }
 
   async reset(expanded = []) {
@@ -146,6 +156,20 @@ export class FileTree {
       b.textContent = letter;
       b.className = `tbadge ${letter}`;
     }
+  }
+
+  /**
+   * Where a dragged entry would go: the folder under the finger, the folder
+   * of the file under it, or the project root below the last row.
+   */
+  dropTarget(row, el) {
+    if (!el || !this.el.contains(el)) return null;
+    const over = el.closest('.tree-row');
+    const dir = !over ? '' : over.dataset.kind === 'directory' ? over.dataset.path : dirname(over.dataset.path);
+    const from = row.dataset.path;
+    if (dir === dirname(from)) return null; // already there
+    if (row.dataset.kind === 'directory' && (dir === from || dir.startsWith(from + '/'))) return null; // into itself
+    return dir ? { el: this.rows.get(dir), cls: 'drop-into', dir } : { el: this.el, cls: 'drop-root', dir };
   }
 
   menu(path, kind, at) {

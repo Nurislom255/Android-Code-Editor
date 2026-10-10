@@ -873,6 +873,18 @@ export class Workspace {
     this.closeTab(fromPane, docId, { force: true });
   }
 
+  /** Drag and drop of a tab: into pane `toPane`, before tab `beforeId` (null = at the end). */
+  placeTab(fromPane, docId, toPane, beforeId) {
+    if (fromPane !== toPane) this.moveTab(fromPane, docId, toPane);
+    const tabs = this.panes[toPane] && this.panes[toPane].tabs;
+    if (!tabs || beforeId === docId || !tabs.includes(docId)) return;
+    tabs.splice(tabs.indexOf(docId), 1);
+    const at = beforeId == null ? -1 : tabs.indexOf(beforeId);
+    tabs.splice(at < 0 ? tabs.length : at, 0, docId);
+    this.emit('docs', {});
+    this.saveSessionSoon();
+  }
+
   // ---- toggles & settings -------------------------------------------------------
 
   setWrap(docId, on) {

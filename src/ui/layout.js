@@ -74,11 +74,6 @@ export class Layout {
       move: (w0, dx) => document.documentElement.style.setProperty('--sidebar-w', `${Math.max(160, Math.min(600, w0 + dx))}px`),
       end: () => { const s = this.getSettings(); s.sidebarWidth = Math.round($('#sidebar').getBoundingClientRect().width); this.saveSettings(s); },
     });
-    drag($('#panel-resizer'), {
-      start: () => $('#bottom-panel').getBoundingClientRect().height,
-      move: (h0, dx, dy) => document.documentElement.style.setProperty('--panel-h', `${Math.max(90, Math.min(window.innerHeight * 0.85, h0 - dy))}px`),
-      end: () => { const s = this.getSettings(); s.panelHeight = Math.round($('#bottom-panel').getBoundingClientRect().height); this.saveSettings(s); },
-    });
     drag($('#pane-divider'), {
       start: () => {
         const area = $('#editor-area').getBoundingClientRect();
