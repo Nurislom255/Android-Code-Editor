@@ -6,9 +6,10 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
-What's next: see **[ROADMAP.md](ROADMAP.md)** (keys bar redesign, VS Code look,
-tabs & explorer, built-in Python and C++). Phase 1 of it — typing
-correctness — is built: see *Typing* below.
+What's next: see **[ROADMAP.md](ROADMAP.md)** (settings pages, VS Code look,
+tabs & explorer, built-in Python, C, C++ and Rust). Phase 1 — typing
+correctness — is done (see *Typing*); Phase 2 part 1, the new **keys bar**,
+is built (see *Keys bar*).
 
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
@@ -33,9 +34,7 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 | **Triple-tap** a line | Delete that line (Undo brings it back) |
 | Pinch | Zoom the code font (saved) |
 | Tap / drag the line numbers | Select one / several lines |
-| Keys bar: **swipe up** or **hold** a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …); leaning or curved swipes count |
-| Keys bar: drag the **trackpad** strip | Move the cursor (with ⇧ armed: select) — works with any keyboard app |
-| Keys bar: hold an arrow | Key repeat |
+| Keys bar | Swipes and holds on the keys: see *Keys bar* below |
 | Status bar: swipe left / right | Next / previous tab |
 | Long-press a tab, file or folder | Context menu (rename, delete, split, …) |
 | Long-press a tab, file or folder, then keep moving | Drag it: reorder tabs or move them to the other pane; move files and folders into a folder (or to the project root: the empty space below the list). With a mouse, just drag |
@@ -66,6 +65,52 @@ How false triggers are avoided (see `src/core/gestures.js`):
 
 ---
 
+## Keys bar (ROADMAP Phase 2)
+
+Above the keyboard while you type in the editor (Settings → *Keys bar*:
+Auto / Always / Never). Made for two thumbs: no row scrolls sideways and no
+key is narrower than 44 px.
+
+```
+Phone:   [Mod][ctx][ctx][ctx][ctx][+⇣][ ⋯ ]    context keys: what fits where the cursor is
+         [Tab][ ◉ ][ s1][ s2][ s3][ ↵ ][ ↶ ]    s1–s3: the language's most used symbols
+Tablet:  [Esc][Tab][ ◉ ][Ctrl][Shift][Alt]   [ctx ×6][s1 … s6][↵][+⇣][↶][↷][⋯]
+```
+
+A landscape phone gets one row: `Tab ◉ Mod ctx×4 s1–s3 ↵ +⇣ ↶ ⋯`.
+
+| Key | Tap | Swipe up / down | Hold |
+|---|---|---|---|
+| **Tab** | Tab / indent / accept suggestion | — | Shift+Tab (outdent) |
+| **◉** joystick | Select the word | Drag any way: the cursor follows; drag further than a key away and it keeps going, faster the further you go. Quick flick ← / →: line start / end | Then drag: select |
+| **Symbols** (`;` `{` `(` …) | The symbol | The variant shown small in the top / bottom corner | All variants pop up: slide to one, release |
+| **↵** line | New line below | Move the line up / down (hold to repeat) | Line actions pop up: `⏎;` complete statement, `↥` new line above, Dup, Join, `✕Ln` delete, `//` comment |
+| **+⇣** cursors | Add a cursor below | Above / below | `⫶` a cursor on each selected line, `Sel+` next match, `Sel*` all matches, Esc |
+| **↶** | Undo | — | Redo (repeats) |
+| **Mod** | Opens Ctrl · Shift · Alt · Esc · ⇧Tab · ⏎; | | |
+| **⋯** | Every key, grouped: lines, cursors, selection, navigation (Home, End, Page up/down…), editing, brackets, operators | | |
+
+- **Context keys** follow the code: C++ at a statement start `std::` `cout <<`
+  `auto` `for ()` `if ()` `return`, after `cout` `<<` `endl` `"\n"`, after `=`
+  `{}` `""` `nullptr`, after a name `.` `()` `->` `::`; in a string `\n` and the
+  closing quote; HTML tag `class=""` `id=""`; CSS `:` `;` `px`; JS, Python,
+  Markdown, JSON have their own; with text selected: Cut, Copy, Paste, `//`,
+  indent, and `(` `[` `{` `"` to wrap it. A key that is still offered keeps
+  its place; they change at a word boundary or after a short pause in typing.
+- **Esc** shows up in the first context slot whenever there is something to
+  escape: suggestions, the find panel, several cursors, a selection.
+- **Modifiers** are one-shot (next key only); a double tap locks them. Ctrl
+  offers its shortcuts as keys: S Save, F Find, D next match, A select all,
+  `/` comment, G go to line, P go to file, X C V, Z Y. Shift: the joystick
+  selects, symbols type their first variant. Alt: the joystick moves lines
+  (↑↓) or jumps by word part (←→).
+- Every key's tooltip shows its keyboard shortcut (e.g. new line above
+  **Ctrl+Alt+Enter**), for when a keyboard is connected.
+- Symbol rows per language are editable in Settings (`(^)^[]^{}` = tap `(`,
+  swipe up `)`, swipe down `[]`).
+
+---
+
 ## Typing (ROADMAP Phase 1)
 
 - **Automatic semicolons** (C, C++, Java, C#, JS, TS; never Python/Kotlin),
@@ -77,7 +122,7 @@ How false triggers are avoided (see `src/core/gestures.js`):
   after it appears removes it. The check runs only when one of a few
   trigger characters is typed, so it costs nothing while you type normally.
   JS files written without semicolons are left alone. Settings → Typing.
-- **Complete statement**: keys-bar `⏎;` or **Ctrl+Shift+Enter** — adds the
+- **Complete statement**: keys-bar `⏎;` (hold `↵`, or Mod) or **Ctrl+Shift+Enter** — adds the
   missing `;` (`:` after a Python header, ` {}` after `if (…)` or a function
   header), closes an open `(`, and starts a new indented line.
 - **Tags without typing `<`**: in HTML text, typing `di` suggests `div`,
@@ -92,8 +137,9 @@ How false triggers are avoided (see `src/core/gestures.js`):
   `#include "…"` and for **words from your other open files**.
 - The keys bar types through the same pipeline as the keyboard, so `(` from
   the bar auto-closes and `>` from the bar closes an HTML tag.
-- **Several cursors at once:** keys bar `+⇣` / `+⇡`, or select lines (drag
-  down the line numbers) and tap `⫶`; whatever you type goes to every line.
+- **Several cursors at once:** keys bar `+⇣` (swipe up: above), or select
+  lines (drag down the line numbers) and hold `+⇣` → `⫶`; whatever you type
+  goes to every line.
   Tap the text to get back to one cursor. Keyboard: Ctrl+Alt+↑/↓, Ctrl+D,
   Shift+Alt+I.
 - **No automatic capitals in code:** on Android the editor uses the classic
@@ -110,13 +156,7 @@ How false triggers are avoided (see `src/core/gestures.js`):
   (`ProjectFs` interface, spec §4.2). Import a folder or `.zip`, export `.zip`.
 - Lazy file tree that hides `.git`, `node_modules`, `build` by default.
 - Soft wrap per file, with wrapped rows indented under their line.
-- Coding-keys bar: per-language symbol rows (editable), then Tab, Complete
-  statement (`⏎;`), new line below, move line up/down first; a trackpad strip
-  for the cursor (no arrow keys), Shift/Ctrl/Alt (one-shot, double-tap to
-  lock), undo/redo, hide keyboard, **multi-line editing** (`+⇣`/`+⇡` add a
-  cursor below/above, `⫶` a cursor on each selected line; Ctrl+D selects
-  the next occurrence), more line operations. Both rows scroll sideways
-  from any key.
+- Coding-keys bar (redesigned in Phase 2: see *Keys bar* above).
 - Auto-close brackets, auto-indent, line operations, undo grouping.
 - Highlighting for ~30 languages (incremental Lezer parsers for JS/TS/JSX,
   HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for

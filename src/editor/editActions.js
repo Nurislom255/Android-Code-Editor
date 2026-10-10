@@ -14,13 +14,15 @@ import {
   selectLineUp, selectLineDown, cursorGroupLeft, cursorGroupRight, selectGroupLeft, selectGroupRight,
   deleteGroupBackward, deleteCharBackward, insertNewlineAndIndent, cursorLineBoundaryBackward,
   cursorLineBoundaryForward, selectLine, cursorDocStart, cursorDocEnd, selectLineBoundaryBackward,
-  selectLineBoundaryForward, addCursorAbove, addCursorBelow,
+  selectLineBoundaryForward, addCursorAbove, addCursorBelow, copyLineUp as cmCopyLineUp,
+  cursorSubwordForward, cursorSubwordBackward, selectSubwordForward, selectSubwordBackward,
+  simplifySelection, deleteCharForward, cursorPageUp, cursorPageDown, cursorMatchingBracket,
 } from '@codemirror/commands';
 import {
-  completionStatus, acceptCompletion, startCompletion, closeCompletion,
+  completionStatus, acceptCompletion, startCompletion, closeCompletion, clearSnippet,
   hasNextSnippetField, hasPrevSnippetField, nextSnippetField, prevSnippetField,
 } from '@codemirror/autocomplete';
-import { openSearchPanel, closeSearchPanel, searchPanelOpen, selectNextOccurrence } from '@codemirror/search';
+import { openSearchPanel, closeSearchPanel, searchPanelOpen, selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
 import { EditorSelection } from '@codemirror/state';
 import { gotoLine } from '@codemirror/search';
 import { indentUnit, getIndentUnit } from '@codemirror/language';
@@ -72,6 +74,76 @@ export const newlineBelow = run((v) => {
   return insertNewlineAndIndent(v);
 }, 'New line');
 export const backspace = run(deleteCharBackward, 'Backspace');
+export const deleteForward = run(deleteCharForward, 'Delete');
+export const copyLineUp = run(cmCopyLineUp, 'Copy line up');
+export const pageUp = runRO(cursorPageUp, 'Page up');
+export const pageDown = runRO(cursorPageDown, 'Page down');
+export const matchingBracket = runRO(cursorMatchingBracket, 'Matching bracket');
+
+/** A new, indented line above the cursor's line (VS Code: Ctrl+Shift+Enter; here Ctrl+Alt+Enter). */
+export const newlineAbove = run((view) => {
+  const { state } = view;
+  view.dispatch(state.changeByRange((r) => {
+    const line = state.doc.lineAt(r.head);
+    const indent = /^\s*/.exec(line.text)[0];
+    return { changes: { from: line.from, insert: indent + state.lineBreak }, range: EditorSelection.cursor(line.from + indent.length) };
+  }), { scrollIntoView: true, userEvent: 'input' });
+  return true;
+}, 'New line above');
+
+/** Joins the cursor's line with the next one (one space between, the next line's indent dropped). */
+export const joinLines = run((view) => {
+  const { state } = view;
+  const { doc } = state;
+  let joined = false;
+  const tr = state.changeByRange((r) => {
+    const line = doc.lineAt(r.head);
+    if (line.number >= doc.lines) return { range: r };
+    const next = doc.line(line.number + 1);
+    const lead = /^\s*/.exec(next.text)[0].length;
+    const sep = !line.text.trim() || /\s$/.test(line.text) || !next.text.trim() ? '' : ' ';
+    joined = true;
+    return { changes: { from: line.to, to: next.from + lead, insert: sep }, range: EditorSelection.cursor(line.to) };
+  });
+  if (!joined) return false;
+  view.dispatch(tr, { scrollIntoView: true, userEvent: 'delete' });
+  return true;
+}, 'Joined lines');
+
+/** The word at the cursor (keys-bar joystick tap). */
+export const selectWord = runRO((view) => {
+  const { state } = view;
+  const head = state.selection.main.head;
+  const w = state.wordAt(head) || (head > 0 ? state.wordAt(head - 1) : null);
+  if (!w) return false;
+  view.dispatch({ selection: EditorSelection.range(w.from, w.to), userEvent: 'select' });
+  return true;
+}, 'Word selected');
+
+/** Every occurrence of the selection (or of the word at the cursor). */
+export const selectAllMatches = runRO((view) => {
+  if (view.state.selection.main.empty) selectNextOccurrence(view);
+  return selectSelectionMatches(view);
+}, 'All occurrences');
+
+/** Is there anything Esc would close or collapse? (The keys bar shows Esc then.) */
+export function escapable(state) {
+  return completionStatus(state) !== null || searchPanelOpen(state) || hasNextSnippetField(state) || hasPrevSnippetField(state)
+    || state.selection.ranges.length > 1 || !state.selection.main.empty;
+}
+
+/** Esc: suggestions → find panel → snippet → several cursors → selection. */
+export function escape(view) {
+  if (!view) return null;
+  const { state } = view;
+  if (completionStatus(state) !== null && closeCompletion(view)) return 'Closed list';
+  if (searchPanelOpen(state) && closeSearchPanel(view)) return 'Closed find';
+  if ((hasNextSnippetField(state) || hasPrevSnippetField(state)) && clearSnippet(view)) return 'Left snippet';
+  if (state.selection.ranges.length > 1 && simplifySelection(view)) return 'One cursor';
+  const m = state.selection.main;
+  if (!m.empty) { view.dispatch({ selection: EditorSelection.cursor(m.head), userEvent: 'select' }); return 'Deselected'; }
+  return null;
+}
 export const goLineStart = runRO(cursorLineBoundaryBackward, 'Line start');
 export const goLineEnd = runRO(cursorLineBoundaryForward, 'Line end');
 export const goDocStart = runRO(cursorDocStart, 'Top');
@@ -109,13 +181,17 @@ export function cursorsOnLines(view) {
   return cursorCount(view);
 }
 
-/** Arrow keys with the keys-bar modifiers (Shift extends, Ctrl jumps words, Alt moves lines). */
+/**
+ * Arrow keys with the keys-bar modifiers: Shift extends, Ctrl jumps words,
+ * Alt moves lines (↑↓) or jumps by word part (←→, e.g. inside camelCase).
+ */
 export function arrow(view, dir, { shift = false, ctrl = false, alt = false } = {}) {
   if (!view) return null;
   if (alt && (dir === 'up' || dir === 'down')) return (dir === 'up' ? lineUp : lineDown)(view);
+  const sub = alt && !ctrl;
   const table = {
-    left: shift ? (ctrl ? selectGroupLeft : selectCharLeft) : (ctrl ? cursorGroupLeft : cursorCharLeft),
-    right: shift ? (ctrl ? selectGroupRight : selectCharRight) : (ctrl ? cursorGroupRight : cursorCharRight),
+    left: sub ? (shift ? selectSubwordBackward : cursorSubwordBackward) : shift ? (ctrl ? selectGroupLeft : selectCharLeft) : (ctrl ? cursorGroupLeft : cursorCharLeft),
+    right: sub ? (shift ? selectSubwordForward : cursorSubwordForward) : shift ? (ctrl ? selectGroupRight : selectCharRight) : (ctrl ? cursorGroupRight : cursorCharRight),
     up: shift ? selectLineUp : cursorLineUp,
     down: shift ? selectLineDown : cursorLineDown,
     home: shift ? selectLineBoundaryBackward : cursorLineBoundaryBackward,

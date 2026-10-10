@@ -9,12 +9,12 @@ build, and how we know it is done.
 
 | Phase | Goal | Size | Status |
 |---|---|---|---|
-| 0 | Real-device test loop (diagnostics) | Small | Not started |
-| 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Built; automated tests pass. Waiting for the on-phone check** (see "Phase 1 — result") |
-| 2 | Keys bar redesign, cursor & selection, Settings split | Large | Not started (owner feedback recorded; arrow keys removed, multi-cursor keys added early) |
+| 0 | Real-device test loop (diagnostics) | Small | Skipped for now: the owner's reports were enough to find every bug so far. Build it when a bug can't be reproduced |
+| 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
+| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Part 1 built (v2.2.0): the new keys bar** (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 next: Settings pages (2.1), keys-bar editor (2.7), custom key bindings |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
-| 5 | Built-in runtimes: 5A Python, 5B C/C++ (spike first) | 5A small, 5B unknown until spike | Not started |
+| 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
 
@@ -29,7 +29,7 @@ pushed to the branch and this table updated.
 |---|---|
 | How the phone is held | **Two thumbs.** Most-used keys sit at the left and right ends of the bars; less-used keys in the middle. |
 | Semicolons | `;` matters most in **C++** (also C, Java, C#, JS/TS). Automatic `;` is **on by default** for those languages. JS/TS files written without semicolons are detected and left alone. |
-| Running code | **Built in only.** No Termux, no online compiler, no manual setup: install the app and press Run. If C++ cannot be bundled at a reasonable cost, stop and discuss with the owner before choosing anything external. |
+| Running code | **Built in only.** No Termux, no online compiler, no manual setup: install the app and press Run. **Python, C, C++ and Rust** (owner, Oct 2026), and **the app may grow past 100 MB** for them. If one still can't be bundled, stop and discuss with the owner before choosing anything external. |
 | Keys bar | Tab is a first-class key, always visible. Ctrl, Shift, Alt and Esc are reachable whenever they are needed. The whole bar is **customizable from Settings**. Never delete a key from the app — re-rank it into the "More" sheet instead. |
 | Settings | Split into small pages with a search box. |
 | Accent colour | VS Code blue (`#0078D4`; `#3794FF` on dark backgrounds). |
@@ -140,8 +140,8 @@ key path waits for the keyboard's DOM change). Tests that depend on those
 keys therefore run on the desktop project only. Whether real keyboards are
 affected is one of the on-phone checks below.
 
-**Still to check on the owner's phone** (Phase 0 is not built yet, so the
-gesture test pad is the only on-device diagnostic for now):
+**On-phone checks** (not confirmed one by one: the owner tested broadly and
+reported the problems fixed in "After Phase 1"; re-check any that misbehave):
 - [ ] 20 swipes right at 0–30° all autocomplete; the cursor never jumps.
 - [ ] Vertical scrolls and slow drags never trigger commands.
 - [ ] Typing `doc` with Gboard shows suggestions within ~150 ms.
@@ -307,6 +307,29 @@ customization.)
 - **Multi-line editing** is needed. Shipped early as keys (`+⇣` / `+⇡` add a
   cursor below/above, `⫶` a cursor on each selected line, `Sel+` next
   occurrence); Phase 2 places them in the selection layer / context row.
+
+### Part 1 — result (v2.2.0)
+
+Built: `ui/keysBar.js` (rewritten), `core/keysLayout.js` (variants, slots,
+profiles, the key catalog), `core/contextKeys.js` (context rules),
+`editor/keysContext.js` (what is at the cursor, from the syntax tree).
+Tests: `tests/unit/contextKeys.test.mjs`, `tests/e2e/keysbar.spec.mjs`.
+
+| Item | Shipped | Differences from the plan |
+|---|---|---|
+| 2.2 phone portrait | Context row `[Mod][ctx×4][+⇣][⋯]`, main row `[Tab][◉][s1][s2][s3][↵][↶]`; 7 keys a row, ≥ 44 px, no scrolling; Tab hold = Shift+Tab; Undo hold = Redo | The line key (2.8) and the cursors key are on the bars, so the phone has 4 context keys, not 6. Landscape: one row `Tab ◉ Mod ctx×4 s1–s3 ↵ +⇣ ↶ ⋯` |
+| 2.3 modifiers | Mod layer `[Ctrl][Shift][Alt][Esc][⇧Tab][⏎;]`; Ctrl shows its shortcuts (S F D A / G P X C V Z Y); Shift: joystick selects, symbols type their variant; Alt: joystick moves lines / jumps word parts; one-shot, double tap locks; **Esc** appears in the first context slot when something can be escaped | — |
+| 2.4 tablet | One row, `[Esc][Tab][◉][Ctrl][Shift][Alt]` left, `ctx×6 s1–s6 ↵ +⇣ ↶ ↷ ⋯` right | The floating, resizable dock is not built (later) |
+| 2.5 context row, variants, More | Rules per language and situation (table above, plus JS / Markdown / JSON); stability: change at a word boundary or after 150 ms of no typing, a key that stays keeps its slot; tokens `(^)^[]^{}` = tap, swipe up, swipe down, hold → all variants (slide and release); "More" sheet with every key, grouped | "Pin to bar" from the sheet comes with the keys-bar editor (2.7) |
+| 2.6 cursor | Joystick: drag = the cursor follows (11 px a character, 20 px a line), beyond 56 px it keeps moving (4–40 a second), tap = select word, hold then drag = select, flick ≥ 56 px in < 250 ms = line start / end | The whole-bar trackpad is not built: the joystick covers it and every part of the bar is a key now |
+| 2.8 line-actions key | `↵`: tap new line below; swipe up / down move the line (repeats while held); hold → strong vibration, the key lights up, choices pop up: `⏎;` `↥` Dup Join `✕Ln` `//` — slide and release; releasing without sliding does nothing | The same pattern for cursors: `+⇣` (swipe up `+⇡`; hold: `⫶` `Sel+` `Sel*` Esc) |
+| 2.9 shortcuts | Every key's tooltip shows its shortcut; new line above = **Ctrl+Alt+Enter**; new commands in the palette: copy line up, join lines, select all occurrences, select line, page up/down, matching bracket, cut/copy/paste | Custom key bindings: part 2 |
+
+Found while building: after a tap that changes the bar (the sheet closes, a
+layer opens) the browser's follow-up click landed on whatever was under the
+finger by then (e.g. the status bar's line number, which opened "go to
+line"). Keys now cancel that click. Old default symbol layouts saved in
+settings are upgraded to the new defaults (edited ones are kept).
 
 ### 2.1 Settings split into pages (foundation for the keys-bar editor)
 
@@ -551,50 +574,81 @@ listed in 2.3; the customization survives a reload.
 
 ---
 
-## Phase 5 — Built-in runtimes (reported issue 7)
+## Phase 5 — Built-in runtimes: Python, C, C++, Rust (reported issue 7)
 
 Rule from the owner: **install the app and press Run** — nothing external, no
-manual setup.
+manual setup. **Owner decision (Oct 2026): Python, C, C++ and Rust, and the
+app may grow past 100 MB for them.** The owner may move this phase earlier.
+
+**Checked from the build machine (Oct 2026):**
+- npm is reachable, so `npm install` brings the toolchains — nobody has to
+  download or upload them by hand:
+  - **Pyodide** (`pyodide`, CPython for WebAssembly): 14 MB core and
+    standard library; more packages on demand.
+  - **LLVM / Clang / LLD for WebAssembly** (`@yowasp/clang`): about 105 MB
+    unpacked; compiles C and C++ to WebAssembly.
+  - A WASI shim to run the compiled programs in a worker
+    (`@bjorn3/browser_wasi_shim`, 115 KB): stdout, stdin, exit code.
+- GitHub release downloads are blocked from the build machine (HTTP 403),
+  and Rust has no maintained npm package of a compiler that runs in a
+  browser (5C).
+
+**How the big files reach the phone:**
+- **APK:** bundled in the app: works offline from the first start.
+- **Website (GitHub Pages):** each toolchain downloads the first time a file
+  of that language is run (with a progress bar), then stays in the browser's
+  storage for offline use. It is not in the offline precache, so opening the
+  editor stays fast.
+- **GitHub's limits:** one file in a repository must be < 100 MB (bigger
+  ones are split into parts and joined when loaded); a Pages site ≤ 1 GB;
+  and every update of a 100 MB file committed to `docs/` stays in the git
+  history forever. So toolchains do **not** go into git: the site is built
+  and deployed by a **GitHub Actions** workflow (`npm ci`, build, deploy);
+  the owner switches Pages' source to "GitHub Actions" once.
+- The owner's offer to upload files by hand is only needed if a toolchain
+  exists nowhere but in GitHub releases — possibly Rust (5C).
 
 ### 5A Python (low risk)
 
-- **Pyodide** (CPython compiled to WebAssembly) **shipped inside the APK**. In the
-  web/PWA version it downloads automatically on the first `.py` run (progress
-  bar, cached for offline use) — no manual steps.
-- Runs in a worker: streamed output, Stop button and time limit (as for JS),
-  clickable `File "main.py", line 3` errors.
+- **Pyodide** in a worker: streamed output, Stop button and time limit (as
+  for JS), clickable `File "main.py", line 3` errors.
 - `input()`: interactive input from a worker needs `SharedArrayBuffer`, which
   requires the page to be "cross-origin isolated". GitHub Pages can't send those
   headers; the service worker can add them (`coi-serviceworker` approach).
-  Fallback when unavailable: the stdin box (lines prepared before running).
-- Measure: APK size added (expected order of 10–20 MB), cold start time.
+  Fallback when unavailable: the Program input box (lines prepared before running).
+- Measure: download / APK size added, cold start time on the owner's phone.
 
 ### 5B C and C++ (spike first)
 
-A fully offline C++ compiler inside an app is possible but large. Run a
-**time-boxed spike (1–2 sessions)** before building anything, measured on the
-owner's phone.
+- **Main candidate: clang + lld compiled to WebAssembly** (`@yowasp/clang`).
+  The program is compiled to WebAssembly (wasm32-wasi) and runs in a worker
+  with the WASI shim: `cout` / `printf`, `cin`, exit code, Stop and time
+  limit, real clang error messages made clickable. Same code path in the
+  website and the APK.
+- Fallback: **native clang for Android inside the APK** (executables packaged
+  as native libraries): faster, real ARM programs, but APK-only, a native
+  build pipeline, and Android's rule against running files the app writes
+  itself means an older target SDK (fine for sideloading, not for the Play
+  Store).
+- Spike measurements on the owner's phone: size added (download and
+  installed); first and warm compile+run time of a `#include <iostream>`
+  hello world; peak memory; whether `<iostream>`, `<string>`, `<vector>`,
+  `<map>`, `<algorithm>`, `<cmath>` work; `cin`.
+- Go / no-go (owner to confirm): warm compile+run ≤ 5 s, first ≤ 20 s; those
+  headers work. Plain C comes with it.
 
-- **Approach A — clang + lld compiled to WebAssembly, shipped in the app.** The
-  user's program is compiled to WebAssembly and run in a worker with a small
-  system-call layer (WASI: stdout, stdin, exit code), with Stop and time limit.
-  Same code path in the website and the APK; real clang error messages,
-  clickable. Unknowns: size, compile speed and memory on a phone, how much of
-  the C++ standard library works.
-- **Approach B — native clang for Android inside the APK** (executables packaged
-  as native libraries). Fastest compiles and real ARM programs, but a larger
-  APK, a native build pipeline, APK-only, and Android's restriction on running
-  files the app writes itself means targeting an older Android SDK level (fine
-  for sideloading, not for the Play Store).
+### 5C Rust (spike first; the hardest)
 
-Spike measurements: APK size added; first and warm compile+run time of a
-`#include <iostream>` hello world; peak memory; whether `<iostream>`,
-`<string>`, `<vector>`, `<map>`, `<algorithm>`, `<cmath>` work; `cin` input.
-
-Proposed go/no-go targets (owner to confirm): APK grows by ≤ 100 MB; warm
-compile+run ≤ 5 s, first run ≤ 20 s; those six headers work. Try A first; if
-it misses the targets, try B; if both miss, **stop and discuss with the owner**
-(as agreed). Plain C comes with either approach.
+- `rustc` is large (well over 100 MB as WebAssembly in the experimental
+  builds that exist) and needs Rust's standard library built for wasm32-wasi.
+- Options to measure, in this order: (A) an experimental rustc compiled to
+  WASI, running in a worker like 5B (community builds exist; find a source
+  the build can fetch, else the owner uploads it in < 100 MB parts or CI
+  builds it); (B) a native Rust toolchain inside the APK (APK-only, large,
+  older target SDK, as in 5B's fallback).
+- Go / no-go (owner to confirm): warm compile+run of hello world ≤ 15 s on
+  the phone, ≤ 300 MB added. If both options miss, **stop and discuss with
+  the owner**.
 
 ---
 

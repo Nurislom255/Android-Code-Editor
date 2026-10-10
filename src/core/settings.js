@@ -1,7 +1,7 @@
 // core/settings.js — settings defaults, validation and v1 → v2 migration.
 // Pure: storage (localStorage) is done by the caller.
 
-import { DEFAULT_LAYOUTS } from './keysLayout.js';
+import { DEFAULT_LAYOUTS, LEGACY_DEFAULT_LAYOUTS } from './keysLayout.js';
 
 export const SETTINGS_VERSION = 2;
 
@@ -110,7 +110,9 @@ export function normalizeSettings(raw) {
   const layouts = { ...d.keysLayouts };
   if (r.keysLayouts && typeof r.keysLayouts === 'object') {
     for (const k of Object.keys(layouts)) {
-      if (typeof r.keysLayouts[k] === 'string' && r.keysLayouts[k].trim()) layouts[k] = r.keysLayouts[k].slice(0, 2000);
+      const v = r.keysLayouts[k];
+      // An unedited old default gets the new default (it has more variants).
+      if (typeof v === 'string' && v.trim() && !LEGACY_DEFAULT_LAYOUTS.some((old) => old[k] === v)) layouts[k] = v.slice(0, 2000);
     }
   }
   const gestureMap = { ...d.gestureMap };

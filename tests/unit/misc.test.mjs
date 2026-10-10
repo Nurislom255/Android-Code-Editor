@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { resolveRef, resolveUrlRef, normalize, relative, extname, validateName } from '../../src/core/paths.js';
 import { fuzzyMatch, fuzzyFilter } from '../../src/core/fuzzy.js';
 import { buildMatcher, findInText } from '../../src/core/search.js';
-import { parseLayout, parseToken, groupForLanguage, DEFAULT_LAYOUTS } from '../../src/core/keysLayout.js';
+import { parseLayout, parseToken, formatLayout, groupForLanguage, DEFAULT_LAYOUTS, LEGACY_DEFAULT_LAYOUTS, stableSlots, keysProfile } from '../../src/core/keysLayout.js';
 import { NavHistory } from '../../src/core/navHistory.js';
 import { normalizeSettings, DEFAULTS } from '../../src/core/settings.js';
 import { linkify } from '../../src/core/linkify.js';
@@ -56,10 +56,14 @@ test('search: plain, case, whole word, regex, errors', () => {
 });
 
 test('keys layout tokens with swipe-up alternates', () => {
-  assert.deepEqual(parseToken('(^)'), { label: '(', insert: '(', alt: ')' });
-  assert.deepEqual(parseToken('^'), { label: '^', insert: '^', alt: null });
-  assert.deepEqual(parseToken('|^^'), { label: '|', insert: '|', alt: '^' });
-  assert.deepEqual(parseToken('=^=>'), { label: '=', insert: '=', alt: '=>' });
+  assert.deepEqual(parseToken('(^)'), { label: '(', insert: '(', alt: ')', alts: [')'] });
+  assert.deepEqual(parseToken('^'), { label: '^', insert: '^', alt: null, alts: [] });
+  assert.deepEqual(parseToken('|^^'), { label: '|', insert: '|', alt: '^', alts: ['^'] });
+  assert.deepEqual(parseToken('=^=>'), { label: '=', insert: '=', alt: '=>', alts: ['=>'] });
+  assert.deepEqual(parseToken('(^)^[]^{}').alts, [')', '[]', '{}']);
+  assert.deepEqual(parseToken('->^::').alts, ['::']);
+  assert.deepEqual(parseToken('^^&').alts, ['&'], 'the caret key with a variant');
+  assert.equal(formatLayout(parseLayout('(^)^[] ; |^^')), '(^)^[] ; |^^');
   for (const layout of Object.values(DEFAULT_LAYOUTS)) assert.ok(parseLayout(layout).length >= 6);
   assert.equal(groupForLanguage('typescript'), 'js');
   assert.equal(groupForLanguage('nope'), 'plain');
@@ -147,7 +151,8 @@ test('keys bar: which drags on a symbol key are a swipe up', async () => {
   assert.equal(classifyKeyDrag(-28, 20), 'up', 'leaning ~54° to the left');
   assert.equal(classifyKeyDrag(40, 12), 'pan', 'mostly sideways scrolls the row');
   assert.equal(classifyKeyDrag(-30, 0), 'pan');
-  assert.equal(classifyKeyDrag(3, -20), 'none', 'downward: no alternate');
+  assert.equal(classifyKeyDrag(3, -20), 'down', 'downward: the second variant');
+  assert.equal(classifyKeyDrag(-30, -10), 'pan');
 });
 
 test('preview: page lines of inlined scripts map back to their files', () => {
@@ -180,4 +185,20 @@ test('preview: page lines of inlined scripts map back to their files', () => {
   assert.equal(locateInPage({ file: 'about:srcdoc', line: 2, col: 1 }, map), 'line 2 of the page');
   assert.deepEqual(lineOfText('a\nb\n<script>\nfoo()\n</script>', '\nfoo()\n'), { line: 3, end: 19 });
   assert.equal(lineOfText('abc', 'zzz').line, 0);
+});
+
+test('keys bar: context keys keep their slots; profiles; old default layouts upgrade', () => {
+  assert.deepEqual(stableSlots([], ['a', 'b', 'c'], 4), ['a', 'b', 'c', null]);
+  // "b" and "c" are still offered: they stay where the thumb expects them
+  assert.deepEqual(stableSlots(['a', 'b', 'c', null], ['c', 'x', 'b'], 4), ['x', 'b', 'c', null]);
+  assert.deepEqual(stableSlots(['a', 'b'], ['b', 'a', 'z', 'y'], 3), ['a', 'b', 'z'], 'only the best n keys');
+  assert.deepEqual(stableSlots(['a'], ['a', 'a', null], 2), ['a', null], 'duplicates and nulls ignored');
+  assert.equal(keysProfile({ screenWidth: 412, screenHeight: 915, touch: true }), 'phone');
+  assert.equal(keysProfile({ screenWidth: 915, screenHeight: 412, touch: true }), 'landscape');
+  assert.equal(keysProfile({ screenWidth: 1138, screenHeight: 712, touch: true }), 'tablet');
+  assert.equal(keysProfile({ screenWidth: 1280, screenHeight: 800, touch: false }), 'tablet');
+  const old = LEGACY_DEFAULT_LAYOUTS[0];
+  const s = normalizeSettings({ keysLayouts: { js: old.js, css: 'a^b c' } });
+  assert.equal(s.keysLayouts.js, DEFAULT_LAYOUTS.js, 'an unedited old default gets the new one');
+  assert.equal(s.keysLayouts.css, 'a^b c', 'an edited layout is kept');
 });

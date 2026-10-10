@@ -200,10 +200,11 @@ export class Workspace {
         if (!tr.annotation(syncAnno)) this._propagate(pane, docId, tr);
         if (tr.isUserEvent('input') || tr.isUserEvent('delete') || tr.isUserEvent('undo') || tr.isUserEvent('redo')) userEdit = true;
       }
-      if (tr.selection) selection = true;
+      // (a language finishing to load reconfigures: what's at the cursor changed)
+      if (tr.selection || tr.reconfigured) selection = true;
     }
     if (changed) this._afterDocChange(doc, view.state, userEdit);
-    if ((changed || selection) && pane === this.pane) this.emit('selection', { doc, state: view.state, pane });
+    if ((changed || selection) && pane === this.pane) this.emit('selection', { doc, state: view.state, pane, docChanged: changed });
   }
 
   _propagate(fromPane, docId, tr) {
@@ -422,6 +423,7 @@ export class Workspace {
       comp.language.reconfigure(ext),
       comp.lint.reconfigure(lintExtension(!!doc.lang.lezer)),
     ], doc.id);
+    doc.languageReady = true; // (highlighting, auto-close tags… are on from now)
   }
 
   async _loadGitBase(doc) {
