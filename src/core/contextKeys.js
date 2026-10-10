@@ -25,7 +25,7 @@ const SELECTION = ['@cut', '@copy', '@paste', '@toggleComment', '@indent', '(', 
 /** @param {Situation} s  @returns {string[]} best first */
 export function contextKeys(s) {
   if (s.selection) return SELECTION;
-  if (s.inComment) return ['TODO: '];
+  if (s.inComment) return []; // (the row shows the language's symbols)
   if (s.inString) return stringKeys(s);
   const at = lineContext(s.before);
   switch (s.group) {

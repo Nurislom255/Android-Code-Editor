@@ -27,7 +27,7 @@
 // Keys act on pointer *up*; `preventDefault()` on pointer down keeps the
 // focus (and the soft keyboard) in the editor.
 
-import { h, haptic, isTouchDevice } from './dom.js';
+import { h, icon, haptic, isTouchDevice } from './dom.js';
 import {
   parseLayout, parseToken, groupForLanguage, DEFAULT_LAYOUTS, classifyKeyDrag, stableSlots, keysProfile,
   ACTION_KEYS, MORE_GROUPS, CTRL_KEYS,
@@ -41,9 +41,14 @@ const SWIPE_PX = 18;         // a swipe up / down on a key
 const LONG_PRESS = 380;      // ms: hold
 const REPEAT_EVERY = 55;     // ms: held key repeating (Backspace)
 const SWIPE_REPEAT = 230;    // ms: held swipe repeating (move line)
-const TRACK_X = 11;          // joystick: px of drag per character
-const TRACK_Y = 20;          // joystick: px of drag per line
-const FAST_ZONE = 56;        // joystick: beyond this distance it keeps moving by itself
+// Joystick
+const JOY_STEP_X = 11;       // px of (accelerated) drag per character
+const JOY_STEP_Y = 20;       // … per line
+const JOY_LOCK = 10;         // px before the drag picks a direction
+const JOY_TURN = 36;         // px off that direction to change it
+const JOY_FAST = 72;         // resting further out than this keeps the cursor moving…
+const JOY_DWELL = 300;       // …after this many ms out there
+const JOY_FLICK = 56;        // a quick flick this long: line start / end
 const CTX_SLOTS = { phone: 4, landscape: 4, tablet: 6 };
 const SYM_SLOTS = { phone: 3, landscape: 3, tablet: 6 };
 const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
@@ -214,8 +219,7 @@ export class KeysBar {
         : [...region, ...symKeys];
       this.el.append(h('div.keys-row.keys-single', { role: 'toolbar', 'aria-label': 'Coding keys' },
         h('div.keys-cluster', ...left), h('div.keys-gap'),
-        h('div.keys-cluster.keys-right', ...right, K(this.lineSpec()), K(this.cursorsSpec()), K(this.undoSpec()),
-          K(this.actionSpec('redo')), K(this.moreSpec()))));
+        h('div.keys-cluster.keys-right', ...right, K(this.lineSpec()), K(this.cursorsSpec()), K(this.undoSpec()), K(this.moreSpec()))));
     }
     this.renderMods();
     this.updateContext(true);
@@ -229,8 +233,9 @@ export class KeysBar {
       return [K(this.modifierSpec('ctrl', { active: true })), h('div.keys-region', ...this.ctrlKeys().map(K))];
     }
     if (this.layer === 'mod') {
+      // (Shift+Tab and ⏎; are on Tab and ↵ already: Home / End instead)
       return [K(this.modSpec(true)), K(this.modifierSpec('ctrl')), K(this.modifierSpec('shift')), K(this.modifierSpec('alt')),
-        K(this.actionSpec('escape')), K(this.actionSpec('outdent', { label: '⇧Tab' })), K(this.actionSpec('completeStatement'))];
+        K(this.actionSpec('escape')), K(this.navSpec('home')), K(this.navSpec('end'))];
     }
     const slots = this.contextSlots();
     return this.profile === 'phone'
@@ -261,7 +266,18 @@ export class KeysBar {
       next = [...(esc ? ['@escape'] : []), ...contextKeys(sit).map((k) => (k.startsWith('@') ? k : `t:${k}`))];
     }
     // Room left: the language's next symbols.
-    for (const t of this.symbols().slice(SYM_SLOTS[this.profile])) next.push(`s:${t}`);
+    const syms = this.symbols();
+    for (const t of syms.slice(SYM_SLOTS[this.profile])) next.push(`s:${t}`);
+    // Nothing twice: not what the main row has ("()" when "(" is there,
+    // ";" when ";" is), nor the same symbol as a context key and a filler.
+    const seen = new Set(syms.slice(0, SYM_SLOTS[this.profile]).map((t) => parseToken(t).insert));
+    next = next.filter((id) => {
+      const e = keyEssence(id);
+      if (e == null) return true;
+      if (seen.has(e)) return false;
+      seen.add(e);
+      return true;
+    });
     const slots = stableSlots(this.ctx, next, this.ctxEls.length);
     this.ctx = slots;
     slots.forEach((id, i) => {
@@ -293,18 +309,28 @@ export class KeysBar {
     this.deps.run(name);
   }
 
+  // The small symbol in a key's top corner is what a swipe up (or a hold) does.
+
   tabSpec() {
-    return { ...this.actionSpec('tab'), title: 'Tab / indent / accept suggestion (hold: Shift+Tab)', hold: () => this.deps.run('outdent'), corner: ['⇤'] };
+    const outdent = () => this.deps.run('outdent');
+    return { ...this.actionSpec('tab'), title: 'Tab / indent / accept suggestion · swipe up or hold: Shift+Tab (outdent)', up: outdent, hold: outdent, corner: ['⇤'] };
   }
 
   undoSpec() {
-    return { ...this.actionSpec('undo'), title: 'Undo (Ctrl+Z) · hold: Redo', repeat: false, hold: () => this.deps.run('redo'), holdRepeat: true, corner: ['↷'] };
+    const redo = () => this.deps.run('redo');
+    return { ...this.actionSpec('undo'), label: '', icon: 'undo', sub: 'undo', title: 'Undo (Ctrl+Z) · swipe up or hold: Redo (Ctrl+Y)', repeat: false, up: redo, hold: redo, holdRepeat: true, corner: ['↷'] };
+  }
+
+  /** Home / End: with Shift armed they select. */
+  navSpec(dir) {
+    const name = dir === 'home' ? 'lineStart' : 'lineEnd';
+    return { ...this.actionSpec(name), tap: () => this.deps.arrow(dir, this.consumeMods()) };
   }
 
   lineSpec() {
     const fan = ['completeStatement', 'newlineAbove', 'duplicateLine', 'joinLines', 'deleteLine', 'toggleComment'];
     return {
-      ...this.actionSpec('newlineBelow'), cls: 'action line',
+      ...this.actionSpec('newlineBelow'), cls: 'action line', sub: 'line',
       title: 'New line below (Ctrl+Enter) · swipe up / down: move the line · hold: more line actions',
       up: () => this.deps.run('lineUp'), down: () => this.deps.run('lineDown'), swipeRepeat: true, corner: ['⇡', '⇣'],
       fan: fan.map((n) => ({ ...this.describe(n), run: () => this.deps.run(n) })),
@@ -312,9 +338,10 @@ export class KeysBar {
   }
 
   cursorsSpec() {
-    const fan = ['cursorsOnLines', 'selectNext', 'selectAllMatches', 'escape'];
+    const fan = ['cursorsOnLines', 'selectNext', 'selectAllMatches'];
     return {
-      label: '+⇣', cls: 'action cursors', title: 'Add a cursor below (Ctrl+Alt+↓) · swipe up: above · hold: more',
+      label: '', icon: 'cursors', sub: 'cursor', cls: 'action cursors',
+      title: 'Multi-cursor: add a cursor below (Ctrl+Alt+↓) · swipe up: above · hold: a cursor on each selected line, next match, all matches',
       tap: () => this.deps.run('addCursorDown'), up: () => this.deps.run('addCursorUp'), down: () => this.deps.run('addCursorDown'),
       swipeRepeat: true, corner: ['⇡'],
       fan: fan.map((n) => ({ ...this.describe(n), run: () => this.deps.run(n) })),
@@ -322,15 +349,15 @@ export class KeysBar {
   }
 
   moreSpec() {
-    return { label: '⋯', cls: 'action more', title: 'All keys', tap: () => { this.sheetOpen = !this.sheetOpen; this.render(); } };
+    return { label: '⋯', sub: 'all keys', cls: 'action more', title: 'All keys', tap: () => { this.sheetOpen = !this.sheetOpen; this.render(); } };
   }
 
   modSpec(active) {
     const armed = ['ctrl', 'shift', 'alt'].filter((m) => this.mods[m]);
     const label = active ? 'Mod' : armed.length ? armed.map((m) => ({ ctrl: 'Ctrl', shift: '⇧', alt: 'Alt' }[m])).join('') : 'Mod';
     return {
-      label, cls: `action mod-key${active ? ' armed' : ''}${armed.length && !active ? ' has-mods' : ''}`,
-      title: 'Modifiers: Ctrl, Shift, Alt, Esc',
+      label, sub: 'Ctrl ⇧ Alt', cls: `action mod-key${active ? ' armed' : ''}${armed.length && !active ? ' has-mods' : ''}`,
+      title: 'Modifiers: Ctrl, Shift, Alt, Esc, Home, End',
       tap: () => { this.layer = this.layer === 'main' ? 'mod' : 'main'; this.render(); },
     };
   }
@@ -475,7 +502,7 @@ export class KeysBar {
     btn.setAttribute('aria-label', spec.title || spec.label);
     if (spec.mod) btn.dataset.mod = spec.mod; else delete btn.dataset.mod;
     btn.textContent = '';
-    btn.append(h('span.key-label', spec.label));
+    btn.append(spec.icon ? h('span.key-label.key-icon', { html: icon(spec.icon, 20) }) : h('span.key-label', spec.label));
     if (spec.sub) btn.append(h('span.key-sub', spec.sub));
     const [c1, c2] = spec.corner || [];
     if (c1) btn.append(h('span.alt', c1));
@@ -608,41 +635,49 @@ export class KeysBar {
   // ---- joystick ------------------------------------------------------------------
 
   /**
-   * Drag: the cursor follows (like a trackpad); hold the finger further than
-   * FAST_ZONE from where it started and the cursor keeps moving, faster the
-   * further away. Tap: select the word. Hold, then drag: select. Quick flick
+   * The cursor follows the finger, with mouse-like acceleration: moved
+   * slowly, about 18 px a character (precise); moved fast, about 5 px (far).
+   * The drag sticks to one direction (left/right or up/down) so a slightly
+   * diagonal finger doesn't jump lines; it changes direction only after a
+   * clear turn. Resting the finger far out (> JOY_FAST px) keeps the cursor
+   * moving. Tap: select the word. Hold, then drag: select. Quick flick
    * left / right: line start / end. Shift selects, Alt moves lines (↑↓) or
    * jumps by word part (←→).
    */
   joystick() {
-    const btn = h('button.key.joystick', { type: 'button', title: 'Joystick: drag to move the cursor · tap: select word · hold then drag: select · flick ←/→: line start/end', 'aria-label': 'Cursor joystick' },
-      h('span.knob'));
-    const knob = btn.firstChild;
+    const btn = h('button.key.joystick', { type: 'button', title: 'Joystick: drag to move the cursor (slowly = precisely) · tap: select word · hold then drag: select · flick ←/→: line start/end', 'aria-label': 'Cursor joystick' },
+      h('span.joy-arrows', { html: icon('joystick', 30) }), h('span.knob'));
+    const knob = btn.lastChild;
     let P = null;
     const step = (dir) => {
       this.deps.arrow(dir, { shift: P.select || P.mods.shift, ctrl: P.mods.ctrl, alt: P.mods.alt });
       const now = Date.now();
-      if (now - P.tick > 40) { haptic(this.deps.getSettings(), 3); P.tick = now; }
+      if (now - P.tick > 25) { haptic(this.deps.getSettings(), 3); P.tick = now; } // a tick per character
     };
+    // Resting far out along the locked direction: the cursor keeps going
+    // (3…25 a second), after a short pause so it never overshoots by surprise.
     const loop = (t) => {
       if (!P) return;
       const dt = Math.min(0.1, (t - (P.lastT || t)) / 1000);
       P.lastT = t;
-      const dx = P.x - P.x0, dy = P.y - P.y0;
-      // Beyond the zone the cursor keeps going: 4…40 steps a second.
-      for (const [d, axis, neg, pos] of [[dx, 'fx', 'left', 'right'], [dy, 'fy', 'up', 'down']]) {
-        const out = Math.abs(d) - FAST_ZONE;
-        if (out <= 0) { P[axis] = 0; continue; }
-        P[axis] += dt * Math.min(40, 4 + out / 3);
-        while (P[axis] >= 1) { P[axis] -= 1; step(d < 0 ? neg : pos); }
+      const d = P.axis === 'x' ? P.x - P.x0 : P.axis === 'y' ? P.y - P.y0 : 0;
+      const out = Math.abs(d) - JOY_FAST;
+      if (out <= 0) { P.outSince = 0; P.auto = 0; }
+      else {
+        if (!P.outSince) P.outSince = t;
+        if (t - P.outSince > JOY_DWELL) {
+          P.auto += dt * Math.min(25, 3 + out / 4);
+          while (P.auto >= 1) { P.auto -= 1; step(P.axis === 'x' ? (d < 0 ? 'left' : 'right') : (d < 0 ? 'up' : 'down')); }
+        }
       }
       P.raf = requestAnimationFrame(loop);
     };
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       try { btn.setPointerCapture(e.pointerId); } catch { /* synthetic */ }
-      P = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, ax: 0, ay: 0, fx: 0, fy: 0,
-        t0: Date.now(), tick: 0, moved: false, select: false, mods: { ...this.consumeModsQuiet() } };
+      P = { x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, lt: e.timeStamp,
+        axis: null, acc: 0, auto: 0, outSince: 0, t0: Date.now(), tick: 0, moved: false, select: false,
+        mods: { ...this.consumeModsQuiet() } };
       this.presses.add(stopJoy);
       btn.classList.add('active');
       P.hold = setTimeout(() => {
@@ -652,15 +687,32 @@ export class KeysBar {
     });
     btn.addEventListener('pointermove', (e) => {
       if (!P) return;
+      const ddx = e.clientX - P.lx, ddy = e.clientY - P.ly;
+      const dt = Math.max(1, e.timeStamp - P.lt);
+      P.lx = e.clientX; P.ly = e.clientY; P.lt = e.timeStamp;
       P.x = e.clientX; P.y = e.clientY;
-      if (!P.moved && Math.hypot(P.x - P.x0, P.y - P.y0) >= 8) { P.moved = true; clearTimeout(P.hold); }
-      P.ax += e.clientX - P.lx; P.ay += e.clientY - P.ly;
-      P.lx = e.clientX; P.ly = e.clientY;
-      if (!P.moved) return;
-      while (Math.abs(P.ax) >= TRACK_X) { step(P.ax > 0 ? 'right' : 'left'); P.ax -= Math.sign(P.ax) * TRACK_X; }
-      while (Math.abs(P.ay) >= TRACK_Y) { step(P.ay > 0 ? 'down' : 'up'); P.ay -= Math.sign(P.ay) * TRACK_Y; }
       const kx = Math.max(-14, Math.min(14, P.x - P.x0)), ky = Math.max(-10, Math.min(10, P.y - P.y0));
       knob.style.transform = `translate(${kx}px, ${ky}px)`;
+      const fromStart = Math.hypot(P.x - P.x0, P.y - P.y0);
+      if (!P.moved) { if (fromStart < 8) return; P.moved = true; clearTimeout(P.hold); }
+      // One direction at a time.
+      if (!P.axis) {
+        if (fromStart < JOY_LOCK) return;
+        P.axis = Math.abs(P.x - P.x0) >= Math.abs(P.y - P.y0) ? 'x' : 'y';
+        P.ox = P.x; P.oy = P.y;
+      } else if (P.axis === 'x' ? Math.abs(P.y - P.oy) > JOY_TURN : Math.abs(P.x - P.ox) > JOY_TURN) {
+        P.axis = P.axis === 'x' ? 'y' : 'x';
+        P.ox = P.x; P.oy = P.y; P.x0 = P.x; P.y0 = P.y; P.acc = 0;
+      }
+      if (P.axis === 'x') P.oy += (P.y - P.oy) * 0.05; else P.ox += (P.x - P.ox) * 0.05; // slow drift is forgiven
+      const d = P.axis === 'x' ? ddx : ddy;
+      const gain = 0.6 + Math.min(1.6, (Math.abs(d) / dt) * 1.6); // px/ms → slow: 0.6, fast: up to 2.2
+      P.acc += d * gain;
+      const size = P.axis === 'x' ? JOY_STEP_X : JOY_STEP_Y;
+      while (Math.abs(P.acc) >= size) {
+        step(P.axis === 'x' ? (P.acc > 0 ? 'right' : 'left') : (P.acc > 0 ? 'down' : 'up'));
+        P.acc -= Math.sign(P.acc) * size;
+      }
     });
     btn.addEventListener('touchmove', (e) => { if (P && e.cancelable) e.preventDefault(); }, { passive: false });
     btn.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); });
@@ -682,7 +734,7 @@ export class KeysBar {
       if (cancelled) return;
       const dt = Date.now() - p.t0, dx = p.x - p.x0, dy = p.y - p.y0;
       if (!p.moved && !p.select && dt < 350) { this.deps.run('selectWord'); this.feedback(btn); return; }
-      if (dt < 250 && Math.abs(dx) >= FAST_ZONE && Math.abs(dy) < Math.abs(dx) * 0.6) {
+      if (dt < 250 && p.axis === 'x' && Math.abs(dx) >= JOY_FLICK && Math.abs(dy) < Math.abs(dx) * 0.6) {
         this.deps.arrow(dx > 0 ? 'end' : 'home', { shift: p.select || p.mods.shift });
         this.feedback(btn);
       }
@@ -732,9 +784,17 @@ class Chooser {
     if (!this.armed) { if (Math.hypot(x - this.x0, y - this.y0) < 12) return; this.armed = true; }
     let i = -1;
     if (y < this.keyRect.bottom + 30) {
+      // The choices may wrap onto two rows (the operator key has a dozen):
+      // the one under the finger, else the nearest.
       const rects = [...this.el.children].map((e) => e.getBoundingClientRect());
-      i = rects.findIndex((r) => x >= r.left - 2 && x <= r.right + 2);
-      if (i < 0) i = x < rects[0].left ? 0 : rects.length - 1;
+      i = rects.findIndex((r) => x >= r.left - 2 && x <= r.right + 2 && y >= r.top - 6 && y <= r.bottom + 6);
+      if (i < 0) {
+        let best = Infinity;
+        rects.forEach((r, k) => {
+          const d = Math.hypot(x - (r.left + r.right) / 2, y - (r.top + r.bottom) / 2);
+          if (d < best) { best = d; i = k; }
+        });
+      }
     }
     if (i !== this.index) { this.index = i; this.paint(); if (i >= 0) this.onChange(); }
   }
@@ -749,3 +809,12 @@ class Chooser {
 }
 
 export { parseLayout };
+
+/** What a context-slot key types, to spot duplicates: "(" for "()", "=" for " = ". */
+function keyEssence(id) {
+  if (id.startsWith('@')) return null;
+  if (id.startsWith('s:')) return parseToken(id.slice(2)).insert;
+  const { text, cursor } = parseTextKey(id.slice(2));
+  if (text.length === 2 && cursor === 1 && PAIRS[text[0]] === text[1]) return text[0];
+  return text.trim() || text;
+}
