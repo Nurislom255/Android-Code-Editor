@@ -1,8 +1,9 @@
 // app/chrome.js — rendering of the per-pane chrome (tab bar, breadcrumbs,
 // conflict bar, empty-pane welcome) and the status bar.
 
-import { h, icon, onLongPress } from '../ui/dom.js';
+import { h, icon } from '../ui/dom.js';
 import { popupMenu } from '../ui/overlays.js';
+import { dragMove } from '../ui/dragMove.js';
 import { dirname } from '../core/paths.js';
 import { eolLabel } from '../core/textFormat.js';
 import { symbolPathAt } from '../editor/outline.js';
@@ -13,7 +14,7 @@ export function renderTabBar(app, paneIndex) {
   const ws = app.ws;
   const pane = ws.panes[paneIndex];
   const bar = document.querySelector(`#pane-${paneIndex} .tab-bar`);
-  if (!pane || !bar) return;
+  if (!pane || !bar || bar._dragging) return;
   // Rebuild only when something shown changed. Rebuilding on every focus
   // change replaced the ✕ under the finger between touch-down and touch-up,
   // so the first tap on a tab in the other pane did nothing.
@@ -54,8 +55,33 @@ export function renderTabBar(app, paneIndex) {
   }
   if (!bar._menuBound) {
     bar._menuBound = true;
-    onLongPress(bar, '.tab', (tab, at) => tabMenu(app, paneIndex, Number(tab.dataset.docId), at));
+    // Long-press: menu. Keep moving after it (or drag with a mouse) to put
+    // the tab somewhere else in this bar or in the other pane's.
+    dragMove(bar, '.tab', {
+      axis: 'x',
+      ignore: '.tab-close',
+      getSettings: () => app.settings,
+      menu: (tab, at) => tabMenu(app, paneIndex, Number(tab.dataset.docId), at),
+      label: (tab) => tab.querySelector('.tab-name').textContent,
+      find: tabDropTarget,
+      drop: (tab, t) => app.ws.placeTab(paneIndex, Number(tab.dataset.docId), t.pane, t.before),
+      onDragChange: (on) => { bar._dragging = on; if (!on) renderTabBar(app, paneIndex); },
+    });
   }
+}
+
+/** Where a dragged tab would land: next to the tab under the pointer, or at the end of a tab bar. */
+function tabDropTarget(tab, el, x) {
+  const bar = el && el.closest('.pane .tab-bar');
+  if (!bar) return null;
+  const pane = Number(bar.closest('.pane').dataset.pane);
+  const over = el.closest('.tab');
+  if (!over) return { el: bar, cls: 'drop-end', pane, before: null };
+  if (over === tab) return null;
+  const r = over.getBoundingClientRect();
+  if (x < r.left + r.width / 2) return { el: over, cls: 'drop-before', pane, before: Number(over.dataset.docId) };
+  const next = over.nextElementSibling;
+  return { el: over, cls: 'drop-after', pane, before: next && next.matches('.tab') ? Number(next.dataset.docId) : null };
 }
 
 function tabMenu(app, paneIndex, docId, at) {
@@ -221,7 +247,11 @@ function reconcile(bar, items) {
       el.dataset.key = it.key;
       if (tag === 'button') el.type = 'button';
     }
+    // Keep what fitStatus hid until it runs again (next frame), or the
+    // hidden items and ⋯ would flash on every cursor move.
+    const overflowed = el.classList.contains('sb-overflowed');
     el.className = it.spacer ? 'spacer' : `sb-item ${it.cls || ''}`.trim();
+    if (overflowed) el.classList.add('sb-overflowed');
     if (it.title) el.title = it.title; else el.removeAttribute('title');
     if (it.label) el.setAttribute('aria-label', it.label); else el.removeAttribute('aria-label');
     el.onclick = it.onclick || null;

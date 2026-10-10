@@ -36,6 +36,7 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 | Keys bar: hold an arrow | Key repeat |
 | Status bar: swipe left / right | Next / previous tab |
 | Long-press a tab, file or folder | Context menu (rename, delete, split, …) |
+| Long-press a tab, file or folder, then keep moving | Drag it: reorder tabs or move them to the other pane; move files and folders into a folder (or to the project root: the empty space below the list). With a mouse, just drag |
 
 How false triggers are avoided (see `src/core/gestures.js`):
 

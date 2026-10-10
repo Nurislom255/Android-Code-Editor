@@ -132,6 +132,25 @@ export function isTouchDevice() {
   return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 }
 
+/**
+ * Hover styles only while a mouse or pen is in use. On a touch screen the
+ * browser fakes :hover on the last tapped element and keeps it there after
+ * the finger lifts (most visibly after a long press). The class follows the
+ * pointer actually used, so a tablet with a mouse attached still gets hover.
+ */
+export function trackHoverInput(root = document.documentElement) {
+  let kind = typeof matchMedia === 'function' && matchMedia('(hover: hover)').matches ? 'mouse' : 'touch';
+  root.classList.toggle('can-hover', kind !== 'touch');
+  const seen = (e) => {
+    const k = e.pointerType === 'touch' ? 'touch' : 'mouse';
+    if (k === kind) return;
+    kind = k;
+    root.classList.toggle('can-hover', k !== 'touch');
+  };
+  document.addEventListener('pointerdown', seen, { capture: true, passive: true });
+  document.addEventListener('pointermove', seen, { capture: true, passive: true });
+}
+
 export function haptic(settings, ms = 8) {
   if (!settings || !settings.haptics) return;
   try { if (navigator.vibrate) navigator.vibrate(ms); } catch { /* not allowed */ }
@@ -144,41 +163,4 @@ export function formatTime(ts) {
   if (diff < 3600000) return `${Math.round(diff / 60000)} min ago`;
   if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-
-/**
- * Long-press (touch) or right-click (mouse) → callback, for context menus on
- * phones where there is no right mouse button.
- */
-export function onLongPress(el, selector, cb, { delay = 480 } = {}) {
-  let timer = 0, start = null, fired = false;
-  el.addEventListener('pointerdown', (e) => {
-    if (e.pointerType === 'mouse') return;
-    const target = e.target.closest(selector);
-    if (!target) return;
-    fired = false;
-    start = { x: e.clientX, y: e.clientY };
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      fired = true;
-      cb(target, { x: start.x, y: start.y });
-    }, delay);
-  });
-  const cancel = (e) => {
-    if (!start) return;
-    if (e.type === 'pointermove' && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 10) return;
-    clearTimeout(timer);
-    start = null;
-  };
-  el.addEventListener('pointermove', cancel);
-  el.addEventListener('pointerup', cancel);
-  el.addEventListener('pointercancel', cancel);
-  // Suppress the click that follows a long-press, and the browser's own menu.
-  el.addEventListener('click', (e) => { if (fired) { e.stopPropagation(); e.preventDefault(); fired = false; } }, true);
-  el.addEventListener('contextmenu', (e) => {
-    const target = e.target.closest(selector);
-    if (!target) return;
-    e.preventDefault();
-    if (!fired) cb(target, { x: e.clientX, y: e.clientY });
-  });
 }

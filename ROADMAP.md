@@ -13,11 +13,12 @@ build, and how we know it is done.
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Built; automated tests pass. Waiting for the on-phone check** (see "Phase 1 — result") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | Not started (owner feedback recorded; arrow keys removed, multi-cursor keys added early) |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
 | 5 | Built-in runtimes: 5A Python, 5B C/C++ (spike first) | 5A small, 5B unknown until spike | Not started |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
+| 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
 
-Order matters: 0 → 1 → 2 → 3 → 4 → 5 → 6. Each phase ends with a tested build
+Order matters: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7. Each phase ends with a tested build
 pushed to the branch and this table updated.
 
 ---
@@ -35,6 +36,8 @@ pushed to the branch and this table updated.
 | Arrow keys | Not on the keys bar (trackpad strip now, joystick in Phase 2). |
 | Line actions | New line, move line up/down are the important ones; they go into **one line-actions key** with gestures (2.8). **Delete line = triple-tap on the line.** |
 | Gestures **and** shortcuts | A phone or tablet is often used with a keyboard: every key-bar action and gesture also keeps a VS Code-style shortcut (2.9). Moving an action to a gesture never removes its shortcut. |
+| Project name in the title bar | **Tap = switch project** (as today). **Long-press** (right-click with a mouse) = project actions, including Rename — a rename must never happen from a single tap (Phase 3). |
+| Moving tabs and files | **Long-press, then drag** on touch; plain drag with a mouse. A quick swipe keeps scrolling the list. |
 
 ## Working rules for every phase
 
@@ -159,6 +162,9 @@ gesture test pad is the only on-device diagnostic for now):
 | Console/Preview/Problems bar: tiny resize handle; ✕ off-screen in portrait; what is "stdin"? | 12 px handle; the actions row could not shrink | The whole bar drags to resize (drag to the bottom closes it); tabs scroll, actions never; on phones the rarer actions are in ⋯; "stdin" is now "Program input" with an explanation |
 | Status bar: Wrap / Lock cut off | One scrolling line, too many items for a phone | Items that don't fit move into a ⋯ menu (least needed first); Wrap is icon-only on phones |
 | Autocomplete: `p`, `h1`–`h3`, `lorem20` | `lorem` was not offered at all; a keyboard's capital ("P", "H1") hid tag suggestions | `lorem`, `loremN` (N **words**, as in Emmet/VS Code) anywhere in text; capitals accepted where a tag starts; h1–h6 grouped; duplicate snippet entries removed |
+| Two resize handles on the Console/Preview bar | The old 12 px handle stayed above the new draggable bar | Old handle removed; the bar is the only handle |
+| Buttons stay highlighted after a long-press | Browsers keep `:hover` on the last tapped element until you tap elsewhere | Hover highlights only while a mouse or pen is in use (a tablet with a mouse still gets them) |
+| Drag tabs, files and folders to move them | Not built (planned for Phase 4) | Shipped early: long-press then drag (mouse: drag). Tabs reorder and move to the other pane; files and folders move into a folder or to the project root (empty space below the list); lists auto-scroll at the edges; a folder never goes into itself |
 
 ---
 
@@ -500,21 +506,25 @@ listed in 2.3; the customization survives a reload.
   menus get `user-select: none` so a long-press doesn't start selecting their
   text; the code, the console output, inputs and dialogs' messages stay
   selectable.
-- **Project name → project actions (owner's request):** tapping the project
-  name in the title bar opens: **Rename project** (missing today — there is no
-  way to rename one), Switch project, New project, Import, Export as .zip,
-  Project settings. Rename must also rename the stored project record and, for
-  a device folder, offer to rename the folder.
+- **Project name → project actions (owner's request):** **long-pressing** the
+  project name in the title bar (right-click with a mouse) opens: **Rename
+  project** (missing today — there is no way to rename one), Switch project,
+  New project, Import, Export as .zip, Project settings. A single tap keeps
+  doing what it does today (switch project), so a rename never starts by
+  accident (owner's correction). Rename must also rename the stored project
+  record and, for a device folder, offer to rename the folder. Give the
+  long-press the "armed" feedback above.
 
 ---
 
 ## Phase 4 — Tabs and file explorer (reported issue 6)
 
 **Tabs**
-- Drag to reorder.
-- Drag to the right or bottom edge → highlighted drop zones → split; drag into
-  the other pane to move. A pane that becomes empty closes itself.
-- On touch: long-press, then drag.
+- ~~Drag to reorder.~~ Shipped early.
+- Drag to the right or bottom edge → highlighted drop zones → split. ~~Drag into
+  the other pane to move. A pane that becomes empty closes itself.~~ Shipped early.
+- ~~On touch: long-press, then drag.~~ Shipped early (the long-press menu opens
+  first; moving the finger closes it and picks the tab up).
 - Preview tabs as in VS Code: a single tap opens a temporary (italic) tab; editing
   or double-tapping keeps it.
 
@@ -523,8 +533,11 @@ listed in 2.3; the customization survives a reload.
   Folder create inside it; with a file selected, they create in that file's
   folder. (v2 bug: the header's New File always creates at the project root.)
 - Create and rename inline in the tree (no dialogs).
-- Drag and drop to move files into folders: long-press to pick up, folders open
-  while hovering, the list auto-scrolls at the edges.
+- ~~Drag and drop to move files into folders: long-press to pick up, the list
+  auto-scrolls at the edges.~~ Shipped early. Still to do: **folders open while
+  hovering** over them — the tree must then update without replacing the rows
+  (replacing the row under the finger ends the touch), and an Undo on the
+  "Moved …" message.
 - Cut / copy / paste files; multi-select (long-press, then tap more).
 - "Open Editors" list, a filter box, auto-reveal of the active file, compact
   single-child folders.
@@ -588,6 +601,51 @@ it misses the targets, try B; if both miss, **stop and discuss with the owner**
 4. Side-by-side diff view (git and local history).
 5. Multiple cursors on touch.
 6. Breadcrumb dropdowns (jump to sibling symbols / files).
+
+---
+
+## Phase 7 — Git, more advanced (owner's request)
+
+**Today (v2):** init, status, diff, stage / unstage / discard per file, commit,
+create and switch branches, log, push / pull / fetch over https with a saved
+token, clone. The web version needs a CORS proxy (a setting) for the network
+operations.
+
+**To build — ranked by value for effort.** isomorphic-git (already bundled)
+covers everything in this list except where noted.
+
+1. **Sync at a glance:** ahead / behind counts in the status bar; one **Sync**
+   action (pull, then push); **Commit & push** in one step.
+2. **History view:** commits as a list with branch lines; tap a commit → its
+   changed files and diffs; check it out, or start a branch from it.
+3. **Amend** the last commit; **undo last commit** (its changes go back to
+   staged).
+4. **Single changes (hunks):** stage / unstage / discard one change from the
+   diff view, and from the gutter markers (tap a marker → see the old lines →
+   revert or stage just that change).
+5. **Branches:** delete, rename, **merge into the current branch**, list remote
+   branches, set the upstream.
+6. **Merge conflicts:** conflict blocks highlighted in the editor with
+   VS Code-style *Accept current / Accept incoming / Accept both* buttons;
+   abort the merge.
+7. **Stash:** save, list, apply, pop, drop.
+8. **Tags:** create (light or annotated), push, delete.
+9. **From the file tree:** coloured git status (with Phase 3), *Add to
+   .gitignore*, *Show history of this file*.
+10. **APK:** use Android's native HTTP for push / pull, so the app needs no CORS
+    proxy (the web version still does).
+
+**Harder — measure first** (not in isomorphic-git, needs our own code):
+blame (who changed each line: walks the file's history, slow on long
+histories, so limited depth); revert a commit and cherry-pick (a three-way
+merge of that commit's changes).
+
+**Not planned:** rebase (complex and easy to lose work with on a phone); SSH
+remotes (a browser can't open SSH connections; https + token works).
+
+**Done when:** each feature has an e2e test against the local git server used
+by the existing tests (`tests/e2e/gitHttpServer.mjs`), and a merge conflict can
+be resolved on the phone without a keyboard.
 
 ---
 

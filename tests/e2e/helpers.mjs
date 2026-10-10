@@ -123,3 +123,33 @@ export async function runCommand(page, id) {
 }
 
 export const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/**
+ * Drags one element onto another: press and move with a mouse; on a touch
+ * screen hold until the menu opens, then move (ui/dragMove.js).
+ * `at` is where on the target to let go, as fractions of its box.
+ */
+export async function dragItem(page, hasTouch, from, to, at = { x: 0.5, y: 0.5 }) {
+  const a = await from.boundingBox();
+  const b = await to.boundingBox();
+  const x0 = a.x + Math.min(30, a.width / 2), y0 = a.y + a.height / 2;
+  const x1 = b.x + b.width * at.x, y1 = b.y + b.height * at.y;
+  if (!hasTouch) {
+    await page.mouse.move(x0, y0);
+    await page.mouse.down();
+    await page.mouse.move(x1, y1, { steps: 10 });
+    await page.mouse.up();
+    return;
+  }
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: x0, y: y0 }] });
+  await page.waitForTimeout(650);
+  await expect(page.locator('.popup-menu')).toBeVisible(); // the long-press menu comes first
+  for (let i = 1; i <= 10; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x0 + ((x1 - x0) * i) / 10, y: y0 + ((y1 - y0) * i) / 10 }] });
+    await page.waitForTimeout(20);
+  }
+  await expect(page.locator('.popup-menu')).toHaveCount(0);
+  await expect(page.locator('.drag-chip')).toBeVisible();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+}

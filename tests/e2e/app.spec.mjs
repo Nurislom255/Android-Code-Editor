@@ -24,7 +24,7 @@ test('scratch file works without any project', async ({ page }) => {
   await expect(page.locator('.tab.active .tab-name')).toHaveText('scratch.js');
   await setText(page, 'console.log(6 * 7)');
   await page.locator('#btn-run').click();
-  await expect(page.locator('#console-view .console-line', { hasText: '42' })).toHaveCount(1);
+  await expect(page.locator('#console-view .console-line', { hasText: '42', hasNotText: 'Finished' })).toHaveCount(1); // not "✓ Finished in 42 ms"
 });
 
 test('a 5,000-line file stays responsive while typing (spec §8 benchmark)', async ({ page }) => {
@@ -116,7 +116,7 @@ test('F5 runs the file; Ctrl+Enter inserts a line below in the editor', async ({
   await page.getByRole('button', { name: /Scratch file/ }).click();
   await setText(page, 'console.log(6 * 7)', 3);
   await page.keyboard.press('F5');
-  await expect(page.locator('#console-view .console-line', { hasText: '42' })).toHaveCount(1);
+  await expect(page.locator('#console-view .console-line', { hasText: '42', hasNotText: 'Finished' })).toHaveCount(1); // not "✓ Finished in 42 ms"
   await page.evaluate(() => window.__app.ws.view.focus());
   await page.keyboard.press('Control+Enter');
   expect(await page.evaluate(() => window.__app.ws.view.state.doc.toString())).toBe('console.log(6 * 7)\n');
@@ -129,6 +129,7 @@ test('bottom panel: the whole bar resizes, dragging it down closes it, ✕ is al
   const panel = page.locator('#bottom-panel');
   const head = page.locator('#bottom-panel .panel-head');
   const close = page.locator('#bottom-panel [aria-label="Close panel"]');
+  await expect(page.locator('#panel-resizer')).toHaveCount(0); // the bar is the only handle
   const vw = page.viewportSize().width;
   const c = await close.boundingBox();
   expect(c.x + c.width).toBeLessThanOrEqual(vw + 1);
@@ -149,6 +150,18 @@ test('bottom panel: the whole bar resizes, dragging it down closes it, ✕ is al
   await page.mouse.move(x, page.viewportSize().height - 5, { steps: 8 });
   await page.mouse.up();
   await expect(panel).toBeHidden();
+});
+
+test('hover highlights only follow a mouse: a tapped button does not stay lit', async ({ page, hasTouch }) => {
+  await boot(page);
+  const html = page.locator('html');
+  if (hasTouch) {
+    await page.locator('#titlebar button').first().tap();
+    await expect(html).not.toHaveClass(/can-hover/);
+  } else {
+    await page.mouse.move(200, 200);
+    await expect(html).toHaveClass(/can-hover/);
+  }
 });
 
 test('status bar: one line, never cut off — what does not fit is in ⋯', async ({ page }) => {

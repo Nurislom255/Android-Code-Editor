@@ -197,7 +197,7 @@ svg { display: block; flex-shrink: 0; }
   background: transparent;
   color: var(--text-dim);
 }
-.icon-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) .icon-btn:hover:not(:disabled) { background: var(--bg-hover); color: var(--text); }
 .icon-btn.active { background: var(--accent-dim); color: var(--accent); }
 .icon-btn.small { min-width: 30px; height: 30px; padding: 0 6px; }
 
@@ -215,7 +215,7 @@ svg { display: block; flex-shrink: 0; }
   font-weight: 600;
   font-size: 14px;
 }
-.project-btn:hover { background: var(--bg-hover); }
+:where(.can-hover) .project-btn:hover { background: var(--bg-hover); }
 #project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-btn .caret { color: var(--text-faint); }
 
@@ -232,7 +232,7 @@ svg { display: block; flex-shrink: 0; }
   color: var(--accent);
   font-weight: 600;
 }
-.run-btn:hover { background: var(--accent); color: var(--on-accent); }
+:where(.can-hover) .run-btn:hover { background: var(--accent); color: var(--on-accent); }
 .run-btn.running { background: var(--error-dim); border-color: var(--error); color: var(--error); }
 
 .btn {
@@ -248,9 +248,9 @@ svg { display: block; flex-shrink: 0; }
   color: var(--text);
   font-size: 14px;
 }
-.btn:hover:not(:disabled) { background: var(--bg-hover); }
+:where(.can-hover) .btn:hover:not(:disabled) { background: var(--bg-hover); }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
-.btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
+:where(.can-hover) .btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
 .btn-danger { border-color: var(--error); color: var(--error); background: var(--error-dim); }
 .btn-ghost { background: transparent; border-color: transparent; }
 .btn-small { min-height: 30px; padding: 3px 10px; font-size: 13px; }
@@ -300,7 +300,7 @@ svg { display: block; flex-shrink: 0; }
   color: var(--text-faint);
   position: relative;
 }
-.activity:hover { color: var(--text); }
+:where(.can-hover) .activity:hover { color: var(--text); }
 .activity.active { color: var(--text); }
 .activity.active::before {
   content: '';
@@ -355,7 +355,7 @@ svg { display: block; flex-shrink: 0; }
   z-index: 2;
   touch-action: none;
 }
-#sidebar-resizer:hover, #sidebar-resizer.dragging { background: var(--accent-dim); }
+:where(.can-hover) #sidebar-resizer:hover, #sidebar-resizer.dragging { background: var(--accent-dim); }
 #scrim { display: none; }
 
 /* Phones: the sidebar becomes a drawer over the editor. */
@@ -415,7 +415,7 @@ svg { display: block; flex-shrink: 0; }
   height: 28px; align-self: center; padding: 0 10px; border: 1px solid var(--border); border-radius: 14px;
   background: var(--bg-panel); color: var(--text-dim); font-size: 12px; box-shadow: -8px 0 8px var(--bg-panel);
 }
-.split-close:hover { color: var(--text); border-color: var(--accent); }
+:where(.can-hover) .split-close:hover { color: var(--text); border-color: var(--accent); }
 #app.split .pane:not(.focused-pane) .tab.active { box-shadow: inset 0 -2px 0 var(--text-faint); }
 .pane-divider {
   width: 5px;
@@ -424,7 +424,7 @@ svg { display: block; flex-shrink: 0; }
   flex-shrink: 0;
   touch-action: none;
 }
-.pane-divider:hover, .pane-divider.dragging { background: var(--accent-dim); }
+:where(.can-hover) .pane-divider:hover, .pane-divider.dragging { background: var(--accent-dim); }
 #app.layout-compact #editor-area { flex-direction: column; }
 #app.layout-compact .pane-divider { width: auto; height: 5px; cursor: row-resize; }
 
@@ -464,7 +464,7 @@ svg { display: block; flex-shrink: 0; }
   color: var(--text-faint);
   position: relative;
 }
-.tab .tab-close:hover { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) .tab .tab-close:hover { background: var(--bg-hover); color: var(--text); }
 .tab.dirty .tab-close svg { visibility: hidden; }
 .tab.dirty .tab-close::after {
   content: '';
@@ -473,8 +473,8 @@ svg { display: block; flex-shrink: 0; }
   border-radius: 50%;
   background: var(--accent);
 }
-.tab.dirty .tab-close:hover svg { visibility: visible; }
-.tab.dirty .tab-close:hover::after { display: none; }
+:where(.can-hover) .tab.dirty .tab-close:hover svg { visibility: visible; }
+:where(.can-hover) .tab.dirty .tab-close:hover::after { display: none; }
 .tab.untitled .tab-name { font-style: italic; }
 
 .crumbs {
@@ -495,7 +495,7 @@ svg { display: block; flex-shrink: 0; }
 .crumbs::-webkit-scrollbar { display: none; }
 .crumbs:empty { display: none; }
 .crumb { border: none; background: none; padding: 2px 4px; border-radius: 4px; color: inherit; font-size: 12px; }
-.crumb:hover { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) .crumb:hover { background: var(--bg-hover); color: var(--text); }
 .crumb.symbol { color: var(--text-dim); }
 .crumb-sep { opacity: 0.6; }
 
@@ -542,7 +542,7 @@ svg { display: block; flex-shrink: 0; }
 .cm-gutters { user-select: none; }
 .cm-lineNumbers, .cm-lineNumbers .cm-gutterElement { touch-action: none; cursor: pointer; }
 .cm-fold-marker { display: inline-block; width: 14px; text-align: center; color: var(--text-faint); cursor: pointer; font-size: 13px; }
-.cm-fold-marker:hover { color: var(--text); }
+:where(.can-hover) .cm-fold-marker:hover { color: var(--text); }
 .cm-git-gutter { width: 4px; }
 .cm-git-gutter .cm-gutterElement { padding: 0 !important; }
 .cm-git-added, .cm-git-modified { width: 3px; height: 100%; margin-left: 1px; }
@@ -563,7 +563,7 @@ svg { display: block; flex-shrink: 0; }
   cursor: pointer;
 }
 .cm-sticky-row { display: flex; white-space: pre; overflow: hidden; }
-.cm-sticky-row:hover { background: var(--bg-hover); }
+:where(.can-hover) .cm-sticky-row:hover { background: var(--bg-hover); }
 .cm-sticky-num { flex-shrink: 0; text-align: right; padding-right: 6px; color: var(--ed-gutter-fg); background: var(--ed-gutter-bg); box-sizing: border-box; }
 .cm-sticky-text { padding-left: 6px; overflow: hidden; text-overflow: ellipsis; color: var(--ed-fg); }
 
@@ -641,7 +641,7 @@ svg { display: block; flex-shrink: 0; }
   background: var(--bg-panel);
   text-align: left;
 }
-.action-card:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
+:where(.can-hover) .action-card:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-dim); }
 .action-card .ac-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .action-card .ac-title { font-weight: 600; }
 .action-card .ac-desc { font-size: 12px; color: var(--text-faint); }
@@ -660,7 +660,7 @@ svg { display: block; flex-shrink: 0; }
 .project-row .pr-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: left; background: none; border: none; padding: 4px 0; }
 .project-row .pr-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-row .pr-meta { font-size: 12px; color: var(--text-faint); }
-.project-row:hover { border-color: var(--accent); }
+:where(.can-hover) .project-row:hover { border-color: var(--accent); }
 .kbd-tips { color: var(--text-faint); font-size: 13px; line-height: 1.8; }
 kbd {
   font-family: var(--font-mono);
@@ -688,7 +688,7 @@ kbd {
   width: 100%;
   text-align: left;
 }
-.tree-row:hover { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) .tree-row:hover { background: var(--bg-hover); color: var(--text); }
 .tree-row.active { background: var(--accent-dim); color: var(--text); }
 .tree-row.focused { outline: 1px solid var(--accent); outline-offset: -1px; }
 .tree-row .twisty { width: 16px; color: var(--text-faint); display: flex; align-items: center; justify-content: center; transition: transform 0.12s; }
@@ -731,7 +731,7 @@ kbd {
   font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim);
   cursor: pointer; white-space: nowrap; overflow: hidden;
 }
-.result-line:hover, .result-file:hover { background: var(--bg-hover); }
+:where(.can-hover) .result-line:hover, :where(.can-hover) .result-file:hover { background: var(--bg-hover); }
 .result-line .ln { color: var(--text-faint); min-width: 30px; text-align: right; flex-shrink: 0; }
 .result-line .txt { overflow: hidden; text-overflow: ellipsis; }
 .result-line mark { background: var(--ed-search-selected); color: var(--text); border-radius: 2px; }
@@ -742,7 +742,7 @@ kbd {
   padding: 2px 10px 2px calc(10px + var(--depth, 0) * 14px);
   border: none; background: none; text-align: left; color: var(--text-dim); font-size: 13px; cursor: pointer;
 }
-.outline-row:hover { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) .outline-row:hover { background: var(--bg-hover); color: var(--text); }
 .outline-row.current { background: var(--accent-dim); color: var(--text); }
 .outline-row .kind { width: 18px; height: 18px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; font-family: var(--font-mono); background: var(--bg-panel-alt); color: var(--accent); flex-shrink: 0; }
 .outline-row .oname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
@@ -758,7 +758,7 @@ kbd {
 .list-row .meta { color: var(--text-faint); font-size: 12px; }
 .git-section-title { padding: 10px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); display: flex; align-items: center; }
 .git-file { display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 4px 0 12px; font-size: 13px; }
-.git-file:hover { background: var(--bg-hover); }
+:where(.can-hover) .git-file:hover { background: var(--bg-hover); }
 .git-file .gname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .git-file .gdir { color: var(--text-faint); font-size: 11px; margin-left: 6px; }
 .git-status { width: 18px; text-align: center; font-weight: 700; font-family: var(--font-mono); font-size: 12px; }
@@ -818,19 +818,6 @@ kbd {
 }
 #bottom-panel.collapsed { display: none; }
 #bottom-panel.maximized { position: absolute; inset: var(--titlebar-h) 0 0 0; height: auto !important; z-index: 20; }
-#panel-resizer {
-  position: absolute;
-  top: -6px; left: 0; right: 0;
-  height: 12px;
-  cursor: row-resize;
-  z-index: 3;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  touch-action: none;
-}
-#panel-resizer span { width: 40px; height: 4px; border-radius: 2px; background: var(--border); }
-#panel-resizer:hover span, #panel-resizer.dragging span { background: var(--accent); }
 /* The whole head is the resize handle (drag up/down); tabs may scroll
    sideways, the actions (✕) never shrink off the screen. */
 .panel-head {
@@ -890,7 +877,7 @@ kbd {
 .preview-toolbar .ptitle { flex: 1; font-size: 12.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
 .preview-frame { flex: 1; width: 100%; border: none; background: #fff; min-height: 0; }
 .problem-row { display: flex; gap: 8px; padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--border); cursor: pointer; align-items: baseline; }
-.problem-row:hover { background: var(--bg-hover); }
+:where(.can-hover) .problem-row:hover { background: var(--bg-hover); }
 .problem-row .sev { font-weight: 700; }
 .problem-row .sev.error { color: var(--error); }
 .problem-row .sev.warning { color: var(--warn); }
@@ -929,7 +916,7 @@ kbd {
   font-size: 12px;
   border-radius: 4px;
 }
-button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
+:where(.can-hover) button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
 .sb-item.warn { color: var(--warn); }
 .sb-item.err { color: var(--error); }
 .sb-item.on { color: var(--accent); }
@@ -988,6 +975,23 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
 .key-preview-char { font-family: var(--font-mono); font-size: calc(26px * var(--ui-zoom, 1)); line-height: 1.1; font-weight: 600; }
 .key-preview-hint { font-size: calc(10px * var(--ui-zoom, 1)); opacity: 0.85; text-transform: uppercase; letter-spacing: 0.05em; }
 @keyframes key-pop { from { transform: translate(-50%, -80%) scale(0.7); opacity: 0.4; } }
+
+/* ---- Drag to move (tabs, file tree; ui/dragMove.js) ------------------------ */
+.tab, .tree-row { -webkit-touch-callout: none; }
+.drag-chip {
+  position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none;
+  padding: calc(6px * var(--ui-zoom, 1)) calc(10px * var(--ui-zoom, 1)); border-radius: 8px;
+  background: var(--bg-panel-alt); color: var(--text); border: 1px solid var(--accent);
+  font-size: calc(13px * var(--ui-zoom, 1)); white-space: nowrap; max-width: 60vw; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tab.dragging, .tree-row.dragging { opacity: 0.4; }
+.tab.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
+.tab.drop-after, .tab-bar.drop-end { box-shadow: inset -3px 0 0 var(--accent); }
+.tree-row.drop-into { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); color: var(--text); }
+.tree.drop-root { box-shadow: inset 0 0 0 2px var(--accent); }
+html.drag-moving, html.drag-moving * { cursor: grabbing !important; }
+html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto the list below it */
 
 /* ---- Interface size (Settings → Appearance) --------------------------------
    Everything around the code is zoomed; the code has its own font size.
@@ -1060,7 +1064,7 @@ button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
 }
 .menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 4px 10px; border: none; background: none; text-align: left; border-radius: 6px; font-size: 14px; }
-.menu-item:hover:not(:disabled), .menu-item:focus-visible { background: var(--bg-hover); outline: none; }
+:where(.can-hover) .menu-item:hover:not(:disabled), .menu-item:focus-visible { background: var(--bg-hover); outline: none; }
 .menu-item.danger { color: var(--error); }
 .menu-icon { width: 16px; color: var(--text-faint); display: flex; }
 .menu-label { flex: 1; }

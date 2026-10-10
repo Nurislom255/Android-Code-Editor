@@ -29,7 +29,7 @@ import { attachGestures, attachStripSwipe } from '../editor/gestureLayer.js';
 import { symbolsFor } from '../editor/viewPlugins.js';
 import { flattenSymbols } from '../editor/outline.js';
 import { syntaxDiagnostics } from '../editor/syntaxLint.js';
-import { h, icon, $, $$, hydrateIcons, debounce, haptic, formatTime } from '../ui/dom.js';
+import { h, icon, $, $$, hydrateIcons, debounce, haptic, formatTime, trackHoverInput } from '../ui/dom.js';
 import { choose, confirm, prompt, toast, popupMenu, showModal, isModalOpen, closeMenus } from '../ui/overlays.js';
 import { Layout } from '../ui/layout.js';
 import { Palette } from '../ui/palette.js';
@@ -59,6 +59,7 @@ export class App {
     this.recentFiles = [];
     this.problemCounts = { errors: 0, warnings: 0 };
     hydrateIcons();
+    trackHoverInput();
     this.applyTheme();
     this.applyFont();
     this.applyUiZoom();
@@ -353,6 +354,7 @@ export class App {
       onOpen: (p) => { this.ws.openPath(p); this.layout.closeDrawer(); },
       onExpandChange: (list) => { if (this.project) kv.set(`expanded:${this.project.meta.id}`, list).catch(() => {}); },
       getGitBadges: () => this.gitBadges,
+      getSettings: () => this.settings,
       getOpenState: () => ({
         active: this.ws.activeDoc ? this.ws.activeDoc.path : null,
         dirty: new Set(this.ws.dirtyDocs().map((d) => d.path).filter(Boolean)),
@@ -765,6 +767,23 @@ export class App {
         this.ws.onPathRenamed(path, to);
         if (this.tree.expanded.has(path)) { this.tree.expanded.delete(path); this.tree.expanded.add(to); }
         await afterChange(dirname(path));
+      },
+      /** Drag and drop in the file tree: `path` goes into folder `toDir` ('' = project root). */
+      move: async (path, kind, toDir) => {
+        const fs = fsOf(); if (!fs) return;
+        const to = join(toDir, basename(path));
+        if (to === path) return;
+        if (kind === 'directory' && (toDir === path || toDir.startsWith(path + '/'))) return;
+        try { await fs.rename(path, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); return; }
+        this.ws.onPathRenamed(path, to);
+        const moved = (p) => (p === path || p.startsWith(path + '/') ? to + p.slice(path.length) : p);
+        this.tree.expanded = new Set([...this.tree.expanded].map(moved));
+        if (toDir) this.tree.expanded.add(toDir);
+        if (this.project) kv.set(`expanded:${this.project.meta.id}`, [...this.tree.expanded]).catch(() => {});
+        await afterChange();
+        await this.tree.reveal(to);
+        toast(`Moved ${basename(path)} to ${toDir ? `${toDir}/` : 'the project root'}`, 'success');
+        if (this.activePanel === 'git') this.gitLater();
       },
       duplicate: async (path) => {
         const fs = fsOf(); if (!fs) return;

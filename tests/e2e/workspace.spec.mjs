@@ -1,6 +1,6 @@
 // File tree, quick open, project search, outline, expand selection, split editor.
 import { test, expect } from '@playwright/test';
-import { boot, newProject, openFile, editorText, setText, writeProjectFile, runCommand, mod, isCompact } from './helpers.mjs';
+import { boot, newProject, openFile, editorText, setText, writeProjectFile, runCommand, mod, isCompact, dragItem } from './helpers.mjs';
 
 async function showPanel(page, id) {
   await page.evaluate((p) => window.__app.showPanel(p), id);
@@ -40,6 +40,54 @@ test('file tree: create in a folder, rename, delete (with long-press / right-cli
   await page.locator('.modal').getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('.tab', { hasText: 'helpers.js' })).toHaveCount(0);
   expect(await page.evaluate(() => window.__app.project.fs.exists('src/helpers.js'))).toBe(false);
+});
+
+test('file tree: drag a file into a folder and a folder to the project root', async ({ page, hasTouch }) => {
+  await boot(page);
+  await newProject(page, 'dm', 'web');
+  await writeProjectFile(page, 'src/lib/util.js', 'export const x = 1;\n');
+  await openFile(page, 'style.css');
+  await page.evaluate(() => window.__app.tree.refresh());
+  await showPanel(page, 'files');
+  if (hasTouch) await page.waitForTimeout(350); // the phone drawer slides in
+  const row = (p) => page.locator(`.tree-row[data-path="${p}"]`);
+  const exists = (p) => page.evaluate((x) => window.__app.project.fs.exists(x), p);
+
+  await dragItem(page, hasTouch, row('style.css'), row('src'));
+  await expect.poll(() => exists('src/style.css')).toBe(true);
+  expect(await exists('style.css')).toBe(false);
+  await expect(page.locator('.pane.focused-pane .tab.active')).toHaveAttribute('title', 'src/style.css'); // the open tab follows
+
+  // a folder never goes into itself
+  await expect(row('src/lib')).toBeVisible();
+  await dragItem(page, hasTouch, row('src'), row('src/lib'));
+  await page.waitForTimeout(200);
+  expect(await exists('src/lib/util.js')).toBe(true);
+
+  // the empty space below the rows is the project root
+  await dragItem(page, hasTouch, row('src/lib'), page.locator('#sidebar .tree'), { x: 0.5, y: 0.97 });
+  await expect.poll(() => exists('lib/util.js')).toBe(true);
+  expect(await exists('src/lib')).toBe(false);
+});
+
+test('tabs: drag to reorder and into the other pane', async ({ page, hasTouch }) => {
+  await boot(page);
+  await newProject(page, 'dt', 'web');
+  await page.evaluate(async () => { for (const id of [...window.__app.ws.panes[0].tabs]) await window.__app.ws.closeTab(0, id, { force: true }); });
+  await openFile(page, 'index.html');
+  await openFile(page, 'style.css');
+  const names = (i) => page.locator(`#pane-${i} .tab .tab-name`).allTextContents();
+  expect(await names(0)).toEqual(['index.html', 'style.css']);
+
+  const tab = (i, name) => page.locator(`#pane-${i} .tab`, { hasText: name });
+  await dragItem(page, hasTouch, tab(0, 'index.html'), tab(0, 'style.css'), { x: 0.8, y: 0.5 });
+  await expect.poll(() => names(0)).toEqual(['style.css', 'index.html']);
+
+  await runCommand(page, 'split'); // the active file (style.css) opens in the second pane too
+  await expect(page.locator('#pane-1')).toBeVisible();
+  await dragItem(page, hasTouch, tab(0, 'index.html'), page.locator('#pane-1 .tab-bar'), { x: 0.7, y: 0.5 });
+  await expect.poll(() => names(1)).toEqual(['style.css', 'index.html']);
+  expect(await names(0)).toEqual(['style.css']);
 });
 
 test('quick open finds files by fuzzy name (Ctrl+P / palette)', async ({ page }) => {
