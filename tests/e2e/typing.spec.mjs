@@ -341,3 +341,23 @@ test('import paths are suggested relative to the file', async ({ page }) => {
   await page.keyboard.type("import { add } from '");
   await expect(page.locator('.cm-completionLabel', { hasText: './utils/math.js' })).toBeVisible();
 });
+
+test('the other uses of the name under the cursor are highlighted (not in strings or comments)', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'wh', 'js');
+  await openFile(page, 'main.js');
+  const marks = page.locator('.pane.focused-pane .cm-wordHighlight');
+  await setText(page, 'let total = 0;\ntotal += 2; // total\nconsole.log("total", total);', 6);
+  await expect(marks).toHaveCount(3);
+  await expect(marks.first()).toHaveText('total');
+  // typing: nothing lit, then the name under the cursor again
+  await page.evaluate(() => { const v = window.__app.ws.view; v.dispatch({ changes: { from: 9, insert: 's' }, selection: { anchor: 10 }, userEvent: 'input.type' }); });
+  await expect(marks).toHaveCount(0);
+  await expect(marks).toHaveCount(1); // "totals" is used once
+  // moving the cursor onto "total" (line 2): its two uses
+  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 18 } }));
+  await expect(marks).toHaveCount(2);
+  // off in Settings
+  await page.evaluate(() => window.__app.updateSettings({ wordHighlight: false }));
+  await expect(marks).toHaveCount(0);
+});

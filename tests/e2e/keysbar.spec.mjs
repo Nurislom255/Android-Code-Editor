@@ -36,12 +36,12 @@ async function center(page, label) {
 }
 
 /** Swipes up (dy < 0) or down (dy > 0) on a key. */
-async function swipeKey(page, label, dy) {
+async function swipeKey(page, label, dy, dx = 0) {
   const { x, y } = await center(page, label);
   const cdp = await touch(page);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + dy / 2 }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + dy }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx / 2, y: y + dy / 2 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + dx, y: y + dy }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
 }
@@ -206,6 +206,21 @@ test('joystick: slow = precise, fast = far; it sticks to one direction; tap sele
   expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; })).toEqual([0, 5]);
 });
 
+test('joystick: the line end is a wall; pushing on for a moment goes to the next line', async ({ page }) => {
+  const line = () => page.evaluate(() => window.__app.ws.view.state.doc.lineAt(window.__app.ws.view.state.selection.main.head).number);
+  await setup(page, 'abc\nsecond\nthird', 0);
+  // overshooting past "abc" stops at its end
+  await dragJoystick(page, { dx: 70, n: 14, ms: 15 });
+  expect(await head(page)).toBe(3);
+  // pushing on (well over half a second): through to the next line
+  await dragJoystick(page, { dx: 70, n: 35, ms: 40 });
+  expect(await line()).toBe(2);
+  // and the start of a line stops a drag to the left the same way
+  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 6 } }));
+  await dragJoystick(page, { dx: -70, n: 14, ms: 15 });
+  expect(await head(page)).toBe(4);
+});
+
 test('joystick: a quick flick right goes to the line end', async ({ page }) => {
   await setup(page, 'alpha beta gamma', 0);
   await dragJoystick(page, { dx: 64, n: 2, ms: 40 });
@@ -250,13 +265,32 @@ test('Mod layer: Home and End (with Shift they select)', async ({ page }) => {
   expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.anchor, s.head]; })).toEqual([7, 0]);
 });
 
-test('operator key: tap +, swipe up -, swipe down *, hold for / and the rest', async ({ page }) => {
+test('operator key: tap +, swipe up -, down *, left /, right ** (power), hold for the rest', async ({ page }) => {
   await setup(page, 'a ');
   await key(page, '+').tap();
   await swipeKey(page, '+', -30);
   await swipeKey(page, '+', 30);
-  await holdKey(page, '+', '/', { check: () => expect(page.locator('.key-chooser .key-choice')).toHaveCount(12) });
-  expect(await editorText(page)).toBe('a +-*/');
+  await swipeKey(page, '+', 0, -30);
+  await swipeKey(page, '+', 0, 30);
+  // a swipe that starts sideways and ends up going up is a swipe up
+  await swipeKey(page, '+', -32, 10);
+  await holdKey(page, '+', '%', { check: () => expect(page.locator('.key-chooser .key-choice')).toHaveCount(13) });
+  expect(await editorText(page)).toBe('a +-*/**-%');
+  // the hints sit on the side of each swipe
+  const op = key(page, '+');
+  await expect(op.locator('.alt-left')).toHaveText('/');
+  await expect(op.locator('.alt-right')).toHaveText('**');
+  // "(" swiped left: {}
+  await swipeKey(page, '(', 0, -30);
+  expect(await editorText(page)).toBe('a +-*/**-%{}');
+});
+
+test('operator key in C++: no power operator, so right is % (pow() comes as a suggestion)', async ({ page }) => {
+  await scratch(page, 'main.cpp', 'int main() {\n    int x = |\n}');
+  await swipeKey(page, '+', 0, 30);
+  expect(await editorText(page)).toContain('int x = %');
+  await page.evaluate(() => { const v = window.__app.ws.view; const p = v.state.doc.toString().indexOf('%'); v.dispatch({ changes: { from: p, to: p + 1 }, selection: { anchor: p } }); });
+  await expect(page.locator('#keys-bar .key.ctx', { hasText: 'pow()' })).toBeVisible();
 });
 
 test('context keys never repeat a key of the main row', async ({ page }) => {

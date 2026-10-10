@@ -67,6 +67,7 @@ export class SettingsPanel {
       toggle('autoCloseBrackets', 'Auto-close brackets and quotes'),
       toggle('stickyScroll', 'Sticky scroll', 'Keep the enclosing function/class header visible at the top.'),
       toggle('fastScroll', 'Fast-scroll thumb', 'A draggable handle on long files (touch screens).'),
+      toggle('wordHighlight', 'Highlight the name under the cursor', 'With the cursor on a variable (or function, property…), its other uses are lightly highlighted. Strings and comments are skipped.'),
       toggle('formatOnSave', 'Format on save', 'Runs Prettier for JS/TS/CSS/HTML/JSON/Markdown/YAML.'),
 
       h('h4', 'Typing'),

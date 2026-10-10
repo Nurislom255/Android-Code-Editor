@@ -15,7 +15,7 @@
 import { EditorView } from '@codemirror/view';
 import { EditorState, Transaction, Annotation, Text } from '@codemirror/state';
 import { comp, buildExtensions, wrapExtension, readOnlyExtension, indentExtension, lineNumbersExtension,
-  closeBracketsExtension, lintExtension, stickyExtension, fastScrollExtension, langDataExtension } from '../editor/setup.js';
+  closeBracketsExtension, lintExtension, stickyExtension, fastScrollExtension, wordHighlightExtension, langDataExtension } from '../editor/setup.js';
 import { setEditorEnv } from '../editor/context.js';
 import { languageForName, loadLanguage, languageById } from '../editor/languages.js';
 import { setGitBase } from '../editor/gitGutter.js';
@@ -941,6 +941,7 @@ export class Workspace {
     if (prev.autoCloseBrackets !== next.autoCloseBrackets) this.reconfigure(() => comp.closeBrackets.reconfigure(closeBracketsExtension(next.autoCloseBrackets)));
     if (prev.stickyScroll !== next.stickyScroll) this.reconfigure(() => comp.sticky.reconfigure(stickyExtension(next.stickyScroll)));
     if (prev.fastScroll !== next.fastScroll) this.reconfigure(() => comp.fastScroll.reconfigure(fastScrollExtension(next.fastScroll)));
+    if (prev.wordHighlight !== next.wordHighlight) this.reconfigure(() => comp.wordHighlight.reconfigure(wordHighlightExtension(next.wordHighlight)));
     if (prev.tabWidth !== next.tabWidth || prev.insertSpaces !== next.insertSpaces) {
       this.reconfigure((doc) => {
         if (doc.indentSource !== 'settings') return null;

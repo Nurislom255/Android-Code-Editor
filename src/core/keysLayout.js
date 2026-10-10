@@ -4,24 +4,29 @@
 // (toolbar customization is *data*, not a plugin). Tokens are separated by
 // spaces; a token lists a key and its variants separated by "^":
 //
-//   "("          tap → (
-//   "(^)"        tap → (   swipe up or hold → )
-//   "(^)^[]^{}"  tap → (   swipe up → )   swipe down → []   hold → pick any
+//   "("             tap → (
+//   "(^)"           tap → (   swipe up or hold → )
+//   "(^)^[]^{}"     tap → (   swipe up → )   down → []   left → {}   hold → pick any
+//   "+^-^*^/^**^%"  …and the fourth variant (**) is swipe right
 //
 // A "^" only separates when it has text on both sides, so "^" alone is the
 // caret key and "|^^" is "|" with "^" as its variant.
 
-// The operator key ("+^-^*^/…": tap +, swipe up -, swipe down *, hold for the
-// rest) is on the main row of every code layout: arithmetic needs it often.
+// The operator key is on the main row of every code layout: tap +, swipe up -,
+// down *, left /, right ** (power) — hold for the rest. C-like languages have
+// no power operator (C++: pow(a, b) from <cmath>; "^" is XOR there and in JS
+// and Python too), so their right swipe is % (remainder).
 const OPS = '+^-^*^/^%^=^<^>^!^&^|^^';
+const OPS_POW = '+^-^*^/^**^%^=^<^>^!^&^|^^';
+const OPS_PY = '+^-^*^/^**^%^//^=^<^>^!^&^|^^';
 
 export const DEFAULT_LAYOUTS = Object.freeze({
   // The first three are on the phone's main row, the first six on a tablet;
   // the rest fill the context row when it has room, and all are in "More".
-  js: `(^)^[]^{} ;^:^, ${OPS} {^}^\${} =^=>^=== "^'^\` .^,^?. [^] <^> !^? &^|^&& _^# \\^% @^~`,
+  js: `(^)^[]^{} ;^:^, ${OPS_POW} {^}^\${} =^=>^=== "^'^\` .^,^?. [^] <^> !^? &^|^&& _^# \\^% @^~`,
   html: '<^>^</ /^\\ =^" "^\'^` {^} (^) !^- #^. :^; &^@ [^] _^* +^%',
   css: '{^} :^; .^# (^) -^_ %^! "^\' ,^> *^+ [^] @^& /^= ~^$',
-  python: `:^= (^)^[]^{} ${OPS} "^'^""" [^] {^} _^# .^, =^== <^> !^? @^% \\^|`,
+  python: `:^= (^)^[]^{} ${OPS_PY} "^'^""" [^] {^} _^# .^, =^== <^> !^? @^% \\^|`,
   clike: `;^:^:: (^)^[]^{}^<> ${OPS} {^} [^] =^== "^'^\\n <^> &^* .^, ->^:: !^? |^^ #^_`,
   markdown: '#^* -^+ `^~^``` [^] (^) *^_ >^| !^? :^; "^\' \\^/ <^> =^&',
   json: '{^} [^] "^: ,^. -^+ true^false null^0 \\^/',
@@ -34,6 +39,10 @@ export const DEFAULT_LAYOUTS = Object.freeze({
  * (one the owner edited is kept).
  */
 export const LEGACY_DEFAULT_LAYOUTS = Object.freeze([{
+  // v2.3.0
+  js: `(^)^[]^{} ;^:^, ${OPS} {^}^\${} =^=>^=== "^'^\` .^,^?. [^] <^> !^? &^|^&& _^# \\^% @^~`,
+  python: `:^= (^)^[]^{} ${OPS} "^'^""" [^] {^} _^# .^, =^== <^> !^? @^% \\^|`,
+}, {
   // v2.2.0
   js: '(^)^[]^{} {^}^${} ;^:^, =^=>^=== "^\'^` .^,^?. [^] <^> !^? &^|^&& +^-^++ *^/^% _^# \\^% @^~',
   python: ':^= (^)^[]^{} "^\'^""" [^] {^} _^# .^, =^== *^/ +^- <^> !^? @^% \\^|',
@@ -100,12 +109,16 @@ export const AUTO_PAIRS = Object.freeze({ '(': ')', '[': ']', '{': '}', '"': '"'
  * What a finger dragging on a key is doing.
  *   dx    horizontal movement, px (right is positive)
  *   dyUp  vertical movement, px (UP is positive)
+ *   sideways  the key has left / right variants too
  * → 'none' (not decided yet / a small wobble), 'up' or 'down' (a swipe: a
  *   leaning or curved one counts, up to ~63° from vertical), or 'pan'
- *   (mostly sideways).
+ *   (mostly sideways). With `sideways`, 'left' / 'right' instead of 'pan';
+ *   up / down still get a little more room (~51° from vertical): thumbs
+ *   swipe up in an arc.
  */
-export function classifyKeyDrag(dx, dyUp) {
+export function classifyKeyDrag(dx, dyUp, sideways = false) {
   if (Math.hypot(dx, dyUp) < 8) return 'none';
+  if (sideways) return Math.abs(dyUp) >= Math.abs(dx) * 0.8 ? (dyUp > 0 ? 'up' : 'down') : (dx > 0 ? 'right' : 'left');
   if (Math.abs(dyUp) >= Math.abs(dx) * 0.5) return dyUp > 0 ? 'up' : 'down';
   if (Math.abs(dx) > Math.abs(dyUp)) return 'pan';
   return 'none';
@@ -201,7 +214,7 @@ export const MORE_GROUPS = Object.freeze([
   ['Navigation', ['@lineStart', '@lineEnd', '@docStart', '@docEnd', '@pageUp', '@pageDown', '@matchingBracket', '@goToLine']],
   ['Editing', ['@tab', '@outdent', '@indent', '@backspace', '@deleteForward', '@undo', '@redo', '@format', '@find', '@save', '@hideKeyboard']],
   ['Brackets & quotes', ['(', ')', '[', ']', '{', '}', '<', '>', '"', "'", '`']],
-  ['Operators', ['=', '==', '!=', '+', '-', '*', '/', '%', '&', '|', '&&', '||', '!', '?', ':', ';', ',', '.', '->', '::', '=>', '#', '@', '$', '\\', '^', '~', '_']],
+  ['Operators', ['=', '==', '!=', '+', '-', '*', '/', '%', '**', '&', '|', '&&', '||', '!', '?', ':', ';', ',', '.', '->', '::', '=>', '#', '@', '$', '\\', '^', '~', '_']],
 ]);
 
 /** With Ctrl armed, the context row offers these (key letter, command). */
