@@ -8,6 +8,12 @@ import { GestureRecognizer, presetOptions, describeDecision, gestureKey } from '
 
 const LAYOUT_NAMES = { js: 'JavaScript / TypeScript', html: 'HTML / XML', css: 'CSS', python: 'Python', clike: 'C / C++ / Java / Kotlin', markdown: 'Markdown', json: 'JSON', plain: 'Other files' };
 
+/** "10 Oct 2026, 08:41" in the reader's own time zone. */
+function formatBuilt(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString([], { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export class SettingsPanel {
   /**
    * @param {HTMLElement} el
@@ -118,13 +124,34 @@ export class SettingsPanel {
       this.snippetsEditor(s, set),
 
       h('h4', 'About'),
-      h('div.setting', h('div.s-text', h('div.s-label', `CodeEditor ${this.deps.extras.version}`), this.storageLine = h('div.s-desc', 'Storage: …'))),
+      h('div.setting', h('div.s-text',
+        h('div.s-label.app-version', `CodeEditor ${this.deps.extras.version}`),
+        h('div.s-desc', this.deps.extras.built ? `Built ${formatBuilt(this.deps.extras.built)}` : 'Development build'),
+        this.storageLine = h('div.s-desc', 'Storage: …'))),
+      this.deps.extras.checkUpdate && h('div.setting', h('div.s-text',
+        h('button.btn.btn-small', { type: 'button', onclick: () => this.checkUpdate() }, 'Check for updates'),
+        this.updateLine = h('div.s-desc.update-line', { 'aria-live': 'polite' }))),
       h('div.setting', h('button.btn.btn-small', { type: 'button', onclick: () => this.deps.extras.showShortcuts() }, 'Keyboard shortcuts'),
         h('button.btn.btn-small.btn-danger', { type: 'button', onclick: async () => {
           if (await confirm('Reset all settings?', 'Your files are not affected.', 'Reset', 'danger')) { this.deps.set({ ...DEFAULTS, __reset: true }); this.render(); }
         } }, 'Reset settings')),
     );
     this.deps.extras.storageInfo().then((t) => { if (this.storageLine) this.storageLine.textContent = t; });
+  }
+
+  async checkUpdate() {
+    const line = this.updateLine;
+    line.textContent = 'Checking…';
+    const r = await this.deps.extras.checkUpdate();
+    if (!line.isConnected) return;
+    if (r.error) line.textContent = 'Could not reach the website (offline?).';
+    else if (r.upToDate) line.textContent = 'This is the latest version.';
+    else {
+      const v = `Version ${r.latest.version} (built ${formatBuilt(r.latest.built)})`;
+      line.textContent = r.ready ? `${v} is ready: tap Reload in the message below.`
+        : r.hasWorker ? `${v} is on the website. Downloading it; a Reload button appears when it's ready.`
+          : `${v} is on the website. Reload the page to get it.`;
+    }
   }
 
   /** A touch area that reports how each swipe was read (and why not). */

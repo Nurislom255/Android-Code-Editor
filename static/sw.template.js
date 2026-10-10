@@ -28,6 +28,8 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // Always from the network: it's how the app learns that a newer build exists.
+  if (url.pathname.endsWith('/version.json')) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const hit = await cache.match(req, { ignoreSearch: true });

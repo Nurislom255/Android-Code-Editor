@@ -13,6 +13,8 @@ correctness — is built: see *Typing* below.
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
 (`docs/` is the published build) and fully offline after the first visit.
+Settings → About shows the version and when it was built, and checks the
+website for a newer one; a downloaded update offers a **Reload** button.
 
 ---
 
