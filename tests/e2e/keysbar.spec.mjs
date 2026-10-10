@@ -95,10 +95,11 @@ test('symbol variants: swipe up, swipe down, or hold and pick', async ({ page })
   await setup(page, '');
   await swipeKey(page, '(', -30);
   expect(await editorText(page)).toBe(')');
-  await swipeKey(page, '(', 30); // the second variant
+  await swipeKey(page, '(', 30); // the second variant (a pair: the cursor goes inside)
   expect(await editorText(page)).toBe(')[]');
   await holdKey(page, '(', '{}', { check: () => expect(page.locator('.key-chooser .key-choice')).toHaveText(['(', ')', '[]', '{}']) });
-  expect(await editorText(page)).toBe(')[]{}');
+  expect(await editorText(page)).toBe(')[{}]');
+  expect(await head(page)).toBe(')[{'.length);
   await expect(page.locator('.key-chooser')).toHaveCount(0);
 });
 
@@ -134,11 +135,55 @@ test('context row: C++ after cout offers << and endl', async ({ page }) => {
   expect(slot).toBeGreaterThanOrEqual(0);
 });
 
-test('context row: in an HTML tag, class="" puts the cursor between the quotes', async ({ page }) => {
+test('context row: in an HTML tag, class="" puts the cursor between the quotes; typing " steps out', async ({ page }) => {
   await scratch(page, 'a.html', '<div |></div>');
   await key(page, 'class=""').tap();
   expect(await editorText(page)).toBe('<div class=""></div>');
   expect(await head(page)).toBe('<div class="'.length);
+  await page.keyboard.type('box"');
+  expect(await editorText(page)).toBe('<div class="box"></div>');
+  expect(await head(page)).toBe('<div class="box"'.length);
+});
+
+test('pairs from the keys bar: the cursor goes inside; typing the closer steps over it', async ({ page }) => {
+  await setup(page, 'let a = ');
+  // ( swiped left: {}, swiped down: []
+  await swipeKey(page, '(', 0, -30);
+  expect(await editorText(page)).toBe('let a = {}');
+  expect(await head(page)).toBe('let a = {'.length);
+  await page.keyboard.type('x}');
+  expect(await editorText(page)).toBe('let a = {x}');
+  expect(await head(page)).toBe('let a = {x}'.length);
+  await swipeKey(page, '(', 30);
+  expect(await editorText(page)).toBe('let a = {x}[]');
+  expect(await head(page)).toBe('let a = {x}['.length);
+  // a context key ending in a pair: if (|), then typing ")" doesn't double it
+  await setText(page, '', 0);
+  await page.waitForTimeout(300);
+  await key(page, 'if ()').tap();
+  await page.keyboard.type('ok)');
+  expect(await editorText(page)).toBe('if (ok)');
+});
+
+test('pairs: nested printf("|") steps over both closers; with auto-close off pairs stay whole', async ({ page }) => {
+  await scratch(page, 'a.c', 'int main() {\n    |\n}');
+  await key(page, 'printf("")').tap();
+  await page.keyboard.type('hi")');
+  expect(await editorText(page)).toBe('int main() {\n    printf("hi");\n}'); // (; the automatic semicolon)
+  expect(await head(page)).toBe('int main() {\n    printf("hi")'.length);
+  // with auto-close off the pair is still whole
+  await page.evaluate(() => window.__app.updateSettings({ autoCloseBrackets: false }));
+  await setText(page, 'int b = ', 8);
+  await swipeKey(page, '(', 0, -30);
+  expect(await editorText(page)).toMatch(/^int b = \{\};?$/); // (maybe the automatic ;)
+  expect(await head(page)).toBe('int b = {'.length);
+});
+
+test('Python: """ from the keys bar makes a docstring with the cursor inside', async ({ page }) => {
+  await scratch(page, 'a.py', 'def f():\n    |');
+  await page.evaluate(() => window.__app.keysBar.typeSymbol('"""'));
+  expect(await editorText(page)).toBe('def f():\n    """"""');
+  expect(await head(page)).toBe('def f():\n    """'.length);
 });
 
 test('context keys keep their slot while they are still offered', async ({ page }) => {

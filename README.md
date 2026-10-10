@@ -87,7 +87,7 @@ swipe up (or hold).
 |---|---|---|---|
 | **Tab** | Tab / indent / accept suggestion | up: Shift+Tab (outdent) | Shift+Tab |
 | **◉** joystick | Select the word | Drag: the cursor follows like a mouse — move slowly for single characters, faster to go far. It sticks to one direction (a wobbly sideways drag stays on the line). It stops at the end (and start) of a line — the knob turns amber; keep pushing for a moment to go on to the next line. Rest the finger far out and it keeps moving. Quick flick ← / →: line start / end | Then drag: select |
-| **Symbols** (`;` `(` …) | The symbol | The variants shown small around it (`(`: up `)`, down `[]`, left `{}`) | All variants pop up: slide to one, release |
+| **Symbols** (`;` `(` …) | The symbol | The variants shown small around it (`(`: up `)`, down `[]`, left `{}`); a pair puts the cursor inside, and typing its closer later steps over it | All variants pop up: slide to one, release |
 | **+** operators (code files) | `+` | up `-`, down `*`, left `/`, right `**` power (JS, Python) or `%` (C, C++, Java…: no power operator there — use `pow()`, offered after `=`) | `% = < > ! & \| ^` (`^` is XOR, not power), Python also `//` |
 | **line** (↵) | New line below | Move the line up / down (hold to repeat) | Line actions pop up: `⏎;` complete statement, `↥` new line above, Dup, Join, `✕Ln` delete, `//` comment |
 | **cursor** (multi-cursor) | Add a cursor below | up: above | `⫶` a cursor on each selected line, `Sel+` next match, `Sel*` all matches |

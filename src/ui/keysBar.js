@@ -36,6 +36,7 @@ import { contextKeys, parseTextKey, keyLabel } from '../core/contextKeys.js';
 import { situationAt } from '../editor/keysContext.js';
 import { escapable, atLineEdge } from '../editor/editActions.js';
 import { EditorSelection } from '@codemirror/state';
+import { insertBracket } from '@codemirror/autocomplete';
 
 const SWIPE_PX = 18;         // a swipe on a key
 const SWIPES = { up: 0, down: 1, left: 2, right: 3 }; // → which variant (and corner hint)
@@ -53,7 +54,7 @@ const JOY_FLICK = 56;        // a quick flick this long: line start / end
 const JOY_WALL = 450;        // ms of pushing past a line's end before the cursor wraps to the next line
 const CTX_SLOTS = { phone: 4, landscape: 4, tablet: 6 };
 const SYM_SLOTS = { phone: 3, landscape: 3, tablet: 6 };
-const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
+const PAIRS = { '(': ')', '[': ']', '{': '}', '<': '>', '"': '"', "'": "'", '`': '`' };
 
 export class KeysBar {
   /**
@@ -426,30 +427,64 @@ export class KeysBar {
     if (mods.ctrl && text === '/') { this.deps.run('toggleComment'); return; }
     if (mods.ctrl && text === '[') { this.deps.run('outdent'); return; }
     if (mods.ctrl && text === ']') { this.deps.run('indent'); return; }
+    const view = this.deps.getView();
+    const triple = /^(["'`])\1\1$/.test(text);
+    // A pair variant ([] {} ${} <>): both, with the cursor in between.
+    const n = text.length;
+    if (n >= 2 && !triple && PAIRS[text[n - 2]] === text[n - 1]) { this.typeWithCursor(text, n - 1); return; }
+    // Triple quotes: typed one by one, like the keyboard, so Python's
+    // auto-close makes """|""" (or steps over the closing ones).
+    if (view && triple && closeBracketsOf(view.state).includes(text)) {
+      for (const ch of text) this.deps.type(ch);
+      return;
+    }
     this.deps.type(text);
   }
 
   /** A context key like `class="|"`: types it, with the cursor where "|" was. */
   insertTextKey(token) {
     this.consumeMods();
+    const { text, cursor } = parseTextKey(token);
+    this.typeWithCursor(text, cursor);
+  }
+
+  /**
+   * Types `text` leaving the cursor at offset `cursor`. The brackets and
+   * quotes around the cursor (`if (|)`, `class="|"`, `printf("|")`, `[]`,
+   * `${}`) are typed like the keyboard types them: each opener goes through
+   * auto-close, which adds its closer, so typing that closer later steps over
+   * it instead of doubling it ("if (a))"). Where auto-close doesn't (it is
+   * off, `<`, before a letter), the closer is added here. Text after the
+   * closers (`;` in `println(|);`) follows them.
+   */
+  typeWithCursor(text, cursor) {
     const view = this.deps.getView();
     if (!view || view.state.readOnly) return;
-    const { text, cursor } = parseTextKey(token);
-    // Brackets and quotes go through the normal typing path (auto-close,
-    // wrapping a selection); the closer is added if auto-close is off.
-    if (text.length === 2 && cursor === 1 && PAIRS[text[0]] === text[1]) {
-      this.deps.type(text[0]);
-      const st = view.state;
-      const head = st.selection.main.head;
-      if (st.selection.main.empty && st.sliceDoc(head, head + 1) !== text[1]) view.dispatch({ changes: { from: head, insert: text[1] } });
+    if (cursor >= text.length) { this.deps.type(text); return; }
+    let i = cursor, j = cursor; // text[i, cursor) openers, text[cursor, j) their closers
+    while (i > 0 && j < text.length && PAIRS[text[i - 1]] === text[j]) { i--; j++; }
+    if (i === cursor) {
+      view.dispatch(view.state.changeByRange((r) => ({
+        changes: { from: r.from, to: r.to, insert: text },
+        range: EditorSelection.cursor(r.from + cursor),
+      })), { scrollIntoView: true, userEvent: 'input.type' });
       return;
     }
-    if (cursor === text.length) { this.deps.type(text); return; }
-    const { state } = view;
-    view.dispatch(state.changeByRange((r) => ({
-      changes: { from: r.from, to: r.to, insert: text },
-      range: EditorSelection.cursor(r.from + cursor),
-    })), { scrollIntoView: true, userEvent: 'input.type' });
+    if (i > 0) this.deps.type(text.slice(0, i));
+    for (let k = i; k < cursor; k++) {
+      const open = text[k];
+      const autoCloses = this.deps.getSettings().autoCloseBrackets && insertBracket(view.state, open) != null;
+      this.deps.type(open);
+      if (!autoCloses) this.insertAfterCursors(PAIRS[open], 0);
+    }
+    if (j < text.length) this.insertAfterCursors(text.slice(j), j - cursor);
+  }
+
+  /** Inserts `text` `skip` characters after every cursor, which stay where they are. */
+  insertAfterCursors(text, skip) {
+    const view = this.deps.getView();
+    view.dispatch(view.state.changeByRange((r) => ({ changes: { from: r.head + skip, insert: text }, range: EditorSelection.cursor(r.head) })),
+      { scrollIntoView: true, userEvent: 'input.type' });
   }
 
   // ---- modifiers --------------------------------------------------------------
@@ -845,4 +880,10 @@ function keyEssence(id) {
   const { text, cursor } = parseTextKey(id.slice(2));
   if (text.length === 2 && cursor === 1 && PAIRS[text[0]] === text[1]) return text[0];
   return text.trim() || text;
+}
+
+/** The brackets auto-close handles at the cursor: the language's own list (Python adds """ and '''). */
+function closeBracketsOf(state) {
+  const conf = state.languageDataAt('closeBrackets', state.selection.main.head)[0];
+  return (conf && conf.brackets) || ['(', '[', '{', "'", '"'];
 }

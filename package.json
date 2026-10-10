@@ -1,6 +1,6 @@
 {
   "name": "codeeditor-web",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Offline-first code editor for Android (web app + Capacitor), v2",
   "scripts": {
     "build": "node scripts/build.mjs",

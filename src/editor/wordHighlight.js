@@ -78,16 +78,26 @@ export const wordHighlight = ViewPlugin.fromClass(class {
   }
 
   update(u) {
-    if (u.docChanged) {
+    // Typing, or a word still being composed by the keyboard (underlined on
+    // Android): no marks — wrapping the word being composed in new elements
+    // can make the keyboard lose its place.
+    if (u.docChanged || u.view.composing) {
       this.decorations = Decoration.none;
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.view.dispatch({ effects: refresh.of(null) }), AFTER_TYPING);
+      this.later();
       return;
     }
     const refreshed = u.transactions.some((tr) => tr.effects.some((e) => e.is(refresh)));
     if (refreshed || u.selectionSet || u.viewportChanged || syntaxTree(u.startState) !== syntaxTree(u.state)) {
       this.decorations = decorations(u.view);
     }
+  }
+
+  later() {
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      if (this.view.composing) this.later();
+      else this.view.dispatch({ effects: refresh.of(null) });
+    }, AFTER_TYPING);
   }
 
   destroy() { clearTimeout(this.timer); }
