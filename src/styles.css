@@ -1075,6 +1075,7 @@ html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto t
 
 #toasts { position: fixed; left: 50%; bottom: calc(var(--statusbar-h) + 16px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 90; width: min(480px, calc(100vw - 24px)); pointer-events: none; }
 .toast { pointer-events: auto; padding: 10px 14px; border-radius: 10px; background: var(--bg-panel-alt); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); font-size: 13.5px; line-height: 1.4; animation: toast-in 0.18s ease; }
+.toast-action { margin-left: 12px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 13px; }
 .toast-error { border-color: var(--error); }
 .toast-warn { border-color: var(--warn); }
 .toast-success { border-color: var(--success); }

@@ -45,6 +45,7 @@ import { BOILERPLATE_FILES, CONSOLE_STARTER } from '../core/boilerplate.js';
 
 const SETTINGS_KEY = 'codeeditor:settings';
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
+const BUILT = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : '';
 
 function loadSettings() {
   try { return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch { return normalizeSettings({}); }
@@ -420,6 +421,9 @@ export class App {
       set: (patch) => this.updateSettings(patch),
       extras: {
         version: VERSION,
+        built: BUILT,
+        // The Android app updates with a new APK, not from the website.
+        checkUpdate: window.Capacitor ? null : () => this.checkForUpdate(),
         showShortcuts: () => this.showShortcuts(),
         showGestures: () => this.showGestureGuide(),
         storageInfo: () => this.storageInfo(),
@@ -1346,12 +1350,14 @@ export class App {
     window.addEventListener('pagehide', () => { this.recovery.flushAll(); this.ws.saveSession(); });
     window.addEventListener('beforeunload', (e) => {
       this.recovery.flushAll();
-      if (this.ws.dirtyDocs().length && !window.Capacitor) { e.preventDefault(); e.returnValue = ''; }
+      // (Reloading into an update keeps unsaved work: it is restored on start.)
+      if (this.ws.dirtyDocs().length && !window.Capacitor && !this._updating) { e.preventDefault(); e.returnValue = ''; }
     });
   }
 
   /** Back from another app: files may have changed (git, Termux, a file manager). */
   onResume() {
+    if (Date.now() - (this._updateCheckedAt || 0) > 60000) this.checkForUpdate();
     if (!this.project) return;
     this.ws.checkExternalChanges();
     this.fileCache = null;
@@ -1362,16 +1368,63 @@ export class App {
   registerServiceWorker() {
     if (!('serviceWorker' in navigator) || window.Capacitor || !/^(https:|http:\/\/(localhost|127\.0\.0\.1))/.test(location.href) || window.__NO_SW__) return;
     navigator.serviceWorker.register('sw.js').then((reg) => {
+      this.swReg = reg;
+      if (reg.waiting && navigator.serviceWorker.controller) this.updateReady(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         if (!nw) return;
         nw.addEventListener('statechange', () => {
-          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-            toast('A new version is ready — it will load the next time you open the app.', 'info', 8000);
-          }
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) this.updateReady(nw);
         });
       });
     }).catch(() => { /* offline support is optional */ });
+    // The new version took over (after "Reload"): load its files.
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (this._updating) location.reload(); });
+  }
+
+  /**
+   * A newer build is downloaded and waiting. Without this it would only start
+   * once every tab of the app is closed (a reload isn't enough), which is
+   * why a fresh merge seemed to take forever to show up.
+   */
+  async updateReady(worker) {
+    this.updateWaiting = worker;
+    const latest = await this.latestVersion();
+    const name = latest && latest.version ? `Version ${latest.version}` : 'A new version';
+    toast(`${name} is ready.`, 'info', 20000, { label: 'Reload', run: () => this.applyUpdate() });
+  }
+
+  applyUpdate() {
+    const worker = this.updateWaiting || (this.swReg && this.swReg.waiting);
+    this.recovery.flushAll();
+    this.ws.saveSession();
+    this._updating = true;
+    if (worker) worker.postMessage('skip-waiting'); // → controllerchange → reload
+    else location.reload();
+  }
+
+  /** What the website serves right now: version.json is never cached. */
+  async latestVersion() {
+    try {
+      const r = await fetch(`version.json?t=${Date.now()}`, { cache: 'no-store' });
+      return r.ok ? await r.json() : null;
+    } catch { return null; }
+  }
+
+  /**
+   * Compares this build with the server's. A different build makes the
+   * service worker fetch it; updateReady() then offers the Reload button.
+   * @returns {Promise<{error?:true, upToDate?:boolean, ready?:boolean, latest?:{version:string, built:string}}>}
+   */
+  async checkForUpdate() {
+    this._updateCheckedAt = Date.now();
+    const latest = await this.latestVersion();
+    if (!latest) return { error: true };
+    if (latest.built === BUILT || !BUILT) return { upToDate: true, latest };
+    const reg = this.swReg;
+    if (reg && reg.waiting) { this.updateReady(reg.waiting); return { upToDate: false, ready: true, latest }; }
+    if (reg) reg.update().catch(() => {});
+    return { upToDate: false, ready: false, hasWorker: !!reg, latest };
   }
 }
 

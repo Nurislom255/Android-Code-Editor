@@ -52,6 +52,10 @@ pushed to the branch and this table updated.
 4. `npm run check` passes, `docs/` is rebuilt, README updated, then push.
 5. Accessibility: every new control has an accessible name (TalkBack reads it)
    and a long-press tooltip.
+6. **Every PR bumps the version** (`npm version <x.y.z> --no-git-tag-version`;
+   minor for features, patch for fixes only) and its description says which
+   version it is. The owner checks Settings → About ("CodeEditor 2.1.0, built
+   …") to know whether the merged change has reached the phone.
 
 Code map (from v2): pure logic in `src/core/`, editor behaviour in
 `src/editor/`, app wiring in `src/app/`, UI in `src/ui/`, runners in `src/run/`
@@ -166,6 +170,7 @@ gesture test pad is the only on-device diagnostic for now):
 | Buttons stay highlighted after a long-press | Browsers keep `:hover` on the last tapped element until you tap elsewhere | Hover highlights only while a mouse or pen is in use (a tablet with a mouse still gets them) |
 | Drag tabs, files and folders to move them | Not built (planned for Phase 4) | Shipped early: long-press then drag (mouse: drag). Tabs reorder and move to the other pane; files and folders move into a folder or to the project root (empty space below the list); lists auto-scroll at the edges; a folder never goes into itself |
 | Console: `SyntaxError: unterminated regular expression literal (about:srcdoc:64)` between two normal runs | The preview refreshed 650 ms after typing stopped, so a half-typed `//` (or `</`) ran and failed; the location was a line of the generated preview page | Auto-refresh waits while the file being typed has a syntax error ("Paused: syntax error at app.js:3" in the preview bar; ⟳ still forces it); errors name the file and line (`app.js:3`, tappable), mapped from the generated page; Firefox errors keep their message |
+| Which version am I using? A merge seemed to take a long time to arrive | The version was always "2.0.0". The offline cache downloaded a new build in the background but only started it after every tab of the app was closed (a reload is not enough) | Version per PR (2.1.0 onwards) with its build time in Settings → About; "Check for updates" there; when a new build is downloaded: "Version x.y.z is ready" with a **Reload** button (unsaved work is restored after it) |
 
 ---
 

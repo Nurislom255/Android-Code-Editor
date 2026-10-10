@@ -21,6 +21,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, 'docs');
 const dev = process.argv.includes('--dev');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+// Shown in Settings → About next to the version, and written to version.json
+// so a running app can tell that a newer build is on the server.
+const built = new Date().toISOString();
 
 const common = {
   bundle: true,
@@ -29,7 +32,7 @@ const common = {
   target: ['es2020', 'chrome80'],
   legalComments: 'none',
   logLevel: 'warning',
-  define: { __APP_VERSION__: JSON.stringify(pkg.version), 'process.env.NODE_ENV': '"production"', global: 'globalThis' },
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __BUILD_TIME__: JSON.stringify(built), 'process.env.NODE_ENV': '"production"', global: 'globalThis' },
 };
 
 // Clean previous output, but keep files that aren't build products (e.g. CNAME).
@@ -62,6 +65,7 @@ await cp(path.join(root, 'src/index.html'), path.join(out, 'index.html'));
 await cp(path.join(root, 'src/styles.css'), path.join(out, 'styles.css'));
 await cp(path.join(root, 'static'), out, { recursive: true, filter: (src) => !src.endsWith('sw.template.js') });
 await writeFile(path.join(out, '.nojekyll'), '');
+await writeFile(path.join(out, 'version.json'), `${JSON.stringify({ version: pkg.version, built })}\n`);
 
 // ---- service worker: precache every built file ----------------------------
 async function walk(dir, base = '') {
@@ -74,7 +78,7 @@ async function walk(dir, base = '') {
   }
   return files;
 }
-const assets = (await walk(out)).filter((f) => !/(^|\/)(sw\.js|CNAME|\.nojekyll)$|\.map$/.test(f)).sort();
+const assets = (await walk(out)).filter((f) => !/(^|\/)(sw\.js|version\.json|CNAME|\.nojekyll)$|\.map$/.test(f)).sort();
 const hash = createHash('sha256');
 for (const f of assets) hash.update(f).update(await readFile(path.join(out, f)));
 const version = `${pkg.version}-${hash.digest('hex').slice(0, 10)}`;
@@ -86,4 +90,4 @@ await writeFile(path.join(out, 'sw.js'), swTemplate
 let total = 0;
 for (const f of assets) total += (await stat(path.join(out, f))).size;
 const mainSize = (await stat(path.join(out, 'main.js'))).size;
-console.log(`Built ${assets.length} files into docs/ (${(total / 1024).toFixed(0)} KB total, main.js ${(mainSize / 1024).toFixed(0)} KB) — version ${version}`);
+console.log(`Built ${assets.length} files into docs/ (${(total / 1024).toFixed(0)} KB total, main.js ${(mainSize / 1024).toFixed(0)} KB) — version ${pkg.version}, built ${built}, cache ${version}`);

@@ -104,10 +104,12 @@ export function showModal(title, body, { className = '', actions = null, onClose
 
 // ---- toasts -----------------------------------------------------------------
 
-export function toast(message, kind = 'info', duration = 3500) {
+/** @param {{label:string, run:()=>void}} [action]  a button in the message */
+export function toast(message, kind = 'info', duration = 3500, action = null) {
   const host = document.getElementById('toasts');
   if (!host) return;
-  const el = h(`div.toast.toast-${kind}`, { role: kind === 'error' ? 'alert' : 'status' }, h('span.toast-text', message));
+  const el = h(`div.toast.toast-${kind}`, { role: kind === 'error' ? 'alert' : 'status' }, h('span.toast-text', message),
+    action ? h('button.toast-action', { type: 'button', onclick: () => action.run() }, action.label) : null);
   el.addEventListener('click', () => el.remove());
   host.append(el);
   while (host.children.length > 4) host.firstChild.remove();
