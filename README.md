@@ -78,15 +78,17 @@ Tablet:  [Esc][Tab][ ◉ ][Ctrl][Shift][Alt]   [ctx ×6][s1 … s6][line][cursor
 ```
 
 A landscape phone gets one row: `Tab ◉ Mod ctx×4 s1 s2 + line cursor undo ⋯`.
-The small symbol in a key's top corner is what a **swipe up** (or a hold)
-does; the one in the bottom corner, a swipe down.
+On a symbol key, the small symbols around the middle are what a swipe
+toward them types: top = **swipe up**, bottom = swipe down, left and right =
+swipe sideways. On Tab, undo and the other action keys, the corner symbol is
+swipe up (or hold).
 
-| Key | Tap | Swipe up / down | Hold |
+| Key | Tap | Swipe | Hold |
 |---|---|---|---|
 | **Tab** | Tab / indent / accept suggestion | up: Shift+Tab (outdent) | Shift+Tab |
-| **◉** joystick | Select the word | Drag: the cursor follows like a mouse — move slowly for single characters, faster to go far. It sticks to one direction (a wobbly sideways drag stays on the line). Rest the finger far out and it keeps moving. Quick flick ← / →: line start / end | Then drag: select |
-| **Symbols** (`;` `(` …) | The symbol | The variants shown small in the corners | All variants pop up: slide to one, release |
-| **+** operators (code files) | `+` | up `-`, down `*` | `/ % = < > ! & \| ^` |
+| **◉** joystick | Select the word | Drag: the cursor follows like a mouse — move slowly for single characters, faster to go far. It sticks to one direction (a wobbly sideways drag stays on the line). It stops at the end (and start) of a line — the knob turns amber; keep pushing for a moment to go on to the next line. Rest the finger far out and it keeps moving. Quick flick ← / →: line start / end | Then drag: select |
+| **Symbols** (`;` `(` …) | The symbol | The variants shown small around it (`(`: up `)`, down `[]`, left `{}`) | All variants pop up: slide to one, release |
+| **+** operators (code files) | `+` | up `-`, down `*`, left `/`, right `**` power (JS, Python) or `%` (C, C++, Java…: no power operator there — use `pow()`, offered after `=`) | `% = < > ! & \| ^` (`^` is XOR, not power), Python also `//` |
 | **line** (↵) | New line below | Move the line up / down (hold to repeat) | Line actions pop up: `⏎;` complete statement, `↥` new line above, Dup, Join, `✕Ln` delete, `//` comment |
 | **cursor** (multi-cursor) | Add a cursor below | up: above | `⫶` a cursor on each selected line, `Sel+` next match, `Sel*` all matches |
 | **undo** | Undo | up: Redo | Redo (repeats) |
@@ -112,7 +114,7 @@ does; the one in the bottom corner, a swipe down.
 - Every key's tooltip shows its keyboard shortcut (e.g. new line above
   **Ctrl+Alt+Enter**), for when a keyboard is connected.
 - Symbol rows per language are editable in Settings (`(^)^[]^{}` = tap `(`,
-  swipe up `)`, swipe down `[]`).
+  swipe up `)`, down `[]`, left `{}`; a fourth variant is swipe right).
 
 ---
 
@@ -180,6 +182,8 @@ does; the one in the bottom corner, a swipe down.
 - Syntax-error underlines from the parse tree + a Problems list, bracket
   matching, folding, **expand/shrink selection** (word → expression → block).
 - Outline panel, breadcrumbs, sticky scroll, fast-scroll thumb.
+- The other uses of the name under the cursor are lightly highlighted (from
+  the syntax tree: not in strings or comments). Settings → Editor.
 - Quick open (fuzzy), command palette, go to line / symbol, back/forward history.
 - Project-wide search (plain/regex/case/whole word) respecting `.gitignore`.
 - Snippets with tab stops, built-in per language + your own (JSON in Settings).

@@ -202,6 +202,20 @@ export function arrow(view, dir, { shift = false, ctrl = false, alt = false } = 
 }
 
 /**
+ * Would arrow(view, dir) leave the line? True when the main cursor sits at
+ * the line's end (→) or start (←) and another line follows in that direction.
+ * (Without Shift, a selection just collapses: that never leaves the line.)
+ */
+export function atLineEdge(view, dir, shift = false) {
+  if (!view || (dir !== 'left' && dir !== 'right')) return false;
+  const { state } = view;
+  const r = state.selection.main;
+  if (!r.empty && !shift) return false;
+  const line = state.doc.lineAt(r.head);
+  return dir === 'right' ? r.head === line.to && line.number < state.doc.lines : r.head === line.from && line.number > 1;
+}
+
+/**
  * Inserts text exactly as if it was typed on a keyboard: it goes through the
  * same input handlers as real typing (EditorView.inputHandler), so the
  * keys bar gets auto-closed brackets and quotes, `>` closing an HTML tag,

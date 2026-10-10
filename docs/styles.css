@@ -38,6 +38,7 @@
   --ed-gutter-bg: #16181d;
   --ed-gutter-fg: #555c69;
   --ed-match: rgba(170, 200, 110, 0.14);
+  --ed-word: rgba(150, 170, 210, 0.17);
   --ed-search: rgba(114, 161, 255, 0.3);
   --ed-search-outline: #457dff;
   --ed-search-selected: rgba(227, 165, 72, 0.4);
@@ -112,6 +113,7 @@
   --ed-gutter-bg: #ffffff;
   --ed-gutter-fg: #a3a9b3;
   --ed-match: rgba(120, 170, 40, 0.18);
+  --ed-word: rgba(60, 90, 150, 0.13);
   --ed-search: rgba(64, 120, 220, 0.22);
   --ed-search-outline: #2d6fc0;
   --ed-search-selected: rgba(184, 110, 0, 0.3);
@@ -946,6 +948,7 @@ kbd {
 #keys-bar[data-profile="tablet"] .keys-region { flex: 12 1 0; }
 .keys-region::-webkit-scrollbar { display: none; }
 .keys-region > .key { flex: 0 0 auto; min-width: 52px; touch-action: pan-x; }
+.keys-region > .key.four-way { touch-action: none; } /* sideways is a swipe on it, not a scroll */
 .key {
   position: relative;
   height: 44px;
@@ -975,6 +978,11 @@ kbd {
 .key.ctx { background: transparent; }
 .key.ctx.action { background: var(--bg-panel-alt); }
 .key .alt.alt-down { top: auto; bottom: 2px; }
+/* symbol keys: each hint sits on the side you swipe toward */
+.key.sym .alt { left: 0; right: 0; text-align: center; }
+.key.sym .alt.alt-left, .key.sym .alt.alt-right { top: 50%; transform: translateY(-50%); }
+.key.sym .alt.alt-left { right: auto; left: 3px; }
+.key.sym .alt.alt-right { left: auto; right: 3px; }
 .key.pressed { background: var(--accent-dim); border-color: var(--accent); }
 .key.action { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .key.ctx-text { font-size: 13.5px; }
@@ -987,6 +995,7 @@ kbd {
 .key.joystick .joy-arrows { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-faint); opacity: 0.6; pointer-events: none; }
 .key.joystick .knob { position: relative; width: 14px; height: 14px; border-radius: 50%; background: var(--text-dim); box-shadow: 0 0 0 3px var(--bg-panel-alt); transition: transform 70ms; pointer-events: none; }
 .key.joystick.active .knob { background: var(--accent); transition: none; }
+.key.joystick.at-edge .knob { background: var(--warn); }
 .key.joystick.selecting { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .key-preview {
   position: fixed; z-index: 95; transform: translate(-50%, -100%); pointer-events: none;

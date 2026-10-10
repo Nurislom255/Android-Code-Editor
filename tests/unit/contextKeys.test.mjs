@@ -25,6 +25,7 @@ test('C++ keys follow the statement', () => {
   assert.ok(cpp('    std::cout << x ').includes('endl'));
   assert.deepEqual(cpp('    std::cin ')[0], '>> ');
   assert.ok(cpp('    int* p = ').includes('nullptr'));
+  assert.deepEqual(cpp('    double y = ').slice(0, 4), ['{|}', '"|"', 'pow(|)', 'nullptr'], 'C++ has no power operator: pow() is offered');
   assert.ok(cpp('    obj').includes('->'));
   assert.ok(contextKeys(sit({ group: 'clike', lang: 'java', before: '    String s = ' })).includes('new '));
   assert.ok(contextKeys(sit({ group: 'clike', lang: 'c', before: '' }))[0].startsWith('printf'));

@@ -63,6 +63,10 @@ test('keys layout tokens with swipe-up alternates', () => {
   assert.deepEqual(parseToken('(^)^[]^{}').alts, [')', '[]', '{}']);
   assert.deepEqual(parseToken('->^::').alts, ['::']);
   assert.deepEqual(parseToken('^^&').alts, ['&'], 'the caret key with a variant');
+  // the operator key: up, down, left, right = - * / and power (where there is one)
+  assert.deepEqual(parseLayout(DEFAULT_LAYOUTS.js)[2].alts.slice(0, 4), ['-', '*', '/', '**']);
+  assert.deepEqual(parseLayout(DEFAULT_LAYOUTS.python)[2].alts.slice(0, 4), ['-', '*', '/', '**']);
+  assert.deepEqual(parseLayout(DEFAULT_LAYOUTS.clike)[2].alts.slice(0, 4), ['-', '*', '/', '%'], 'C/C++ have no power operator');
   assert.equal(formatLayout(parseLayout('(^)^[] ; |^^')), '(^)^[] ; |^^');
   for (const layout of Object.values(DEFAULT_LAYOUTS)) assert.ok(parseLayout(layout).length >= 6);
   assert.equal(groupForLanguage('typescript'), 'js');
@@ -153,6 +157,12 @@ test('keys bar: which drags on a symbol key are a swipe up', async () => {
   assert.equal(classifyKeyDrag(-30, 0), 'pan');
   assert.equal(classifyKeyDrag(3, -20), 'down', 'downward: the second variant');
   assert.equal(classifyKeyDrag(-30, -10), 'pan');
+  // a key with left / right variants
+  assert.equal(classifyKeyDrag(-30, 4, true), 'left');
+  assert.equal(classifyKeyDrag(30, -10, true), 'right');
+  assert.equal(classifyKeyDrag(20, 22, true), 'up', 'up still gets a little more room');
+  assert.equal(classifyKeyDrag(-24, -20, true), 'down', '~50° from vertical');
+  assert.equal(classifyKeyDrag(4, 3, true), 'none');
 });
 
 test('preview: page lines of inlined scripts map back to their files', () => {
@@ -197,8 +207,11 @@ test('keys bar: context keys keep their slots; profiles; old default layouts upg
   assert.equal(keysProfile({ screenWidth: 915, screenHeight: 412, touch: true }), 'landscape');
   assert.equal(keysProfile({ screenWidth: 1138, screenHeight: 712, touch: true }), 'tablet');
   assert.equal(keysProfile({ screenWidth: 1280, screenHeight: 800, touch: false }), 'tablet');
-  const old = LEGACY_DEFAULT_LAYOUTS[0];
-  const s = normalizeSettings({ keysLayouts: { js: old.js, css: 'a^b c' } });
-  assert.equal(s.keysLayouts.js, DEFAULT_LAYOUTS.js, 'an unedited old default gets the new one');
+  for (const old of LEGACY_DEFAULT_LAYOUTS) {
+    for (const [lang, layout] of Object.entries(old)) {
+      assert.equal(normalizeSettings({ keysLayouts: { [lang]: layout } }).keysLayouts[lang], DEFAULT_LAYOUTS[lang], `an unedited old ${lang} default gets the new one`);
+    }
+  }
+  const s = normalizeSettings({ keysLayouts: { css: 'a^b c' } });
   assert.equal(s.keysLayouts.css, 'a^b c', 'an edited layout is kept');
 });

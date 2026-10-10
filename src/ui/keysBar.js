@@ -34,10 +34,11 @@ import {
 } from '../core/keysLayout.js';
 import { contextKeys, parseTextKey, keyLabel } from '../core/contextKeys.js';
 import { situationAt } from '../editor/keysContext.js';
-import { escapable } from '../editor/editActions.js';
+import { escapable, atLineEdge } from '../editor/editActions.js';
 import { EditorSelection } from '@codemirror/state';
 
-const SWIPE_PX = 18;         // a swipe up / down on a key
+const SWIPE_PX = 18;         // a swipe on a key
+const SWIPES = { up: 0, down: 1, left: 2, right: 3 }; // → which variant (and corner hint)
 const LONG_PRESS = 380;      // ms: hold
 const REPEAT_EVERY = 55;     // ms: held key repeating (Backspace)
 const SWIPE_REPEAT = 230;    // ms: held swipe repeating (move line)
@@ -49,6 +50,7 @@ const JOY_TURN = 36;         // px off that direction to change it
 const JOY_FAST = 72;         // resting further out than this keeps the cursor moving…
 const JOY_DWELL = 300;       // …after this many ms out there
 const JOY_FLICK = 56;        // a quick flick this long: line start / end
+const JOY_WALL = 450;        // ms of pushing past a line's end before the cursor wraps to the next line
 const CTX_SLOTS = { phone: 4, landscape: 4, tablet: 6 };
 const SYM_SLOTS = { phone: 3, landscape: 3, tablet: 6 };
 const PAIRS = { '(': ')', '[': ']', '{': '}', '"': '"', "'": "'", '`': '`' };
@@ -391,16 +393,19 @@ export class KeysBar {
     }));
   }
 
-  /** A symbol from the language's layout: tap, swipe up / down, hold for all variants. */
+  /** A symbol from the language's layout: tap, swipe up / down / left / right, hold for all variants. */
   symbolSpec(token) {
     const k = parseToken(token);
     const alts = k.alts;
+    const swipes = Object.keys(SWIPES).slice(0, alts.length).map((dir, i) => `${dir}: ${alts[i]}`).join(' · ');
     return {
-      label: k.label, cls: 'sym', corner: alts.slice(0, 2),
-      title: alts.length ? `${k.label} — swipe up: ${alts[0]}${alts[1] ? ` · down: ${alts[1]}` : ''} · hold: ${alts.length > 1 ? 'all' : alts[0]}` : k.label,
+      label: k.label, cls: alts.length > 2 ? 'sym four-way' : 'sym', corner: alts.slice(0, 4),
+      title: alts.length ? `${k.label} — swipe ${swipes} · hold: ${alts.length > 1 ? 'all' : alts[0]}` : k.label,
       tap: () => this.typeSymbol(this.mods.shift && alts[0] ? alts[0] : k.insert),
       up: alts[0] ? () => this.typeSymbol(alts[0]) : null,
       down: alts[1] ? () => this.typeSymbol(alts[1]) : null,
+      left: alts[2] ? () => this.typeSymbol(alts[2]) : null,
+      right: alts[3] ? () => this.typeSymbol(alts[3]) : null,
       alt: alts.length === 1 ? alts[0] : null,
       fan: alts.length > 1 ? [k.insert, ...alts].map((t, i) => ({ label: t, title: t, run: () => this.typeSymbol(t), preset: i === 1 })) : null,
     };
@@ -476,7 +481,7 @@ export class KeysBar {
     const K = (spec) => this.key(spec);
     const close = () => { this.sheetOpen = false; this.render(); };
     // (no swipes in the sheet: a vertical drag scrolls it)
-    const wrap = (spec) => ({ ...spec, up: null, down: null, repeat: false, tap: () => { close(); spec.tap(); } });
+    const wrap = (spec) => ({ ...spec, up: null, down: null, left: null, right: null, repeat: false, tap: () => { close(); spec.tap(); } });
     const groups = [[`Symbols (${this.group})`, this.symbols()], ...MORE_GROUPS];
     return h('div.keys-sheet', { role: 'dialog', 'aria-label': 'All keys' },
       h('div.keys-sheet-head', h('span', 'All keys'), K({ label: '✕', cls: 'action', title: 'Close', tap: close })),
@@ -504,9 +509,11 @@ export class KeysBar {
     btn.textContent = '';
     btn.append(spec.icon ? h('span.key-label.key-icon', { html: icon(spec.icon, 20) }) : h('span.key-label', spec.label));
     if (spec.sub) btn.append(h('span.key-sub', spec.sub));
-    const [c1, c2] = spec.corner || [];
+    const [c1, c2, c3, c4] = spec.corner || [];
     if (c1) btn.append(h('span.alt', c1));
     if (c2) btn.append(h('span.alt.alt-down', c2));
+    if (c3) btn.append(h('span.alt.alt-left', c3));
+    if (c4) btn.append(h('span.alt.alt-right', c4));
     btn.disabled = spec.cls === 'empty';
   }
 
@@ -544,18 +551,21 @@ export class KeysBar {
       if (!P) return;
       if (P.chooser) { P.chooser.track(e.clientX, e.clientY); return; }
       const dx = e.clientX - P.x0, dyUp = P.y0 - e.clientY;
-      if (P.mode === 'none') {
-        const m = classifyKeyDrag(dx, dyUp);
-        if ((m === 'up' && P.spec.up) || (m === 'down' && P.spec.down)) { P.mode = m; clearTimeout(P.hold); }
+      // A four-way key keeps reading the direction until the swipe is long
+      // enough: the whole stroke counts, not its first wobbly pixels.
+      const sideways = !!(P.spec.left || P.spec.right);
+      if (P.mode === 'none' || (sideways && !P.past && P.mode !== 'pan')) {
+        const m = classifyKeyDrag(dx, dyUp, sideways);
+        if (SWIPES[m] != null && P.spec[m]) { P.mode = m; clearTimeout(P.hold); }
         // any other drag: not a tap (in the sheet or the Ctrl row it scrolls)
         else if (m !== 'none' && !P.held) { P.mode = 'pan'; clearTimeout(P.hold); }
       }
-      if (P.mode === 'up' || P.mode === 'down') {
-        const past = (P.mode === 'up' ? dyUp : -dyUp) > SWIPE_PX;
+      if (SWIPES[P.mode] != null) {
+        const past = { up: dyUp, down: -dyUp, left: -dx, right: dx }[P.mode] > SWIPE_PX;
         if (past !== P.past) {
           P.past = past;
           btn.classList.toggle('swiped', past);
-          const alt = P.spec.cls && P.spec.cls.includes('sym') ? (P.mode === 'up' ? P.spec.corner[0] : P.spec.corner[1]) : null;
+          const alt = P.spec.cls && P.spec.cls.includes('sym') ? P.spec.corner[SWIPES[P.mode]] : null;
           if (past && alt) this.showPreview(btn, alt); else this.hidePreview();
           if (past) haptic(this.deps.getSettings(), 8);
         }
@@ -569,7 +579,7 @@ export class KeysBar {
       }
     });
     // The bar must not scroll or zoom under a finger that is swiping on a key.
-    btn.addEventListener('touchmove', (e) => { if (P && (P.mode === 'up' || P.mode === 'down' || P.held) && e.cancelable) e.preventDefault(); }, { passive: false });
+    btn.addEventListener('touchmove', (e) => { if (P && (SWIPES[P.mode] != null || P.held) && e.cancelable) e.preventDefault(); }, { passive: false });
     btn.addEventListener('pointercancel', () => clear());
     btn.addEventListener('pointerup', () => {
       if (!P) return;
@@ -578,7 +588,7 @@ export class KeysBar {
       clear();
       if (p.chooser) { if (choice) { choice.run(); this.feedback(btn); } return; }
       if (p.mode === 'pan' || p.repeating || p.fired) return;
-      if (p.mode === 'up' || p.mode === 'down') { if (p.past) { p.spec[p.mode](); this.feedback(btn); } return; }
+      if (SWIPES[p.mode] != null) { if (p.past) { p.spec[p.mode](); this.feedback(btn); } return; }
       if (p.held) { if (p.spec.alt && !p.spec.hold) { this.typeSymbol(p.spec.alt); this.feedback(btn); } return; }
       p.spec.tap();
       this.feedback(btn);
@@ -639,20 +649,38 @@ export class KeysBar {
    * slowly, about 18 px a character (precise); moved fast, about 5 px (far).
    * The drag sticks to one direction (left/right or up/down) so a slightly
    * diagonal finger doesn't jump lines; it changes direction only after a
-   * clear turn. Resting the finger far out (> JOY_FAST px) keeps the cursor
-   * moving. Tap: select the word. Hold, then drag: select. Quick flick
-   * left / right: line start / end. Shift selects, Alt moves lines (↑↓) or
-   * jumps by word part (←→).
+   * clear turn. The end (and start) of a line stops it: keep pushing a moment
+   * to go on to the next line. Resting the finger far out (> JOY_FAST px)
+   * keeps the cursor moving. Tap: select the word. Hold, then drag: select.
+   * Quick flick left / right: line start / end. Shift selects, Alt moves
+   * lines (↑↓) or jumps by word part (←→).
    */
   joystick() {
-    const btn = h('button.key.joystick', { type: 'button', title: 'Joystick: drag to move the cursor (slowly = precisely) · tap: select word · hold then drag: select · flick ←/→: line start/end', 'aria-label': 'Cursor joystick' },
+    const btn = h('button.key.joystick', { type: 'button', title: 'Joystick: drag to move the cursor (slowly = precisely; it stops at the line end, keep pushing to go on) · tap: select word · hold then drag: select · flick ←/→: line start/end', 'aria-label': 'Cursor joystick' },
       h('span.joy-arrows', { html: icon('joystick', 30) }), h('span.knob'));
     const knob = btn.lastChild;
     let P = null;
-    const step = (dir) => {
-      this.deps.arrow(dir, { shift: P.select || P.mods.shift, ctrl: P.mods.ctrl, alt: P.mods.alt });
-      const now = Date.now();
-      if (now - P.tick > 25) { haptic(this.deps.getSettings(), 3); P.tick = now; } // a tick per character
+    const step = (dir, now) => {
+      const shift = P.select || P.mods.shift;
+      // The line's end (and start) is a wall: an overshoot stops there. Only
+      // pushing on, for JOY_WALL ms and a couple more characters' worth,
+      // goes through to the next line.
+      const view = this.deps.getView();
+      if (atLineEdge(view, dir, shift)) {
+        const head = view.state.selection.main.head;
+        const w = P.wall;
+        if (!w || w.dir !== dir || w.head !== head) {
+          P.wall = { dir, head, since: now, pushes: 0 };
+          btn.classList.add('at-edge');
+          haptic(this.deps.getSettings(), 15);
+          return;
+        }
+        if (++w.pushes < 2 || now - w.since < JOY_WALL) return;
+      }
+      if (P.wall) { P.wall = null; btn.classList.remove('at-edge'); }
+      this.deps.arrow(dir, { shift, ctrl: P.mods.ctrl, alt: P.mods.alt });
+      const t = Date.now();
+      if (t - P.tick > 25) { haptic(this.deps.getSettings(), 3); P.tick = t; } // a tick per character
     };
     // Resting far out along the locked direction: the cursor keeps going
     // (3…25 a second), after a short pause so it never overshoots by surprise.
@@ -667,7 +695,7 @@ export class KeysBar {
         if (!P.outSince) P.outSince = t;
         if (t - P.outSince > JOY_DWELL) {
           P.auto += dt * Math.min(25, 3 + out / 4);
-          while (P.auto >= 1) { P.auto -= 1; step(P.axis === 'x' ? (d < 0 ? 'left' : 'right') : (d < 0 ? 'up' : 'down')); }
+          while (P.auto >= 1) { P.auto -= 1; step(P.axis === 'x' ? (d < 0 ? 'left' : 'right') : (d < 0 ? 'up' : 'down'), t); }
         }
       }
       P.raf = requestAnimationFrame(loop);
@@ -710,7 +738,7 @@ export class KeysBar {
       P.acc += d * gain;
       const size = P.axis === 'x' ? JOY_STEP_X : JOY_STEP_Y;
       while (Math.abs(P.acc) >= size) {
-        step(P.axis === 'x' ? (P.acc > 0 ? 'right' : 'left') : (P.acc > 0 ? 'down' : 'up'));
+        step(P.axis === 'x' ? (P.acc > 0 ? 'right' : 'left') : (P.acc > 0 ? 'down' : 'up'), e.timeStamp);
         P.acc -= Math.sign(P.acc) * size;
       }
     });
@@ -724,7 +752,7 @@ export class KeysBar {
       this.presses.delete(stopJoy);
       clearTimeout(p.hold);
       cancelAnimationFrame(p.raf);
-      btn.classList.remove('active', 'selecting');
+      btn.classList.remove('active', 'selecting', 'at-edge');
       knob.style.transform = '';
       if (this.modsChangedQuietly) {
         this.modsChangedQuietly = false;

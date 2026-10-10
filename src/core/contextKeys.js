@@ -65,8 +65,9 @@ function clikeKeys(s, at) {
     return ['if (|)', 'for (|)', 'return ', '{|}'];
   }
   if (at.afterEquals) {
-    if (cpp) return ['{|}', '"|"', 'nullptr', 'new ', 'std::', '[|]'];
-    if (c) return ['{|}', '"|"', 'NULL', 'malloc(|)'];
+    // (no power operator in C / C++: pow(a, b) from <cmath> / <math.h>)
+    if (cpp) return ['{|}', '"|"', 'pow(|)', 'nullptr', 'new ', 'std::', '[|]'];
+    if (c) return ['{|}', '"|"', 'pow(|)', 'NULL', 'malloc(|)'];
     if (s.lang === 'java' || s.lang === 'csharp') return ['new ', 'null', '"|"', '{|}'];
     return ['{|}', '"|"', '[|]'];
   }

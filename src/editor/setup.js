@@ -24,6 +24,7 @@ import { emmetSource, tagNameSource, proseEnter } from './emmet.js';
 import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
 import { cursorsOnLines } from './editActions.js';
+import { wordHighlight } from './wordHighlight.js';
 
 export const comp = {
   language: new Compartment(),
@@ -36,6 +37,7 @@ export const comp = {
   lint: new Compartment(),
   sticky: new Compartment(),
   fastScroll: new Compartment(),
+  wordHighlight: new Compartment(),
 };
 
 /** Languages whose own completion already offers identifiers from the file. */
@@ -79,6 +81,7 @@ export function closeBracketsExtension(on) { return on ? [closeBrackets(), keyma
 export function lintExtension(on) { return on ? syntaxLinter() : []; }
 export function stickyExtension(on) { return on ? stickyScroll : []; }
 export function fastScrollExtension(on) { return on ? fastScroll : []; }
+export function wordHighlightExtension(on) { return on ? wordHighlight : []; }
 
 /**
  * @param {object} o
@@ -108,6 +111,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     crosshairCursor(),
     highlightActiveLine(),
     highlightSelectionMatches(),
+    comp.wordHighlight.of(wordHighlightExtension(settings.wordHighlight)),
     search({ top: true }),
     expandStack,
     wrapIndent,

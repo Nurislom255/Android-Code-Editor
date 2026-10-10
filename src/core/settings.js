@@ -64,6 +64,7 @@ export const DEFAULTS = Object.freeze({
   autoCloseBrackets: true,
   stickyScroll: true,
   fastScroll: true,
+  wordHighlight: true,        // the other uses of the name under the cursor
   autosave: 'off',            // 'off' | 'delay' | 'blur'
   autosaveDelay: 1500,
   keysBarMode: 'auto',        // 'auto' | 'always' | 'never'
@@ -134,6 +135,7 @@ export function normalizeSettings(raw) {
     autoCloseBrackets: bool(r.autoCloseBrackets, d.autoCloseBrackets),
     stickyScroll: bool(r.stickyScroll, d.stickyScroll),
     fastScroll: bool(r.fastScroll, d.fastScroll),
+    wordHighlight: bool(r.wordHighlight, d.wordHighlight),
     autosave: oneOf(r.autosave, ['off', 'delay', 'blur'], d.autosave),
     autosaveDelay: clamp(r.autosaveDelay, 300, 60000, d.autosaveDelay),
     keysBarMode: oneOf(r.keysBarMode, ['auto', 'always', 'never'], d.keysBarMode),

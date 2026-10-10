@@ -64,6 +64,7 @@ export const editorTheme = EditorView.theme({
   '.cm-lineNumbers .cm-gutterElement': { padding: '0 6px 0 10px', minWidth: '28px' },
   '.cm-foldPlaceholder': { backgroundColor: 'var(--accent-dim)', border: 'none', color: 'var(--accent)', padding: '0 6px' },
   '.cm-selectionMatch': { backgroundColor: 'var(--ed-match)' },
+  '.cm-wordHighlight': { backgroundColor: 'var(--ed-word)', borderRadius: '2px' },
   '.cm-searchMatch': { backgroundColor: 'var(--ed-search)', outline: '1px solid var(--ed-search-outline)' },
   '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'var(--ed-search-selected)' },
   '&.cm-focused .cm-matchingBracket': { backgroundColor: 'var(--ed-bracket)', outline: '1px solid var(--ed-bracket-outline)' },
