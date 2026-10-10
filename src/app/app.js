@@ -121,6 +121,14 @@ export class App {
       onConsole: (e) => { this.bottom.log({ level: e.level, text: e.fromPreview ? `${e.text}` : e.text }); },
       isDark: () => document.documentElement.classList.contains('theme-dark'),
       onLayout: () => this.layoutChanged(),
+      // Auto-refresh waits while the file being typed doesn't parse (same
+      // check as the red underlines), e.g. right after the first "/" of "//".
+      syntaxErrorAt: (doc) => {
+        if (!doc || !this.ws.docs.has(doc.id) || !['javascript', 'html'].includes(doc.lang.id)) return null;
+        const st = this.ws.stateOf(doc.id);
+        const d = st && syntaxDiagnostics(st).find((x) => x.severity === 'error');
+        return d ? `${doc.path || doc.name}:${st.doc.lineAt(d.from).number}` : null;
+      },
     });
 
     this.buildSidebar();
@@ -313,7 +321,7 @@ export class App {
     });
     ws.on('change', ({ doc }) => {
       outlineLater();
-      this.preview.changed();
+      this.preview.changed(doc);
     });
     ws.on('saved', ({ doc }) => {
       this.preview.changed();

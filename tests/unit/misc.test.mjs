@@ -9,6 +9,7 @@ import { normalizeSettings, DEFAULTS } from '../../src/core/settings.js';
 import { linkify } from '../../src/core/linkify.js';
 import { inspect, formatLogArgs } from '../../src/core/inspect.js';
 import { IgnoreRules } from '../../src/core/ignore.js';
+import { scriptLineMap, mapPageRefs, lineOfText, locateInPage } from '../../src/core/previewLines.js';
 
 test('paths', () => {
   assert.equal(resolveRef('site', 'css/a.css'), 'site/css/a.css');
@@ -147,4 +148,36 @@ test('keys bar: which drags on a symbol key are a swipe up', async () => {
   assert.equal(classifyKeyDrag(40, 12), 'pan', 'mostly sideways scrolls the row');
   assert.equal(classifyKeyDrag(-30, 0), 'pan');
   assert.equal(classifyKeyDrag(3, -20), 'none', 'downward: no alternate');
+});
+
+test('preview: page lines of inlined scripts map back to their files', () => {
+  const page = [
+    '<!DOCTYPE html>',                                                   // 1
+    '<html><head><script>/* boot */</script></head><body>',               // 2
+    '<script data-ce-src="js%2Fapp.js" data-ce-line="1">// app line 1',   // 3
+    'console.log(1);',                                                    // 4
+    '/',                                                                  // 5
+    '//# sourceURL=js/app.js</script>',                                   // 6
+    '<script type="module" data-ce-src="index.html" data-ce-line="12">', // 7
+    'notDefined();',                                                      // 8
+    '</script></body></html>',                                            // 9
+  ].join('\n');
+  const { html, map } = scriptLineMap(page);
+  assert.ok(!html.includes('data-ce-'), 'the tags are removed');
+  assert.equal(html.split('\n').length, 9, 'line count unchanged');
+  assert.deepEqual(map, [
+    { from: 3, to: 6, path: 'js/app.js', line: 1 },
+    { from: 7, to: 9, path: 'index.html', line: 12 },
+  ]);
+  assert.equal(mapPageRefs('SyntaxError: unterminated regular expression literal (about:srcdoc:5:1)', map), 'SyntaxError: unterminated regular expression literal (js/app.js:3:1)');
+  assert.equal(mapPageRefs('    at about:srcdoc:8:1', map), '    at index.html:13:1');
+  assert.equal(mapPageRefs('x (about:srcdoc:3:40)', map), 'x (js/app.js:1)', 'first line: the column counts the <script> tag');
+  assert.equal(mapPageRefs('x (about:srcdoc:2:1)', map), 'x (about:srcdoc:2:1)', 'not in a mapped script: unchanged');
+  // syntax errors: a page line, as about:srcdoc (Firefox) or under the sourceURL name (Chrome)
+  assert.equal(locateInPage({ file: 'about:srcdoc', line: 5, col: 1 }, map), 'js/app.js:3:1');
+  assert.equal(locateInPage({ file: 'js/app.js', line: 5, col: 1 }, map), 'js/app.js:3:1');
+  assert.equal(locateInPage({ file: 'js/util.js', line: 2, col: 4 }, map), 'js/util.js:2:4', 'an imported module: its own line');
+  assert.equal(locateInPage({ file: 'about:srcdoc', line: 2, col: 1 }, map), 'line 2 of the page');
+  assert.deepEqual(lineOfText('a\nb\n<script>\nfoo()\n</script>', '\nfoo()\n'), { line: 3, end: 19 });
+  assert.equal(lineOfText('abc', 'zzz').line, 0);
 });

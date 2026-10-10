@@ -17,6 +17,7 @@
 // there and data: URLs are used instead.
 
 import { resolveUrlRef as resolveRef, dirname, extname } from '../core/paths.js';
+import { scriptLineMap, lineOfText } from '../core/previewLines.js';
 
 const MIME = {
   '.css': 'text/css', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json',
@@ -114,6 +115,20 @@ export class PreviewBuilder {
     const dir = dirname(path);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const head = doc.head;
+    // Each script remembers where its code came from, so errors can say
+    // "app.js:9" instead of a line of this generated page (see previewLines.js).
+    const plain = html.replace(/\r\n?/g, '\n');
+    let searchFrom = 0;
+    const tag = (script, file, line) => {
+      if (!line) return;
+      script.setAttribute('data-ce-src', encodeURIComponent(file));
+      script.setAttribute('data-ce-line', String(line));
+    };
+    const inlineLine = (script) => {
+      const r = lineOfText(plain, script.textContent, searchFrom);
+      searchFrom = r.end;
+      return r.line;
+    };
 
     for (const link of [...doc.querySelectorAll('link[rel~="stylesheet"][href]')]) {
       const p = resolveRef(dir, link.getAttribute('href'));
@@ -148,9 +163,12 @@ export class PreviewBuilder {
           continue;
         }
         script.removeAttribute('src');
+        tag(script, p, 1);
       } else if (isModule) {
         code = script.textContent;
+        tag(script, path, inlineLine(script));
       } else {
+        tag(script, path, inlineLine(script));
         continue;
       }
       if (isModule) code = await this.moduleCode(code, p ? dirname(p) : dir, p ? [p] : []);
@@ -181,7 +199,10 @@ export class PreviewBuilder {
     const boot = doc.createElement('script');
     boot.textContent = bootScript(token, scrollY);
     head.insertBefore(boot, head.firstChild);
-    return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+    const page = scriptLineMap('<!DOCTYPE html>\n' + doc.documentElement.outerHTML);
+    /** page line ranges → file lines, for the last page built */
+    this.lineMap = page.map;
+    return page.html;
   }
 }
 
@@ -195,7 +216,10 @@ if(typeof v==='function')return '[Function: '+(v.name||'anonymous')+']';if(v&&ty
 try{if(v instanceof Element)return '<'+v.tagName.toLowerCase()+(v.id?'#'+v.id:'')+'>';if(Array.isArray(v))return '[ '+v.map(function(x){return fmt(x,d+1)}).join(', ')+' ]';
 return '{ '+Object.keys(v).map(function(k){return k+': '+fmt(v[k],d+1)}).join(', ')+' }'}catch(e){return String(v)}}return String(v)}
 ['log','info','warn','error','debug'].forEach(function(l){var o=console[l];console[l]=function(){var a=[].slice.call(arguments);send({type:'console',level:l==='debug'?'log':l,text:a.map(function(x){return fmt(x)}).join(' ')});if(o)o.apply(console,a)}});
-addEventListener('error',function(e){send({type:'console',level:'error',text:(e.error&&e.error.stack)||(e.message+(e.filename?' ('+e.filename+':'+e.lineno+')':''))})});
+addEventListener('error',function(e){var r=e.error,h=r&&r.name?r.name+': '+r.message:e.message,s=String((r&&r.stack)||'');
+if(s.indexOf(h)===0)s=s.slice(h.length);s=s.replace(/^\\s+|\\s+$/g,'');
+if(s)send({type:'console',level:'error',text:h+'\\n'+s.split('\\n').map(function(l){return '    '+l.replace(/^\\s+/,'')}).join('\\n')});
+else send({type:'console',level:'error',text:h,at:e.lineno?{file:String(e.filename||''),line:e.lineno,col:e.colno||0}:null})});
 addEventListener('unhandledrejection',function(e){var r=e.reason;send({type:'console',level:'error',text:'Uncaught (in promise) '+fmt(r)})});
 document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var h=a.getAttribute('href');if(!h||/^(#|[a-z][a-z0-9+.-]*:|\\/\\/)/i.test(h))return;e.preventDefault();send({type:'navigate',href:h})},true);
 var of=window.fetch,pend={},n=0;

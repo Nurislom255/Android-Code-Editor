@@ -6,10 +6,12 @@
 import { h, debounce } from '../ui/dom.js';
 import { PreviewBuilder, markdownPage, renderMarkdown, mimeFor } from '../run/preview.js';
 import { resolveUrlRef as resolveRef, dirname, extname, basename } from '../core/paths.js';
+import { mapPageRefs, locateInPage } from '../core/previewLines.js';
 
 export class PreviewController {
   /**
-   * deps: {read(path) -> {text}|{bytes}|null, bottom, layout, getSettings, saveSettings, onConsole(entry), isDark()}
+   * deps: {read(path) -> {text}|{bytes}|null, bottom, layout, getSettings, saveSettings, onConsole(entry), isDark(),
+   *        syntaxErrorAt(doc) -> 'app.js:3' | null}
    */
   constructor(deps) {
     this.deps = deps;
@@ -18,14 +20,15 @@ export class PreviewController {
     this.scroll = new Map();
     this.builder = new PreviewBuilder((p) => deps.read(p));
     this.title = h('span.ptitle', 'Preview');
+    this.note = h('span.preview-note', { title: 'The preview refreshes by itself again once the code parses. Tap ⟳ to refresh anyway.' });
     this.frame = null;
     this.box = h('div.preview-box', { style: { display: 'flex', flexDirection: 'column', flex: '1', minHeight: '0' } },
-      h('div.preview-toolbar', this.title,
+      h('div.preview-toolbar', this.title, this.note,
         h('button.icon-btn.small', { type: 'button', title: 'Refresh', 'aria-label': 'Refresh preview', icon: 'refresh', onclick: () => this.refresh() }),
         this.placeBtn = h('button.icon-btn.small.wide-only', { type: 'button', title: 'Move preview', 'aria-label': 'Move preview between side and bottom', icon: 'split', onclick: () => this.togglePlacement() }),
         h('button.icon-btn.small', { type: 'button', title: 'Close preview', 'aria-label': 'Close preview', icon: 'close', onclick: () => this.close() })),
       this.empty = h('div.empty-note', 'Open an .html or .md file and press Run to preview it.'));
-    this.later = debounce(() => this.refresh(), 650);
+    this.later = debounce(() => this.autoRefresh(), 650);
     deps.bottom.previewActions = () => [];
     deps.bottom.onShowPreview = () => { if (this.placement() === 'bottom') this.mount(); };
     window.addEventListener('message', (e) => this.onMessage(e));
@@ -91,13 +94,26 @@ export class PreviewController {
     await this.refresh();
   }
 
-  /** Called on any edit/save; refreshes if the preview is showing. */
-  changed() {
+  /** Called on any edit/save (with the edited document); refreshes if the preview is showing. */
+  changed(doc) {
+    if (doc) this.edited = doc;
     if (this.target && this.visible() && this.deps.getSettings().previewAutoRefresh) this.later();
+  }
+
+  /**
+   * Refresh after an edit, unless the file being typed doesn't parse right
+   * now: a half-typed "//" or "</" would only print a syntax error (and blank
+   * the page). The last good page stays until the code parses again.
+   */
+  autoRefresh() {
+    const at = this.deps.syntaxErrorAt ? this.deps.syntaxErrorAt(this.edited) : null;
+    if (at) { this.note.textContent = `Paused: syntax error at ${at}`; return; }
+    this.refresh();
   }
 
   async refresh() {
     if (!this.target) return;
+    this.note.textContent = '';
     const { path, kind } = this.target;
     const file = await this.deps.read(path);
     if (!file) {
@@ -126,6 +142,7 @@ export class PreviewController {
       allow: 'clipboard-write',
     });
     frame.srcdoc = html;
+    this.lineMap = this.builder.lineMap;
     if (this.frame) this.frame.replaceWith(frame);
     else this.box.append(frame);
     this.frame = frame;
@@ -139,7 +156,9 @@ export class PreviewController {
     if (!d || d.__ce !== this.token) return;
     const dir = dirname(this.target.path);
     if (d.type === 'console') {
-      this.deps.onConsole({ level: d.level, text: d.text, fromPreview: true });
+      let text = mapPageRefs(String(d.text), this.lineMap);
+      if (d.at) text += ` (${locateInPage(d.at, this.lineMap)})`;
+      this.deps.onConsole({ level: d.level, text, fromPreview: true });
     } else if (d.type === 'scroll') {
       this.scroll.set(this.target.path, d.y);
     } else if (d.type === 'navigate') {

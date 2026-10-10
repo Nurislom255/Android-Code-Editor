@@ -110,6 +110,38 @@ test('preview updates from unsaved edits', async ({ page }) => {
   await expect(frame.locator('h1')).toHaveText('Changed live');
 });
 
+test('preview errors name the file and line, not the generated page', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'pe', 'web');
+  await writeProjectFile(page, 'app.js', "// app.js\nconsole.log('app ok');\n/\n");
+  await writeProjectFile(page, 'page.html', '<!DOCTYPE html>\n<html>\n<body>\n<p>x</p>\n<script src="app.js"></script>\n<script>\nconsole.log("inline");\nnotDefined();\n</script>\n</body>\n</html>\n');
+  await openFile(page, 'page.html');
+  await runCommand(page, 'run');
+  await expect(consoleLines(page).filter({ hasText: 'inline' })).toHaveCount(1);
+  await expect(consoleLines(page).filter({ hasText: 'SyntaxError' })).toContainText('app.js:3');
+  await expect(consoleLines(page).filter({ hasText: 'notDefined' })).toContainText('page.html:8');
+  await expect(consoleLines(page).filter({ hasText: 'srcdoc' })).toHaveCount(0);
+});
+
+test('auto-refresh waits while the file being typed does not parse', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'pw', 'web');
+  await openFile(page, 'index.html');
+  await runCommand(page, 'run');
+  await expect(consoleLines(page).filter({ hasText: 'app.js loaded' })).toHaveCount(1);
+  await openFile(page, 'app.js');
+  const code = await editorText(page);
+  await setText(page, `${code}\n/`); // the first "/" of a "//" comment
+  await expect(page.locator('.preview-note')).toContainText('app.js:');
+  await page.waitForTimeout(300);
+  await expect(consoleLines(page).filter({ hasText: 'SyntaxError' })).toHaveCount(0);
+  await expect(consoleLines(page).filter({ hasText: 'app.js loaded' })).toHaveCount(1);
+  await setText(page, `${code}\n// done\nconsole.log('again');\n`);
+  await expect(consoleLines(page).filter({ hasText: 'again' })).toHaveCount(1);
+  await expect(page.locator('.preview-note')).toBeHidden();
+  await expect(consoleLines(page).filter({ hasText: 'SyntaxError' })).toHaveCount(0);
+});
+
 test('Markdown preview renders, including relative images', async ({ page }) => {
   await boot(page);
   await newProject(page, 'md', 'empty');

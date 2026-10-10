@@ -165,6 +165,7 @@ gesture test pad is the only on-device diagnostic for now):
 | Two resize handles on the Console/Preview bar | The old 12 px handle stayed above the new draggable bar | Old handle removed; the bar is the only handle |
 | Buttons stay highlighted after a long-press | Browsers keep `:hover` on the last tapped element until you tap elsewhere | Hover highlights only while a mouse or pen is in use (a tablet with a mouse still gets them) |
 | Drag tabs, files and folders to move them | Not built (planned for Phase 4) | Shipped early: long-press then drag (mouse: drag). Tabs reorder and move to the other pane; files and folders move into a folder or to the project root (empty space below the list); lists auto-scroll at the edges; a folder never goes into itself |
+| Console: `SyntaxError: unterminated regular expression literal (about:srcdoc:64)` between two normal runs | The preview refreshed 650 ms after typing stopped, so a half-typed `//` (or `</`) ran and failed; the location was a line of the generated preview page | Auto-refresh waits while the file being typed has a syntax error ("Paused: syntax error at app.js:3" in the preview bar; ⟳ still forces it); errors name the file and line (`app.js:3`, tappable), mapped from the generated page; Firefox errors keep their message |
 
 ---
 
