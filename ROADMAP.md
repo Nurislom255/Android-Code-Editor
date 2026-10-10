@@ -11,7 +11,7 @@ build, and how we know it is done.
 |---|---|---|---|
 | 0 | Real-device test loop (diagnostics) | Small | Skipped for now: the owner's reports were enough to find every bug so far. Build it when a bug can't be reproduced |
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
-| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Part 1 built (v2.2.0): the new keys bar** (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 next: Settings pages (2.1), keys-bar editor (2.7), custom key bindings |
+| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Part 1 built (v2.2.0, refined after the owner's test in v2.3.0): the new keys bar** (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 next: Settings pages (2.1), keys-bar editor (2.7), custom key bindings |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
@@ -171,6 +171,11 @@ reported the problems fixed in "After Phase 1"; re-check any that misbehave):
 | Drag tabs, files and folders to move them | Not built (planned for Phase 4) | Shipped early: long-press then drag (mouse: drag). Tabs reorder and move to the other pane; files and folders move into a folder or to the project root (empty space below the list); lists auto-scroll at the edges; a folder never goes into itself |
 | Console: `SyntaxError: unterminated regular expression literal (about:srcdoc:64)` between two normal runs | The preview refreshed 650 ms after typing stopped, so a half-typed `//` (or `</`) ran and failed; the location was a line of the generated preview page | Auto-refresh waits while the file being typed has a syntax error ("Paused: syntax error at app.js:3" in the preview bar; ⟳ still forces it); errors name the file and line (`app.js:3`, tappable), mapped from the generated page; Firefox errors keep their message |
 | Which version am I using? A merge seemed to take a long time to arrive | The version was always "2.0.0". The offline cache downloaded a new build in the background but only started it after every tab of the app was closed (a reload is not enough) | Version per PR (2.1.0 onwards) with its build time in Settings → About; "Check for updates" there; when a new build is downloaded: "Version x.y.z is ready" with a **Reload** button (unsaved work is restored after it) |
+| Joystick: precise cursor control is difficult (v2.2.0) | A fixed 11 px a character, both directions at once (a slightly diagonal finger changed lines) and the cursor started moving by itself 56 px out | Mouse-like acceleration (slow ≈ 18 px a character, fast ≈ 5 px), one direction at a time (changes only after a clear 36 px turn), moving by itself only after resting 0.3 s beyond 72 px |
+| Arithmetic keys missing | `+ - * /` were deep in the symbol list (context row or "More") | An operator key on the main row of code files: tap `+`, swipe up `-`, down `*`, hold → `/ % = < > ! & \| ^` (the popup wraps onto two rows) |
+| Too many keys, duplicates | Context keys repeated main-row keys (`;`, `()`), the tablet had a Redo key next to Undo's hold, the Mod layer repeated ⇧Tab and ⏎;, the cursor popup had Esc | Context keys skip what the main row has; no Redo key; Mod layer has Home / End instead; no Esc in the cursor popup; no "TODO:" key in comments |
+| Some keys not intuitive (multi-cursor) | Labels like `+⇣`, `Mod`, `⋯` | Icons and captions: *cursor* (two text cursors and a +), *line*, *undo*, *all keys*, Mod with "Ctrl ⇧ Alt"; joystick shows its four arrows; context keys look lighter than fixed keys |
+| Swipe up did nothing on Tab and Undo | Their corner symbol (⇤, ↷) only worked by holding | Swipe up does it too (the corner symbol always means swipe up or hold) |
 
 ---
 

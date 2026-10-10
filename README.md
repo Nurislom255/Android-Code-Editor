@@ -72,23 +72,26 @@ Auto / Always / Never). Made for two thumbs: no row scrolls sideways and no
 key is narrower than 44 px.
 
 ```
-Phone:   [Mod][ctx][ctx][ctx][ctx][+⇣][ ⋯ ]    context keys: what fits where the cursor is
-         [Tab][ ◉ ][ s1][ s2][ s3][ ↵ ][ ↶ ]    s1–s3: the language's most used symbols
-Tablet:  [Esc][Tab][ ◉ ][Ctrl][Shift][Alt]   [ctx ×6][s1 … s6][↵][+⇣][↶][↷][⋯]
+Phone:   [Mod][ctx][ctx][ctx][ctx][cursor][ ⋯ ]    context keys: what fits where the cursor is
+         [Tab][ ◉ ][ s1][ s2][ + ][ line ][undo]   s1, s2: the language's most used symbols; + operators
+Tablet:  [Esc][Tab][ ◉ ][Ctrl][Shift][Alt]   [ctx ×6][s1 … s6][line][cursor][undo][⋯]
 ```
 
-A landscape phone gets one row: `Tab ◉ Mod ctx×4 s1–s3 ↵ +⇣ ↶ ⋯`.
+A landscape phone gets one row: `Tab ◉ Mod ctx×4 s1 s2 + line cursor undo ⋯`.
+The small symbol in a key's top corner is what a **swipe up** (or a hold)
+does; the one in the bottom corner, a swipe down.
 
 | Key | Tap | Swipe up / down | Hold |
 |---|---|---|---|
-| **Tab** | Tab / indent / accept suggestion | — | Shift+Tab (outdent) |
-| **◉** joystick | Select the word | Drag any way: the cursor follows; drag further than a key away and it keeps going, faster the further you go. Quick flick ← / →: line start / end | Then drag: select |
-| **Symbols** (`;` `{` `(` …) | The symbol | The variant shown small in the top / bottom corner | All variants pop up: slide to one, release |
-| **↵** line | New line below | Move the line up / down (hold to repeat) | Line actions pop up: `⏎;` complete statement, `↥` new line above, Dup, Join, `✕Ln` delete, `//` comment |
-| **+⇣** cursors | Add a cursor below | Above / below | `⫶` a cursor on each selected line, `Sel+` next match, `Sel*` all matches, Esc |
-| **↶** | Undo | — | Redo (repeats) |
-| **Mod** | Opens Ctrl · Shift · Alt · Esc · ⇧Tab · ⏎; | | |
-| **⋯** | Every key, grouped: lines, cursors, selection, navigation (Home, End, Page up/down…), editing, brackets, operators | | |
+| **Tab** | Tab / indent / accept suggestion | up: Shift+Tab (outdent) | Shift+Tab |
+| **◉** joystick | Select the word | Drag: the cursor follows like a mouse — move slowly for single characters, faster to go far. It sticks to one direction (a wobbly sideways drag stays on the line). Rest the finger far out and it keeps moving. Quick flick ← / →: line start / end | Then drag: select |
+| **Symbols** (`;` `(` …) | The symbol | The variants shown small in the corners | All variants pop up: slide to one, release |
+| **+** operators (code files) | `+` | up `-`, down `*` | `/ % = < > ! & \| ^` |
+| **line** (↵) | New line below | Move the line up / down (hold to repeat) | Line actions pop up: `⏎;` complete statement, `↥` new line above, Dup, Join, `✕Ln` delete, `//` comment |
+| **cursor** (multi-cursor) | Add a cursor below | up: above | `⫶` a cursor on each selected line, `Sel+` next match, `Sel*` all matches |
+| **undo** | Undo | up: Redo | Redo (repeats) |
+| **Mod** | Opens Ctrl · Shift · Alt · Esc · Home · End | | |
+| **⋯** all keys | Every key, grouped: lines, cursors, selection, navigation (Page up/down…), editing, brackets, operators | | |
 
 - **Context keys** follow the code: C++ at a statement start `std::` `cout <<`
   `auto` `for ()` `if ()` `return`, after `cout` `<<` `endl` `"\n"`, after `=`
@@ -102,8 +105,10 @@ A landscape phone gets one row: `Tab ◉ Mod ctx×4 s1–s3 ↵ +⇣ ↶ ⋯`.
 - **Modifiers** are one-shot (next key only); a double tap locks them. Ctrl
   offers its shortcuts as keys: S Save, F Find, D next match, A select all,
   `/` comment, G go to line, P go to file, X C V, Z Y. Shift: the joystick
-  selects, symbols type their first variant. Alt: the joystick moves lines
-  (↑↓) or jumps by word part (←→).
+  and Home / End select, symbols type their first variant. Alt: the joystick
+  moves lines (↑↓) or jumps by word part (←→).
+- **Nothing twice:** a context key never repeats a key of the main row (no
+  `;` or `()` up there when `;` and `(` are below).
 - Every key's tooltip shows its keyboard shortcut (e.g. new line above
   **Ctrl+Alt+Enter**), for when a keyboard is connected.
 - Symbol rows per language are editable in Settings (`(^)^[]^{}` = tap `(`,

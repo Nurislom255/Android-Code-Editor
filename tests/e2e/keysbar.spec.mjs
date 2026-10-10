@@ -23,12 +23,15 @@ async function scratch(page, name, src) {
 
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const key = (page, label) => page.locator('#keys-bar .key').filter({ has: page.locator('.key-label', { hasText: new RegExp(`^${esc(label)}$`) }) }).first();
+/** Icon keys (undo, multi-cursor) by their accessible name. */
+const named = (page, prefix) => page.locator(`#keys-bar .keys-row .key[aria-label^="${prefix}"]`).first();
+const loc = (page, k) => (typeof k === 'string' ? key(page, k) : k);
 const isPhone = (page) => page.evaluate(() => document.getElementById('keys-bar').dataset.profile === 'phone');
 const head = (page) => page.evaluate(() => window.__app.ws.view.state.selection.main.head);
 
 async function touch(page) { return page.context().newCDPSession(page); }
 async function center(page, label) {
-  const b = await key(page, label).boundingBox();
+  const b = await loc(page, label).boundingBox();
   return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
 }
 
@@ -75,6 +78,9 @@ test('layout: no row scrolls and no key is narrower than 44 px (phone: 2 rows of
   // no arrow keys (the joystick moves the cursor); Tab and Undo at the edges
   for (const arrow of ['←', '→', '↑', '↓']) await expect(key(page, arrow)).toHaveCount(0);
   await expect(page.locator('#keys-bar .key.joystick')).toHaveCount(1);
+  // no duplicates: Redo is on Undo (swipe up / hold), not a key of its own
+  await expect(page.locator('#keys-bar .keys-row .key[aria-label^="Redo"]')).toHaveCount(0);
+  await expect(named(page, 'Multi-cursor')).toContainText('cursor'); // a caption says what it is
 });
 
 test('symbols follow the language and auto-close brackets (plus the pending ;)', async ({ page }) => {
@@ -164,25 +170,46 @@ test('line key: tap = new line below; swipe moves the line; hold opens the line 
   expect(await editorText(page)).toBe('one\none\ntwo');
 });
 
-test('joystick: drag moves the cursor, tap selects the word, flick right = line end', async ({ page }) => {
-  await setup(page, 'alpha beta gamma', 0);
+/** Drags the joystick by `dx`, `dy` px in `n` moves, `ms` apart (explicit times: speed matters). */
+async function dragJoystick(page, { dx = 0, dy = 0, n = 10, ms = 60, wobble = 0 }) {
   const j = await page.locator('#keys-bar .key.joystick').boundingBox();
   const x = j.x + j.width / 2, y = j.y + j.height / 2;
   const cdp = await touch(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-  for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + i * 6, y }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  expect(await head(page)).toBe(3); // 36 px → 3 characters
-  await page.locator('#keys-bar .key.joystick').tap();
-  expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; })).toEqual([0, 5]);
-  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 0 } }));
   const t0 = Date.now() / 1000;
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }], timestamp: t0 });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 30, y }], timestamp: t0 + 0.05 });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + 60, y }], timestamp: t0 + 0.1 });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t0 + 0.12 });
-  expect(await head(page)).toBe('alpha beta gamma'.length);
+  for (let i = 1; i <= n; i++) {
+    const w = wobble ? Math.sin(i) * wobble : 0;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * i) / n + (dy ? w : 0), y: y + (dy * i) / n + (dx ? w : 0) }], timestamp: t0 + (i * ms) / 1000 });
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t0 + ((n + 1) * ms) / 1000 });
   await cdp.detach();
+}
+
+test('joystick: slow = precise, fast = far; it sticks to one direction; tap selects the word', async ({ page }) => {
+  await setup(page, 'alpha beta gamma delta epsilon\nsecond line here', 0);
+  // 60 px slowly: a few characters
+  await dragJoystick(page, { dx: 60, n: 10, ms: 60 });
+  const slow = await head(page);
+  expect(slow).toBeGreaterThanOrEqual(2);
+  expect(slow).toBeLessThanOrEqual(4);
+  // the same 60 px fast: much further
+  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 0 } }));
+  await dragJoystick(page, { dx: 60, n: 10, ms: 4 });
+  expect(await head(page)).toBeGreaterThanOrEqual(slow * 2);
+  // a sideways drag with the finger wobbling up and down stays on the line
+  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 0 } }));
+  await dragJoystick(page, { dx: 90, n: 15, ms: 50, wobble: 14 });
+  expect(await page.evaluate(() => window.__app.ws.view.state.doc.lineAt(window.__app.ws.view.state.selection.main.head).number)).toBe(1);
+  // tap: the word
+  await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 1 } }));
+  await page.locator('#keys-bar .key.joystick').tap();
+  expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; })).toEqual([0, 5]);
+});
+
+test('joystick: a quick flick right goes to the line end', async ({ page }) => {
+  await setup(page, 'alpha beta gamma', 0);
+  await dragJoystick(page, { dx: 64, n: 2, ms: 40 });
+  expect(await head(page)).toBe('alpha beta gamma'.length);
 });
 
 test('modifiers: Ctrl then S saves; Shift + joystick selects; Esc appears when useful', async ({ page }) => {
@@ -198,24 +225,56 @@ test('modifiers: Ctrl then S saves; Shift + joystick selects; Esc appears when u
 
   if (phone) await key(page, 'Mod').tap();
   await key(page, 'Shift').tap();
-  const j = await page.locator('#keys-bar .key.joystick').boundingBox();
-  const x = j.x + j.width / 2, y = j.y + j.height / 2;
-  const cdp = await touch(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
-  for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + i * 7, y }] });
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await cdp.detach();
-  expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; })).toEqual([0, 3]);
+  await dragJoystick(page, { dx: 60, n: 10, ms: 60 });
+  const sel = await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.from, s.to]; });
+  expect(sel[0]).toBe(0);
+  expect(sel[1]).toBeGreaterThanOrEqual(2);
   // something selected: Esc is offered (phone: in the context row); it deselects
   await key(page, 'Esc').tap();
   expect(await page.evaluate(() => window.__app.ws.view.state.selection.main.empty)).toBe(true);
   if (phone) await expect(key(page, 'Esc')).toHaveCount(0);
 });
 
-test('cursors key: tap adds a cursor below, typing goes to every line', async ({ page }) => {
+test('Mod layer: Home and End (with Shift they select)', async ({ page }) => {
+  await setup(page, 'abc def', 3);
+  test.skip(!(await isPhone(page)), 'the tablet has no Mod layer');
+  await key(page, 'Mod').tap();
+  await expect(key(page, '⇧Tab')).toHaveCount(0); // (on Tab already)
+  await key(page, 'End').tap();
+  expect(await head(page)).toBe(7);
+  // (the layer stays open for more Home / End; Shift closes it, armed)
+  await key(page, 'Shift').tap();
+  await expect(named(page, 'Modifiers')).toContainText('⇧'); // the Mod key shows what is armed
+  await named(page, 'Modifiers').tap();
+  await key(page, 'Home').tap();
+  expect(await page.evaluate(() => { const s = window.__app.ws.view.state.selection.main; return [s.anchor, s.head]; })).toEqual([7, 0]);
+});
+
+test('operator key: tap +, swipe up -, swipe down *, hold for / and the rest', async ({ page }) => {
+  await setup(page, 'a ');
+  await key(page, '+').tap();
+  await swipeKey(page, '+', -30);
+  await swipeKey(page, '+', 30);
+  await holdKey(page, '+', '/', { check: () => expect(page.locator('.key-chooser .key-choice')).toHaveCount(12) });
+  expect(await editorText(page)).toBe('a +-*/');
+});
+
+test('context keys never repeat a key of the main row', async ({ page }) => {
+  await scratch(page, 'main.cpp', 'int main() {\n    total|\n}');
+  const labels = await page.locator('#keys-bar .key.ctx .key-label').allTextContents();
+  const main = await page.locator('#keys-bar .key.sym:not(.ctx) .key-label').allTextContents();
+  expect(labels).toContain('.');
+  for (const m of main) {
+    expect(labels).not.toContain(m);
+    expect(labels).not.toContain({ '(': '()', '{': '{}', '[': '[]', '"': '""' }[m] || '\u0000');
+  }
+  expect(new Set(labels.filter(Boolean)).size).toBe(labels.filter(Boolean).length); // nothing twice
+});
+
+test('multi-cursor key: tap adds a cursor below, typing goes to every line', async ({ page }) => {
   await setup(page, 'let a = 1\nlet b = 2\nlet c = 3', 'let a = 1'.length);
-  await key(page, '+⇣').tap();
-  await key(page, '+⇣').tap();
+  await named(page, 'Multi-cursor').tap();
+  await named(page, 'Multi-cursor').tap();
   expect(await page.evaluate(() => window.__app.ws.view.state.selection.ranges.length)).toBe(3);
   await page.keyboard.type(';');
   expect(await editorText(page)).toBe('let a = 1;\nlet b = 2;\nlet c = 3;');
@@ -251,18 +310,27 @@ test('a key in the sheet acts once: holding it never keeps deleting', async ({ p
   await expect(page.locator('.keys-sheet')).toHaveCount(0);
 });
 
-test('Tab: tap indents, hold outdents; Undo: tap undoes, hold redoes', async ({ page }) => {
+test('Tab and Undo: the corner symbol by swipe up or hold (Shift+Tab, Redo)', async ({ page }) => {
   await setup(page, 'x', 0);
   // (edits closer than half a second apart are one undo step)
   await page.waitForTimeout(600);
   await key(page, 'Tab').tap();
   expect(await editorText(page)).toBe('  x');
   await page.waitForTimeout(600);
+  await swipeKey(page, 'Tab', -30);
+  expect(await editorText(page)).toBe('x');
+  await page.waitForTimeout(600);
+  await key(page, 'Tab').tap();
+  await page.waitForTimeout(600);
   await holdKey(page, 'Tab');
   expect(await editorText(page)).toBe('x');
-  await key(page, '↶').tap();
+  const undo = named(page, 'Undo');
+  await undo.tap();
   expect(await editorText(page)).toBe('  x');
-  await holdKey(page, '↶');
+  await swipeKey(page, undo, -30);
+  expect(await editorText(page)).toBe('x');
+  await undo.tap();
+  await holdKey(page, undo);
   expect(await editorText(page)).toBe('x');
 });
 

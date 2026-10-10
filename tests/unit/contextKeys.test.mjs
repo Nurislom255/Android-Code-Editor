@@ -38,7 +38,7 @@ test('other languages, strings, comments and selections', () => {
   assert.ok(contextKeys(sit({ group: 'python', before: '' })).includes('def '));
   assert.ok(contextKeys(sit({ group: 'html', inTag: true })).includes('class="|"'));
   assert.ok(contextKeys(sit({ group: 'css', inCssBlock: true })).includes('!important'));
-  assert.deepEqual(contextKeys(sit({ group: 'js', inComment: true })), ['TODO: ']);
+  assert.deepEqual(contextKeys(sit({ group: 'js', inComment: true })), []);
   assert.deepEqual(contextKeys(sit({ group: 'js', selection: true })).slice(0, 3), ['@cut', '@copy', '@paste']);
 });
 

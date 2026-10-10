@@ -31,6 +31,9 @@ const ICONS = {
   newFile: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3zM13 9V3.5L18.5 9z',
   newFolder: 'M20 6h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3z',
   more: 'M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z',
+  // keys bar: two text cursors and a plus (multi-cursor); four arrows (joystick)
+  cursors: 'M3 4h5v1.5H6.25v13H8V20H3v-1.5h1.75v-13H3zm8 6h5v1.5h-1.75v7H16V20h-5v-1.5h1.75v-7H11zm8-7h1.5v2.5H23V7h-2.5v2.5H19V7h-2.5V5.5H19z',
+  joystick: 'M12 2l3.5 4h-7zm0 20l-3.5-4h7zM2 12l4-3.5v7zm20 0l-4 3.5v-7z',
   keyboardHide: 'M20 3H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-9 3h2v2h-2zm0 3h2v2h-2zM8 6h2v2H8zm0 3h2v2H8zm-1 2H5V9h2zm0-3H5V6h2zm9 7H8v-2h8zm0-4h-2V9h2zm0-3h-2V6h2zm3 3h-2V9h2zm0-3h-2V6h2zm-7 15 4-4H8z',
   lock: 'M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2zM9 6a3 3 0 0 1 6 0v2H9z',
   unlock: 'M18 8h-9V6a3 3 0 0 1 5.8-1l1.9-.6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2z',
