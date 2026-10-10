@@ -19,6 +19,7 @@ export const GESTURE_ACTIONS = Object.freeze({
   commandPalette: 'Command palette',
   quickOpen: 'Quick open file',
   toggleComment: 'Toggle comment',
+  deleteLine: 'Delete the line',
   completeStatement: 'Complete statement (; and new line)',
   hideKeyboard: 'Hide keyboard',
   nextTab: 'Next tab',
@@ -37,6 +38,7 @@ export const GESTURES = Object.freeze({
   'swipe-up-2': 'Swipe up (2 fingers)',
   'swipe-down-2': 'Swipe down (2 fingers)',
   'tap-2': 'Tap (2 fingers)',
+  'tap-3x': 'Triple-tap a line',
 });
 
 export const DEFAULT_GESTURE_MAP = Object.freeze({
@@ -47,6 +49,7 @@ export const DEFAULT_GESTURE_MAP = Object.freeze({
   'swipe-up-2': 'none',
   'swipe-down-2': 'hideKeyboard',
   'tap-2': 'commandPalette',
+  'tap-3x': 'deleteLine',
 });
 
 export const DEFAULTS = Object.freeze({

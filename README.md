@@ -28,6 +28,7 @@ in **Settings → Touch & gestures**, and a hint chip shows what each one did.
 | Swipe left / right (2 fingers) | Undo / redo |
 | Swipe down (2 fingers) | Hide the keyboard |
 | Tap (2 fingers) | Command palette |
+| **Triple-tap** a line | Delete that line (Undo brings it back) |
 | Pinch | Zoom the code font (saved) |
 | Tap / drag the line numbers | Select one / several lines |
 | Keys bar: **swipe up** or **hold** a key | Type the small symbol in its corner (`(` → `)`, `=` → `=>`, …); leaning or curved swipes count |
@@ -81,8 +82,8 @@ How false triggers are avoided (see `src/core/gestures.js`):
   in attribute values, comments, `<script>`/`<style>` or capitalised words;
   in the middle of a sentence the list appears from two letters on and
   Enter still starts a new line (Tab / swipe right accept).
-- **Emmet** in HTML and CSS: `!` → HTML5 page, `ul>li*3`, `div.card>p`;
-  CSS `m10`, `df`, `p10-20`.
+- **Emmet** in HTML and CSS: `!` → HTML5 page, `ul>li*3`, `div.card>p`,
+  `lorem` / `lorem20` (placeholder text, 20 words); CSS `m10`, `df`, `p10-20`.
 - **Renaming `<div>` renames `</div>`**.
 - Suggestions for **file paths** in `src=""`, `href=""`, `url()`, `import '…'`,
   `#include "…"` and for **words from your other open files**.
@@ -110,8 +111,9 @@ How false triggers are avoided (see `src/core/gestures.js`):
   statement (`⏎;`), new line below, move line up/down first; a trackpad strip
   for the cursor (no arrow keys), Shift/Ctrl/Alt (one-shot, double-tap to
   lock), undo/redo, hide keyboard, **multi-line editing** (`+⇣`/`+⇡` add a
-  cursor below/above, `⫶` a cursor on each selected line, `Sel+` next
-  occurrence), more line operations. Both rows scroll sideways from any key.
+  cursor below/above, `⫶` a cursor on each selected line; Ctrl+D selects
+  the next occurrence), more line operations. Both rows scroll sideways
+  from any key.
 - Auto-close brackets, auto-indent, line operations, undo grouping.
 - Highlighting for ~30 languages (incremental Lezer parsers for JS/TS/JSX,
   HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for

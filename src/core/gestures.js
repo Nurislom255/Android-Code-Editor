@@ -40,6 +40,9 @@ export const GESTURE_DEFAULTS = Object.freeze({
   pinchThreshold: 0.14,      // relative change in finger spread that starts a pinch…
   pinchMinPx: 28,            // …and at least this many px (fingers drift a bit in a 2-finger swipe)
   edgeGuard: 20,             // ignore touches starting this close to a screen edge
+  tapMaxDuration: 300,       // a one-finger tap (for triple-tap)
+  multiTapGap: 400,          // ms between the taps of a triple-tap
+  multiTapSlop: 30,          // px every tap may be from the first one
 });
 
 /** Settings → Touch & gestures → Swipe sensitivity. */
@@ -93,6 +96,7 @@ export class GestureRecognizer {
     this.getViewport = getViewport;
     /** Why the last finished touch was (not) a gesture — shown by the test pad. */
     this.lastDecision = null;
+    this.taps = []; // recent one-finger taps, for triple-tap (kept across touches)
     this._reset();
   }
 
@@ -222,6 +226,9 @@ export class GestureRecognizer {
       } else if (this.maxPointers === 1) {
         result = this._classify([p], t, 1);
         this.consumed = true;
+        if (!result && this.lastDecision && this.lastDecision.reason === 'tap' && t - p.t0 <= this.opts.tapMaxDuration) {
+          result = this._tap(p.x0, p.y0, t);
+        } else if (result) this.taps = [];
       }
     }
     this.pointers.delete(id);
@@ -231,6 +238,19 @@ export class GestureRecognizer {
 
   cancel() {
     this._reset();
+  }
+
+  /** Counts quick taps at one spot; the third one is a gesture. */
+  _tap(x, y, t) {
+    const o = this.opts;
+    const last = this.taps[this.taps.length - 1];
+    if (!last || t - last.t > o.multiTapGap || dist(x, y, this.taps[0].x, this.taps[0].y) > o.multiTapSlop) this.taps = [];
+    this.taps.push({ x, y, t });
+    if (this.taps.length < 3) return null;
+    this.taps = [];
+    const g = { type: 'tap', fingers: 1, count: 3, x, y };
+    this.lastDecision = { gesture: g, reason: 'triple tap', fingers: 1 };
+    return g;
   }
 
   _classify(points, tEnd, fingers) {
@@ -294,7 +314,7 @@ export function describeDecision(d) {
   if (d.gesture) {
     const g = d.gesture;
     if (g.type === 'swipe') return `✓ Swipe ${g.direction}, ${g.fingers} finger${g.fingers > 1 ? 's' : ''}${m}`;
-    if (g.type === 'tap') return `✓ Tap, ${g.fingers} fingers`;
+    if (g.type === 'tap') return g.count === 3 ? '✓ Triple tap' : `✓ Tap, ${g.fingers} fingers`;
     return `✓ ${g.type}`;
   }
   return `✗ Not a gesture: ${d.reason}${m}`;
@@ -304,6 +324,6 @@ export function describeDecision(d) {
 export function gestureKey(g) {
   if (!g) return null;
   if (g.type === 'swipe') return `swipe-${g.direction}-${g.fingers}`;
-  if (g.type === 'tap') return `tap-${g.fingers}`;
+  if (g.type === 'tap') return g.count === 3 ? 'tap-3x' : `tap-${g.fingers}`;
   return g.type;
 }

@@ -153,6 +153,24 @@ test('two-finger tap opens the command palette', async ({ page }) => {
   await expect(page.locator('.palette')).toBeVisible();
 });
 
+test('triple-tap a line deletes it; undo brings it back', async ({ page }) => {
+  await jsFile(page, 'let a = 1;\nlet b = 2;\nlet c = 3;', 0);
+  const line2 = page.locator('.pane.focused-pane .cm-line').nth(1);
+  const r = await line2.boundingBox();
+  const at = { x: r.x + 40, y: r.y + r.height / 2 };
+  const cdp = await page.context().newCDPSession(page);
+  const t0 = Date.now() / 1000;
+  for (let i = 0; i < 3; i++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }], timestamp: t0 + i * 0.18 });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], timestamp: t0 + i * 0.18 + 0.05 });
+  }
+  await cdp.detach();
+  await expect.poll(() => editorText(page)).toBe('let a = 1;\nlet c = 3;');
+  await expect(page.locator('#gesture-hint')).toContainText('Line deleted');
+  await page.evaluate(() => window.__app.run('undo'));
+  expect(await editorText(page)).toBe('let a = 1;\nlet b = 2;\nlet c = 3;');
+});
+
 test('tap a line number to select the line', async ({ page }) => {
   await jsFile(page, 'one\ntwo\nthree\n');
   const num = page.locator('.cm-lineNumbers .cm-gutterElement', { hasText: /^2$/ });

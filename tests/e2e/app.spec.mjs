@@ -110,3 +110,65 @@ test('Android: classic keyboard input by default (keeps auto-capitals off)', asy
   expect(await usesEditContext()).toBe(false);
   expect(await page.evaluate(() => window.__app.ws.view.contentDOM.getAttribute('autocapitalize'))).toBe('off');
 });
+
+test('F5 runs the file; Ctrl+Enter inserts a line below in the editor', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /Scratch file/ }).click();
+  await setText(page, 'console.log(6 * 7)', 3);
+  await page.keyboard.press('F5');
+  await expect(page.locator('#console-view .console-line', { hasText: '42' })).toHaveCount(1);
+  await page.evaluate(() => window.__app.ws.view.focus());
+  await page.keyboard.press('Control+Enter');
+  expect(await page.evaluate(() => window.__app.ws.view.state.doc.toString())).toBe('console.log(6 * 7)\n');
+});
+
+test('bottom panel: the whole bar resizes, dragging it down closes it, ✕ is always on screen', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /Scratch file/ }).click();
+  await page.evaluate(() => window.__app.bottom.show('console'));
+  const panel = page.locator('#bottom-panel');
+  const head = page.locator('#bottom-panel .panel-head');
+  const close = page.locator('#bottom-panel [aria-label="Close panel"]');
+  const vw = page.viewportSize().width;
+  const c = await close.boundingBox();
+  expect(c.x + c.width).toBeLessThanOrEqual(vw + 1);
+  const h0 = (await panel.boundingBox()).height;
+  const hb = await head.boundingBox();
+  // drag from the middle of the bar (between the tabs and the buttons) upward
+  const x = hb.x + hb.width * 0.62, y = hb.y + hb.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y - 40, { steps: 4 });
+  await page.mouse.move(x, y - 80, { steps: 4 });
+  await page.mouse.up();
+  expect((await panel.boundingBox()).height).toBeGreaterThan(h0 + 60);
+  // drag it almost to the bottom → closed
+  const hb2 = await head.boundingBox();
+  await page.mouse.move(x, hb2.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(x, page.viewportSize().height - 5, { steps: 8 });
+  await page.mouse.up();
+  await expect(panel).toBeHidden();
+});
+
+test('status bar: one line, never cut off — what does not fit is in ⋯', async ({ page }) => {
+  await boot(page);
+  await page.getByRole('button', { name: /Scratch file/ }).click();
+  const bar = page.locator('#statusbar');
+  await page.waitForTimeout(100);
+  const over = await bar.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(over).toBeLessThanOrEqual(1);
+  const more = bar.locator('[data-key="more"]');
+  if (await more.isVisible()) {
+    // whatever is hidden is reachable from the menu, e.g. soft wrap
+    const wrapHidden = await bar.locator('[data-key="wrap"]').evaluate((el) => el.classList.contains('sb-overflowed'));
+    await more.click();
+    if (wrapHidden) {
+      const wrapBefore = await page.evaluate(() => window.__app.ws.activeDoc.wrap);
+      await page.locator('.menu-item', { hasText: 'Soft wrap' }).click();
+      expect(await page.evaluate(() => window.__app.ws.activeDoc.wrap)).toBe(!wrapBefore);
+    } else {
+      await expect(page.locator('.popup-menu')).toBeVisible();
+    }
+  }
+});

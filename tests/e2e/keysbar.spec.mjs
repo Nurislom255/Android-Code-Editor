@@ -113,9 +113,18 @@ test('a leaning, curved swipe up still types the corner symbol', async ({ page }
   expect(await editorText(page)).toBe('x =>');
 });
 
-test('holding a symbol key types its corner symbol', async ({ page }) => {
+test('holding a symbol key types its corner symbol, with a visible preview while held', async ({ page }) => {
   await setup(page, 'x ');
-  await touchPath(page, '=', [], 550);
+  const b = await key(page, '=').boundingBox();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: b.x + b.width / 2, y: b.y + b.height / 2 }] });
+  await page.waitForTimeout(550);
+  await expect(page.locator('.key-preview')).toBeVisible();
+  await expect(page.locator('.key-preview-char')).toHaveText('=>');
+  await expect(key(page, '=')).toHaveClass(/swiped/);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(page.locator('.key-preview')).toHaveCount(0);
   expect(await editorText(page)).toBe('x =>');
   // a quick tap is still the main symbol
   await key(page, '=').tap();
@@ -144,8 +153,9 @@ test('Home/End with the Shift modifier, and Tab (no arrow keys any more)', async
   expect(await editorText(page)).toBe('  x');
 });
 
-test('the most used line keys come first', async ({ page }) => {
+test('the most used line keys come first; Sel+ is gone (Ctrl+D does it)', async ({ page }) => {
   await setup(page, '');
+  await expect(page.locator('#keys-bar .key', { hasText: /^Sel\+$/ })).toHaveCount(0);
   const labels = await page.locator('#keys-bar .keys-actions .key').evaluateAll((els) => els.slice(0, 5).map((e) => e.textContent));
   expect(labels).toEqual(['Tab', '⏎;', '↵Ln', '⇡Ln', '⇣Ln']);
 });

@@ -51,7 +51,7 @@ test('diff view and discard', async ({ page }) => {
   const panel = page.locator('.side-panel[data-panel="git"]');
   await panel.getByRole('button', { name: 'Initialize repository' }).click();
   await panel.locator('textarea').fill('first');
-  // Ctrl+Enter in the message box commits (and must not trigger "Run")
+  // Ctrl+Enter in the message box commits (and must not insert a line in the editor)
   await panel.locator('textarea').press(`${mod}+Enter`);
   await expect(panel.locator('.commit-row')).toHaveCount(1);
   await openFile(page, 'main.js');

@@ -223,6 +223,23 @@ test.describe('HTML & CSS', () => {
     expect(await head(page)).toBe('<body>\n  <div>'.length);
   });
 
+  test('lorem20 → 20 words of placeholder text; a keyboard capital "P" still suggests <p>', async ({ page }) => {
+    await htmlFile(page, '<body>\n  \n</body>');
+    await page.evaluate(() => window.__app.ws.view.dispatch({ selection: { anchor: 9 } }));
+    await page.keyboard.type('lorem20');
+    await expect(page.locator('.cm-completionLabel', { hasText: 'lorem20' })).toBeVisible();
+    await settle(page);
+    await page.keyboard.press('Tab');
+    const words = (await editorText(page)).split('\n')[1].trim().split(/\s+/);
+    expect(words.length).toBe(20);
+    await setText(page, '<body>\n  \n</body>', 9);
+    await page.keyboard.type('P');
+    await expect(page.locator('.cm-completionLabel').first()).toHaveText('p');
+    await settle(page);
+    await page.keyboard.press('Tab');
+    expect(await editorText(page)).toBe('<body>\n  <p></p>\n</body>');
+  });
+
   test('in a sentence, tag suggestions show but Enter still starts a new line', async ({ page, isMobile }) => {
     test.skip(isMobile, ANDROID_KEYS);
     await htmlFile(page, '<p>Meet me at the');
