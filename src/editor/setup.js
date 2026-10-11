@@ -25,6 +25,7 @@ import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
 import { cursorsOnLines } from './editActions.js';
 import { wordHighlight } from './wordHighlight.js';
+import { mirrorTyping, quietSelectionBar } from './multiCursor.js';
 
 export const comp = {
   language: new Compartment(),
@@ -100,6 +101,8 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     drawSelection(),
     dropCursor(),
     EditorState.allowMultipleSelections.of(true),
+    mirrorTyping,
+    quietSelectionBar,
     indentOnInput(),
     editorHighlighting,
     bracketMatching(),
