@@ -1,7 +1,7 @@
 // Keyboard shortcuts as data (core/keybindings.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCombo, formatCombo, comboFromEvent, comboProblem, effectiveKey, conflictsOf, resolveCombo, normalizeBindings } from '../../src/core/keybindings.js';
+import { parseCombo, formatCombo, comboFromEvent, comboProblem, effectiveKey, conflictsOf, resolveCombo, normalizeBindings, parseBinding, bindingProblem, chordsFrom, prefixClashes, effectiveBindings } from '../../src/core/keybindings.js';
 
 test('shortcuts are written one way', () => {
   assert.equal(parseCombo('ctrl+shift+k'), 'Ctrl+Shift+K');
@@ -70,4 +70,37 @@ test('stored changes are cleaned', () => {
     'canonical; same as default dropped; removing a missing shortcut dropped; unknown command and plain key dropped');
   assert.deepEqual(normalizeBindings({ deleteLine: '', a: 'alt+up' }), { deleteLine: '', a: 'Alt+↑' }, 'without defaults (settings): only the form');
   assert.deepEqual(normalizeBindings('junk'), {});
+});
+
+test('two-key shortcuts (VS Code chords): written several ways, one canonical form', () => {
+  assert.equal(parseBinding('Ctrl+K F'), 'Ctrl+K F');
+  assert.equal(parseBinding('ctrl+k, ctrl+0'), 'Ctrl+K Ctrl+0');
+  assert.equal(parseBinding('Ctrl + K then f'), 'Ctrl+K F');
+  assert.equal(parseBinding('Ctrl+K Enter'), 'Ctrl+K Enter');
+  assert.equal(parseBinding('Ctrl+Shift+K'), 'Ctrl+Shift+K', 'one key still works');
+  assert.equal(parseBinding('Ctrl+K F G'), null, 'at most two keys');
+  assert.equal(parseBinding('Ctrl+K Nope'), null);
+  assert.equal(bindingProblem('Ctrl+K F'), null);
+  assert.match(bindingProblem('K F'), /starts with Ctrl, Alt or Cmd/);
+  assert.match(bindingProblem('Ctrl+K Esc'), /Esc cancels/);
+  assert.match(bindingProblem('K'), /Ctrl or Alt/);
+  // the second key of a chord: a plain letter, even while a keyboard is composing
+  const ev = (o) => ({ key: '', code: '', ctrlKey: false, shiftKey: false, altKey: false, metaKey: false, ...o });
+  assert.equal(comboFromEvent(ev({ key: 'Unidentified', code: 'KeyF', keyCode: 229, isComposing: true }), { anyKey: true }), 'F');
+  assert.equal(comboFromEvent(ev({ key: 'Unidentified', code: 'KeyF', keyCode: 229, isComposing: true })), null);
+});
+
+test('two-key shortcuts: which start with a key, and what clashes with what', () => {
+  const defaults = { closeProject: 'Ctrl+K F', foldAll: 'Ctrl+K Ctrl+0', save: 'Ctrl+S', zen: 'Ctrl+Alt+Z' };
+  assert.deepEqual(chordsFrom('Ctrl+K', defaults), [['Ctrl+K F', 'closeProject'], ['Ctrl+K Ctrl+0', 'foldAll']], 'plain second keys first');
+  assert.deepEqual(chordsFrom('Ctrl+K', defaults, { closeProject: '' }), [['Ctrl+K Ctrl+0', 'foldAll']], 'one taken off');
+  assert.deepEqual(chordsFrom('Ctrl+S', defaults), []);
+  assert.deepEqual(chordsFrom('Ctrl+J', defaults, { zen: 'Ctrl+J Z' }), [['Ctrl+J Z', 'zen']], 'the owner\'s own');
+  // Ctrl+K alone vs. Ctrl+K …: they can't both work
+  assert.deepEqual(prefixClashes('Ctrl+K', 'save', defaults).sort(), ['closeProject', 'foldAll']);
+  assert.deepEqual(prefixClashes('Ctrl+S Q', 'zen', defaults), ['save']);
+  assert.deepEqual(prefixClashes('Ctrl+K Q', 'zen', defaults), []);
+  assert.deepEqual(effectiveBindings(defaults, { save: '', zen: 'Ctrl+J Z' }), { closeProject: 'Ctrl+K F', foldAll: 'Ctrl+K Ctrl+0', zen: 'Ctrl+J Z' });
+  // stored changes: chords kept, canonical
+  assert.deepEqual(normalizeBindings({ zen: 'ctrl+k, z', save: 'K F' }, defaults), { zen: 'Ctrl+K Z' });
 });

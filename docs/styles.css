@@ -1486,6 +1486,23 @@ html.drag-moving, html.drag-moving * { cursor: grabbing !important; }
 html.drag-moving .tree-row:not(.active):not(.selected):hover, html.drag-moving .tree-row:not(.active):not(.selected):active { background: none; } /* no hover light under the lifted row */
 html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto the list below it */
 
+/* ---- Two-key shortcuts: waiting for the second key (app.js startChord) ---------- */
+.chord-pill {
+  position: fixed; left: 50%; bottom: 44px; transform: translateX(-50%); z-index: 75; pointer-events: none;
+  zoom: var(--ui-zoom, 1); width: max-content; max-width: min(720px, calc((100vw - 16px) / var(--ui-zoom, 1)));
+  max-height: calc((var(--app-height, 100vh) - 60px) / var(--ui-zoom, 1)); overflow: hidden;
+  padding: 8px 12px 10px; border: 1px solid var(--accent); border-radius: 10px;
+  background: var(--bg-panel-alt); color: var(--text); font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: menu-in 110ms ease-out;
+}
+.chord-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chord-esc { margin-left: auto; color: var(--text-faint); font-size: 11.5px; }
+.chord-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 2px 14px; margin-top: 6px; width: min(690px, calc((100vw - 48px) / var(--ui-zoom, 1))); }
+.chord-row { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 8px; color: var(--text-dim); white-space: nowrap; }
+.chord-row kbd { justify-self: start; }
+.chord-row span { overflow: hidden; text-overflow: ellipsis; }
+.chord-more { margin-top: 4px; color: var(--text-faint); font-size: 11.5px; }
+
 /* ---- Interface size (Settings → Appearance) --------------------------------
    Everything around the code is zoomed; the code has its own font size.
    Under `zoom`, px and vw lengths are multiplied, so the few vw/vh-based

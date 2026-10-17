@@ -173,6 +173,17 @@ working (also inside the editor).
     following the open file, and `src/main/java` shown as one row (Settings
     → Files & saving).
 - With a keyboard: F2 rename, Delete, Ctrl+C / X / V in the tree.
+- **Two-key shortcuts** (VS Code's chords): press **Ctrl+K**, and a panel
+  lists what the second key does — **F** closes the project, **M** changes
+  the language, **P** copies the file's path, **R** shows it in the tree,
+  **V** previews, **W** closes all tabs, **U** the saved ones, **Enter**
+  keeps a preview tab, **T** colour theme; with Ctrl held: **Ctrl+C / Ctrl+U**
+  add / remove a line comment, **Ctrl+0 / Ctrl+J** fold / unfold all,
+  **Ctrl+X** trims trailing spaces, **Ctrl+O** opens a folder, **Ctrl+S**
+  lists the shortcuts. Esc cancels. Make your own in Settings → Keyboard
+  shortcuts: press two keys one after the other (or type "Ctrl+K Z").
+  (Ctrl+K Ctrl+W and Ctrl+K Ctrl+T, VS Code's, are left out: the browser
+  keeps Ctrl+W and Ctrl+T for itself.)
 - **Panes and the sidebar** (as in VS Code): **Ctrl+1** / **Ctrl+2** put the
   cursor in the first / second code pane (Ctrl+2 splits first); **Ctrl+B**
   hides and shows the sidebar — or drag its edge all the way to the left and

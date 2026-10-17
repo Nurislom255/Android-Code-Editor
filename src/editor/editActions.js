@@ -8,7 +8,7 @@
 // decided elsewhere.
 
 import {
-  undo as cmUndo, redo as cmRedo, indentMore, indentLess, toggleComment as cmToggleComment,
+  undo as cmUndo, redo as cmRedo, indentMore, indentLess, toggleComment as cmToggleComment, lineComment, lineUncomment,
   copyLineDown, moveLineUp, moveLineDown, deleteLine as cmDeleteLine, selectAll as cmSelectAll,
   cursorCharLeft, cursorCharRight, cursorLineUp, cursorLineDown, selectCharLeft, selectCharRight,
   selectLineUp, selectLineDown, cursorGroupLeft, cursorGroupRight, selectGroupLeft, selectGroupRight,
@@ -61,6 +61,22 @@ export const redo = run(cmRedo, 'Redo');
 export const indent = run(indentMore, 'Indent');
 export const outdent = run(indentLess, 'Outdent');
 export const toggleComment = run(cmToggleComment, 'Toggle comment');
+export const addLineComment = run(lineComment, 'Commented');
+export const removeLineComment = run(lineUncomment, 'Uncommented');
+
+/** Removes spaces and tabs at the ends of lines (VS Code: Ctrl+K Ctrl+X). */
+export function trimTrailingWhitespace(view) {
+  if (!view || view.state.readOnly) return null;
+  const changes = [];
+  for (let i = 1; i <= view.state.doc.lines; i++) {
+    const line = view.state.doc.line(i);
+    const m = /[ \t]+$/.exec(line.text);
+    if (m) changes.push({ from: line.from + m.index, to: line.to });
+  }
+  if (!changes.length) return 'Nothing to trim';
+  view.dispatch({ changes, userEvent: 'delete' });
+  return `Trimmed ${changes.length} line${changes.length > 1 ? 's' : ''}`;
+}
 export const duplicateLine = run(copyLineDown, 'Duplicate line');
 export const lineUp = run(moveLineUp, 'Move line up');
 export const lineDown = run(moveLineDown, 'Move line down');

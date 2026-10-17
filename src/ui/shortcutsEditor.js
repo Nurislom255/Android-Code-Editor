@@ -2,16 +2,18 @@
 // Bluetooth or USB keyboard: every command with its shortcut. Tap one, then
 // press the new shortcut (or type it, e.g. "Ctrl+Shift+K"); take it off, or
 // put the default back. A shortcut belongs to one command: giving it to
-// another one moves it.
+// another one moves it. Two keys pressed one after the other (Ctrl+K, then
+// F) make a two-key shortcut, as in VS Code.
 
 import { h } from './dom.js';
 import { showModal, confirm } from './overlays.js';
-import { comboFromEvent, parseCombo, comboProblem, effectiveKey, conflictsOf, normalizeBindings } from '../core/keybindings.js';
+import { comboFromEvent, parseBinding, bindingProblem, comboProblem, effectiveKey, conflictsOf, prefixClashes, normalizeBindings } from '../core/keybindings.js';
 
 const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 // Browsers keep these for their own tabs and windows.
 const BROWSER_KEYS = new Set(['Ctrl+W', 'Ctrl+T', 'Ctrl+N', 'Ctrl+Shift+N', 'Ctrl+Shift+T', 'Ctrl+Shift+W', 'Ctrl+Shift+Q']);
 const words = (...parts) => parts.filter(Boolean).join(' ').toLowerCase();
+const CHORD_MS = 1500; // a second key this soon after the first: a two-key shortcut
 
 export class ShortcutsEditor {
   /** @param {{get:()=>object, set:(patch:object)=>void, commands:()=>{id:string,label:string,key:string}[]}} o */
@@ -57,6 +59,8 @@ export class ShortcutsEditor {
     const d = this.defaults();
     const o = { ...this.overrides() };
     if (combo) for (const other of conflictsOf(combo, id, d, o)) o[other] = '';
+    // A two-key shortcut whose first key was another command's: that one is taken off.
+    if (combo && combo.includes(' ')) for (const other of prefixClashes(combo, id, d, o)) o[other] = '';
     if (combo === (d[id] || '')) delete o[id]; else o[id] = combo;
     this.set({ keyBindings: normalizeBindings(o, d) });
     this.render();
@@ -71,32 +75,43 @@ export class ShortcutsEditor {
     const check = () => {
       msg.classList.remove('error');
       if (!combo) { msg.textContent = 'No shortcut.'; return true; }
-      const problem = comboProblem(combo);
+      const problem = bindingProblem(combo);
       if (problem) { msg.textContent = problem; msg.classList.add('error'); return false; }
+      const chord = combo.includes(' ');
+      const clashes = prefixClashes(combo, c.id, d, o);
+      if (!chord && clashes.length) {
+        const ks = clashes.map((id) => effectiveKey(id, d, o));
+        msg.textContent = `${combo} starts ${clashes.length === 1 ? 'a two-key shortcut' : `${clashes.length} two-key shortcuts`} (${ks.slice(0, 3).join(', ')}${ks.length > 3 ? '…' : ''}): pressed alone it waits for a second key. Pick another key.`;
+        msg.classList.add('error');
+        return false;
+      }
       const others = conflictsOf(combo, c.id, d, o).map(label);
       msg.textContent = others.length ? `Now the shortcut of ${others.join(', ')}: saving moves it here.`
-        : BROWSER_KEYS.has(combo) ? 'The browser may keep this one for itself.' : '';
+        : chord && clashes.length ? `${combo.split(' ')[0]} alone is the shortcut of ${clashes.map(label).join(', ')}: saving takes it off (it will wait for a second key).`
+          : combo.split(' ').some((k) => BROWSER_KEYS.has(k)) ? 'The browser may keep this one for itself.' : '';
       return true;
     };
     const take = (k) => { combo = k; shown.textContent = k || '—'; check(); };
     const capture = h('div.sc-capture', { tabindex: '0', role: 'textbox', 'aria-label': 'Press the new shortcut' },
-      h('div.s-desc', 'Press the new shortcut on the keyboard'), shown);
+      h('div.s-desc', 'Press the new shortcut on the keyboard — two in a row (Ctrl+K, then F) make a two-key one'), shown);
+    let first = null; // { key, at }: the key just pressed, which a second one may follow
     capture.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' || (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey)) return; // closes / moves on
-      const k = comboFromEvent(e, { mac: MAC });
+      const soon = first && Date.now() - first.at < CHORD_MS && !comboProblem(first.key);
+      const k = comboFromEvent(e, { mac: MAC, anyKey: soon });
       if (!k) return;
       e.preventDefault();
       e.stopPropagation();
       typed.value = '';
-      take(k);
+      if (soon) { take(`${first.key} ${k}`); first = null; } else { take(k); first = { key: k, at: Date.now() }; }
     });
-    const typed = h('input.input.sc-typed', { type: 'text', placeholder: 'or type it: Ctrl+Shift+K, Alt+↑, F6', 'aria-label': 'Type the shortcut', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off' });
+    const typed = h('input.input.sc-typed', { type: 'text', placeholder: 'or type it: Ctrl+Shift+K, Alt+↑, F6, Ctrl+K F', 'aria-label': 'Type the shortcut', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off' });
     typed.addEventListener('input', () => {
       const v = typed.value.trim();
       if (!v) return;
-      const k = parseCombo(v);
+      const k = parseBinding(v);
       if (k) take(k);
-      else { msg.classList.add('error'); msg.textContent = 'Not a shortcut yet: write it like Ctrl+Shift+K or Alt+↑.'; }
+      else { msg.classList.add('error'); msg.textContent = 'Not a shortcut yet: write it like Ctrl+Shift+K, Alt+↑ or Ctrl+K F.'; }
     });
     const m = showModal(c.label, h('div.sc-edit', capture, typed, msg, h('p.s-desc', `Default: ${d[c.id] || 'none'}`)), {
       actions: [

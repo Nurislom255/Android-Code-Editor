@@ -6,6 +6,10 @@
 // order Ctrl, Shift, Alt, Cmd, then the key — "Ctrl+Shift+K", "Alt+↑", "F5",
 // "Ctrl+Shift+\". Letters are upper case; arrows are ↑ ↓ ← →; named keys are
 // Esc, Del, Home, End, PgUp, PgDn, Insert, Enter, Tab, Space, Backspace.
+//
+// A shortcut may also be two keys, one after the other, as in VS Code:
+// "Ctrl+K F" is Ctrl+K, then F ("Ctrl+K Ctrl+0": then Ctrl+0). The first
+// key needs Ctrl, Alt or Cmd; pressed alone it waits for the second.
 
 const NAMED = {
   arrowup: '↑', up: '↑', '↑': '↑', arrowdown: '↓', down: '↓', '↓': '↓',
@@ -70,9 +74,10 @@ export function parseCombo(text) {
  * an F-key, is still a shortcut — named by its physical key if the browser
  * reports it as "Unidentified".
  */
-export function comboFromEvent(e, { mac = false } = {}) {
+export function comboFromEvent(e, { mac = false, anyKey = false } = {}) {
   if (!e || !e.key || e.key === 'Dead' || MODIFIER_KEYS.has(e.key)) return null;
-  const chord = e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.key);
+  // anyKey: the second key of a two-key shortcut — even a plain letter is a key then
+  const chord = anyKey || e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.key);
   if (!chord && (e.isComposing || e.keyCode === 229)) return null;
   if (e.key === 'Unidentified' && !(chord && /^(Key[A-Z]|Digit\d)$/.test(e.code || ''))) return null;
   let key = null;
@@ -86,6 +91,31 @@ export function comboFromEvent(e, { mac = false } = {}) {
   if (!key) return null;
   const meta = e.metaKey && !(mac && !e.ctrlKey);
   return formatCombo({ ctrl: e.ctrlKey || (mac && e.metaKey && !e.ctrlKey), shift: e.shiftKey, alt: e.altKey, meta, key });
+}
+
+/**
+ * Reads a shortcut of one key or two ("Ctrl+K F", "ctrl+k, ctrl+0", "Ctrl+K
+ * then F") → canonical ("Ctrl+K F"), or null.
+ */
+export function parseBinding(text) {
+  if (typeof text !== 'string') return null;
+  const s = text.trim().replace(/\s*\+\s*/g, '+'); // "Ctrl + K" is one key
+  if (!s) return null;
+  const parts = s.split(/\s*,\s*|\s+then\s+|\s+/i).filter(Boolean);
+  if (parts.length > 2) return null;
+  const keys = parts.map(parseCombo);
+  return keys.every(Boolean) ? keys.join(' ') : null;
+}
+
+/** parseBinding, then whether it may be used (see comboProblem) → null when fine, else the reason. */
+export function bindingProblem(text) {
+  const b = parseBinding(text);
+  if (!b) return 'Not a shortcut. Write it like Ctrl+Shift+K or Alt+↑ — or two keys: Ctrl+K F.';
+  const [first, second] = b.split(' ');
+  const p = comboProblem(first);
+  if (p) return second ? 'A two-key shortcut starts with Ctrl, Alt or Cmd (like Ctrl+K).' : p;
+  if (second === 'Esc') return 'Esc cancels a two-key shortcut: pick another second key.';
+  return null;
 }
 
 /**
@@ -108,6 +138,37 @@ const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 /** The shortcut a command has now: the owner's, else the default ("" = none). */
 export function effectiveKey(id, defaults, overrides = {}) {
   return own(overrides, id) ? overrides[id] || '' : defaults[id] || '';
+}
+
+/** Every command's shortcut now (the defaults with the owner's changes), without the empty ones. */
+export function effectiveBindings(defaults, overrides = {}) {
+  const ids = new Set([...Object.keys(defaults), ...Object.keys(overrides)]);
+  const out = {};
+  for (const id of ids) { const k = effectiveKey(id, defaults, overrides); if (k) out[id] = k; }
+  return out;
+}
+
+/** The two-key shortcuts that start with `combo`: [[shortcut, id], …] — plain second keys first, then A–Z. */
+export function chordsFrom(combo, defaults, overrides = {}) {
+  if (!combo) return [];
+  const rank = ([k]) => { const second = k.slice(combo.length + 1); return [second.includes('+') ? 1 : 0, second]; };
+  return Object.entries(effectiveBindings(defaults, overrides))
+    .filter(([, k]) => k.startsWith(combo + ' '))
+    .map(([id, k]) => [k, id])
+    .sort((a, b) => { const [x, y] = [rank(a), rank(b)]; return x[0] - y[0] || (x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0); });
+}
+
+/**
+ * Commands whose shortcut can't work together with `binding` for `id`: one
+ * is the first key of the other (Ctrl+K alone vs. Ctrl+K F — pressed, Ctrl+K
+ * waits for a second key, so the one-key shortcut would never run).
+ */
+export function prefixClashes(binding, id, defaults, overrides = {}) {
+  if (!binding) return [];
+  const [first, second] = binding.split(' ');
+  return Object.entries(effectiveBindings(defaults, overrides))
+    .filter(([other, k]) => other !== id && (second ? k === first : k.startsWith(first + ' ')))
+    .map(([other]) => other);
 }
 
 /** Commands other than `id` that `combo` already runs. */
@@ -149,8 +210,8 @@ export function normalizeBindings(raw, defaults = null) {
     if (typeof v !== 'string' || !/^[\w.-]{1,60}$/.test(id)) continue;
     if (defaults && !own(defaults, id)) continue;
     if (v === '') { if (!defaults || defaults[id]) out[id] = ''; continue; }
-    const c = parseCombo(v);
-    if (c && !comboProblem(c) && (!defaults || c !== defaults[id])) out[id] = c;
+    const c = parseBinding(v);
+    if (c && !bindingProblem(c) && (!defaults || c !== defaults[id])) out[id] = c;
   }
   return out;
 }

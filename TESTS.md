@@ -203,6 +203,13 @@ Automated
   and comes back at its width; `lookfeel` — a mouse hovering an icon shows
   its name on Android, not on desktop (the browser does); `settings` — ← on
   wide screens; unit `pages`.
+- Two-key shortcuts (v2.9.0): unit `keybindings` — "Ctrl+K F" written
+  several ways, what may be one, which start with a key (plain second keys
+  first), Ctrl+K alone vs. Ctrl+K …; `settings` — Ctrl+K shows the panel
+  with the second keys, Esc cancels, Ctrl+K Ctrl+C comments, Ctrl+K Ctrl+X
+  trims, an unknown second key says so and types nothing, Ctrl+K F closes
+  the project, listed in Keyboard shortcuts; two keys pressed in a row in
+  Settings make one (Ctrl+K alone refused), typed works, and it runs.
 
 On the device
 - [ ] Tablet with a keyboard: type `doc`, ↓ ↓ in the list, Enter — the
@@ -214,6 +221,8 @@ On the device
 - [ ] Drag the sidebar's edge to the left: it hides; Ctrl+B brings it back.
 - [ ] A mouse on the tablet: rest it on an icon — its name shows.
 - [ ] Tablet: Settings → ← closes it.
+- [ ] With a keyboard: Ctrl+K — the panel; F closes the project. Settings →
+      Keyboard shortcuts: give a command Ctrl+K then a letter; use it.
 - [ ] Tap a few files in the tree: one italic tab follows; type in one: it
       stays.
 - [ ] Long-press a tab, drag it to the lower half of the code: split.
