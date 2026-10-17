@@ -13,7 +13,7 @@ build, and how we know it is done.
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0) — see "Phase 4 — result". Waiting for the owner's test on the phone |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
@@ -681,6 +681,27 @@ Found while testing:
   item now under it — in the test, *Delete*. Menus opened by a long-press now
   open clear of the finger, and that one click is swallowed (tree, tabs, the
   project name).
+
+### After Phase 4 — fixes from the owner's test (v2.8.0)
+
+| Report | Cause | Fix |
+|---|---|---|
+| Files can't be reordered in the tree | The tree only knew "into a folder": a file dropped next to another went into that file's folder, which is where it already was, so nothing happened | Each folder can have its **own order**: drop an entry between two rows and it stays there. Folders stay above files (a file let go among folders lands at the top of the files). The order is saved per project, follows renames and moves, and a duplicate goes right after its original. Folder menu → **Sort A–Z** (Files ⋯ for the root, or every folder) forgets it. The middle half of a folder row still means "into it" |
+| Dragging looks wrong: the item turns into a small floating rectangle | The drag showed a label chip instead of the item | **Lift and slide**, as in a phone's lists: the row (or tab) itself lifts with a shadow and follows the finger (the tree and Open editors only up and down); where it would land, an empty slot opens and the other rows slide aside (160 ms, FLIP). Let go: the copy settles into the slot. Into a folder or onto the code to split: the target lights up and the slot stays put. A dragged open folder travels closed; several selected entries show a count |
+| (the same, for the tab bar and Open editors) | — | The tab bar and the **Open editors** list reorder the same way; Open editors rows can also be dragged into the other pane's group, and have the tab menu on a long-press (now with **Keep open** for a preview tab) |
+
+Found while testing:
+- **A tab dragged into the other pane's bar dropped by itself on touch
+  screens.** The "don't scroll while dragging" guard listened on the bar the
+  tab came from; once the tab sat in the other bar, the browser took the
+  touch for a scroll and cancelled the drag. The guard is now on the page.
+- Neither the tree nor a tab bar is redrawn while an item is lifted (a
+  redraw would take the row from under the finger); they catch up when it
+  is let go.
+
+Changed: a compact `a/b/c` row is now dragged as a whole (it moves `a`
+with everything in it; before, it moved only `c`), since its place in the
+list is `a`'s.
 
 ---
 

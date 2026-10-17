@@ -154,14 +154,19 @@ working (also inside the editor).
   or double-tapping its tab keeps it.
 - **Split by dragging**: hold a tab, drag it onto the right half of the code
   (the lower half on a phone): a "Split" zone shows; let go.
+- **Reorder tabs** by dragging them along the bar (or in *Open editors*):
+  the others slide aside to make room.
 - **The file tree** works like VS Code's:
   - tap a folder, then **+** (new file) or the new-folder button: it is
     created *in that folder*, named right in the tree (Enter keeps it, Esc
     cancels). With a file selected, its folder;
   - long-press a file or folder: Rename (in place), Cut, Copy, Paste,
     Select (then tap more), Duplicate, Delete…;
-  - drag a file onto a folder — hold it over a closed folder and it opens;
-    the "Moved" message has **Undo**;
+  - **drag to reorder**: hold a row and move it — it lifts, the other rows
+    slide aside, and it stays where you let go (each folder keeps its own
+    order; folders stay on top; folder menu → *Sort A–Z* forgets it);
+  - drag onto the middle of a folder to move it inside — hold it over a
+    closed folder and it opens; the "Moved" message has **Undo**;
   - **Delete** goes to the trash for 7 days: Undo right away, or Files ⋯ →
     Trash to restore later;
   - a **filter** box, **Open editors** (your open tabs, with ✕), the tree
