@@ -464,3 +464,24 @@ test('keys starting with @ that are not actions are typed: CSS @media, JS @, the
   await at.tap();
   expect(await editorText(page)).toBe('@media @');
 });
+
+test('with little height (keyboard open), nothing from above shows through the bar or the ⋯ sheet', async ({ page }) => {
+  await setup(page, Array.from({ length: 40 }, (_, i) => `console.log(${i});`).join('\n'), 0);
+  const w = page.viewportSize().width;
+  await page.setViewportSize({ width: w, height: 420 });
+  await named(page, 'All keys').tap();
+  await expect(page.locator('#keys-bar .keys-sheet')).toBeVisible();
+  // what is under the finger along the left edge, from the status bar down
+  const strangers = await page.evaluate(() => {
+    const top = document.getElementById('statusbar').getBoundingClientRect().top;
+    const out = [];
+    for (let y = top + 2; y < innerHeight - 2; y += 8) {
+      for (const x of [6, 24, 44]) {
+        const el = document.elementFromPoint(x, y);
+        if (el && !el.closest('#keys-bar, #statusbar')) out.push(`${x},${Math.round(y)}: ${el.id || el.className || el.tagName}`);
+      }
+    }
+    return out;
+  });
+  expect(strangers).toEqual([]);
+});

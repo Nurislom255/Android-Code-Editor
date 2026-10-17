@@ -277,12 +277,17 @@ svg { display: block; flex-shrink: 0; }
   display: flex;
   min-height: 0;
   position: relative;
+  /* With the keyboard open and the ⋯ sheet up there may be almost no room
+     left: what doesn't fit is cut, never drawn over the bars below. */
+  overflow: hidden;
 }
 
 #activitybar {
   display: flex;
   flex-direction: column;
   align-items: center;
+  overflow-y: auto;
+  scrollbar-width: none;
   width: 48px;
   padding: 4px 0;
   gap: 2px;
@@ -967,6 +972,8 @@ kbd {
 
 /* ---- Status bar ---------------------------------------------------------- */
 #statusbar {
+  position: relative;
+  z-index: 3; /* over anything that spills out of the panels above */
   display: flex;
   align-items: center;
   height: var(--statusbar-h);
@@ -1007,6 +1014,8 @@ kbd {
    Rows of equal keys (≥ 44 px on a 360 px phone), no sideways scrolling;
    only the Ctrl shortcut strip and the "More" sheet scroll. */
 #keys-bar {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 4px;
