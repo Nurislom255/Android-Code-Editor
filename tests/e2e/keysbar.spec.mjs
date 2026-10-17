@@ -437,3 +437,51 @@ test('the bar hides when the keyboard closes, also after the window changes size
   await page.setViewportSize({ width: size.width - 60, height: Math.round(size.height * 0.55) });
   await expect(bar).toBeHidden();
 });
+
+test('⋯ → Pin, then a key: it goes on the bar (in place of a context key) and stays after a reload', async ({ page }) => {
+  await setup(page, '');
+  await named(page, 'All keys').tap();
+  await page.locator('#keys-bar .keys-sheet-head .key', { hasText: 'Pin' }).tap();
+  await expect(page.locator('#keys-bar .keys-sheet-name')).toHaveText('Tap a key to put it on the bar');
+  await page.locator('#keys-bar .keys-sheet .key[aria-label^="Format"]').tap();
+  await expect(page.locator('#keys-bar .keys-sheet')).toHaveCount(0);
+  await expect(page.locator('#keys-bar .keys-row .key[aria-label^="Format"]')).toBeVisible();
+  const profile = await page.evaluate(() => window.__app.keysBar.profile);
+  expect(await page.evaluate((p) => window.__app.settings.keysBar[p].flat(), profile)).toContain('@format');
+  // Customize opens Settings → Keys bar
+  await named(page, 'All keys').tap();
+  await page.locator('#keys-bar .keys-sheet-head .key', { hasText: 'Customize' }).tap();
+  await expect(page.locator('.settings-view .kbe')).toBeVisible();
+});
+
+test('keys starting with @ that are not actions are typed: CSS @media, JS @, the @ operator', async ({ page }) => {
+  await scratch(page, 'a.css', '|');
+  await expect(key(page, '@media')).toBeVisible();
+  await key(page, '@media').tap();
+  expect(await editorText(page)).toBe('@media ');
+  await named(page, 'All keys').tap();
+  const at = page.locator('#keys-bar .keys-sheet .key', { has: page.locator('.key-label', { hasText: /^@$/ }) }).first();
+  await at.tap();
+  expect(await editorText(page)).toBe('@media @');
+});
+
+test('with little height (keyboard open), nothing from above shows through the bar or the ⋯ sheet', async ({ page }) => {
+  await setup(page, Array.from({ length: 40 }, (_, i) => `console.log(${i});`).join('\n'), 0);
+  const w = page.viewportSize().width;
+  await page.setViewportSize({ width: w, height: 420 });
+  await named(page, 'All keys').tap();
+  await expect(page.locator('#keys-bar .keys-sheet')).toBeVisible();
+  // what is under the finger along the left edge, from the status bar down
+  const strangers = await page.evaluate(() => {
+    const top = document.getElementById('statusbar').getBoundingClientRect().top;
+    const out = [];
+    for (let y = top + 2; y < innerHeight - 2; y += 8) {
+      for (const x of [6, 24, 44]) {
+        const el = document.elementFromPoint(x, y);
+        if (el && !el.closest('#keys-bar, #statusbar')) out.push(`${x},${Math.round(y)}: ${el.id || el.className || el.tagName}`);
+      }
+    }
+    return out;
+  });
+  expect(strangers).toEqual([]);
+});

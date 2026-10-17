@@ -28,8 +28,9 @@
 // focus (and the soft keyboard) in the editor.
 
 import { h, icon, haptic, isTouchDevice } from './dom.js';
+import { toast } from './overlays.js';
 import {
-  parseLayout, parseToken, groupForLanguage, DEFAULT_LAYOUTS, classifyKeyDrag, stableSlots, keysProfile,
+  parseLayout, parseToken, groupForLanguage, DEFAULT_LAYOUTS, classifyKeyDrag, stableSlots, keysProfile, barFor, pinToBar, barKeyInfo, barProblem, catalogId,
   ACTION_KEYS, MORE_GROUPS, CTRL_KEYS,
 } from '../core/keysLayout.js';
 import { contextKeys, parseTextKey, keyLabel } from '../core/contextKeys.js';
@@ -52,8 +53,6 @@ const JOY_FAST = 72;         // resting further out than this keeps the cursor m
 const JOY_DWELL = 300;       // …after this many ms out there
 const JOY_FLICK = 56;        // a quick flick this long: line start / end
 const JOY_WALL = 450;        // ms of pushing past a line's end before the cursor wraps to the next line
-const CTX_SLOTS = { phone: 4, landscape: 4, tablet: 6 };
-const SYM_SLOTS = { phone: 3, landscape: 3, tablet: 6 };
 const PAIRS = { '(': ')', '[': ']', '{': '}', '<': '>', '"': '"', "'": "'", '`': '`' };
 
 export class KeysBar {
@@ -190,6 +189,11 @@ export class KeysBar {
     return layout.trim().split(/\s+/).filter(Boolean);
   }
 
+  /** The bar's rows of key ids for this device (Settings → Keys bar). */
+  bar() {
+    return barFor(this.deps.getSettings().keysBar, this.profile);
+  }
+
   render() {
     // Every key is rebuilt: presses on the old ones are over (a repeating
     // key or the joystick would otherwise keep going with no finger up to come).
@@ -200,61 +204,90 @@ export class KeysBar {
     this.el.dataset.profile = this.profile;
     this.ctxEls = [];
     if (this.sheetOpen) this.el.append(this.sheet());
+    const rows = this.bar();
+    const all = rows.flat();
+    this.symCount = all.filter((id) => id === 'sym').length;
+    this.hasEsc = all.includes('esc');
     const syms = this.symbols();
-    const nSym = SYM_SLOTS[this.profile];
-    const symKeys = syms.slice(0, nSym).map((t) => this.key(this.symbolSpec(t)));
-    const region = this.region();
-    const K = (spec) => this.key(spec);
+    let nextSym = 0;
+    const make = (id) => {
+      if (id === 'ctx') return this.contextSlot();
+      if (id === 'sym') { const t = syms[nextSym++]; return this.key(t ? this.symbolSpec(t) : { label: '', title: '', tap: () => {}, cls: 'empty' }); }
+      if (id === 'joystick') return this.joystick();
+      const spec = this.barKeySpec(id);
+      return spec ? this.key(spec) : null;
+    };
+    // A layer (Mod's keys, Ctrl's shortcuts) takes the place of the flexible
+    // keys (Mod, context, symbols) of the row with Mod — of the whole row on
+    // a phone, where that row is the context row.
+    // (A bar without Mod — the tablet's — shows Ctrl's keys while Ctrl is on.)
+    const layer = this.layer === 'main' && this.mods.ctrl && !all.includes('mod') ? 'ctrl' : this.layer;
+    const lrow = layerRow(rows);
+    const flexible = (id) => id === 'mod' || id === 'ctx' || id === 'sym';
+    const build = (row, i) => {
+      if (layer === 'main' || i !== lrow) return row.map(make);
+      const keys = this.layerKeys(layer, rows.some((r, j) => j !== i && r.includes('ctrl')));
+      if (this.profile === 'phone') return keys;
+      const out = [];
+      let placed = false;
+      for (const id of row) {
+        if (!flexible(id)) out.push(make(id));
+        else if (!placed) { out.push(...keys); placed = true; }
+      }
+      return out;
+    };
+    const built = rows.map((r, i) => build(r, i).filter(Boolean));
     if (this.profile === 'phone') {
       this.el.append(
-        h('div.keys-row.keys-context', { role: 'toolbar', 'aria-label': 'Context keys' }, ...region),
-        h('div.keys-row.keys-main', { role: 'toolbar', 'aria-label': 'Main keys' },
-          K(this.tabSpec()), this.joystick(), ...symKeys, K(this.lineSpec()), K(this.undoSpec())),
-      );
+        h('div.keys-row.keys-context', { role: 'toolbar', 'aria-label': 'Context keys' }, ...built[0]),
+        h('div.keys-row.keys-main', { role: 'toolbar', 'aria-label': 'Main keys' }, ...built[1]));
     } else if (this.profile === 'landscape') {
-      this.el.append(h('div.keys-row.keys-single', { role: 'toolbar', 'aria-label': 'Coding keys' },
-        K(this.tabSpec()), this.joystick(), ...region,
-        ...(this.layer === 'main' ? symKeys : []), K(this.lineSpec()), K(this.cursorsSpec()), K(this.undoSpec()), K(this.moreSpec())));
+      this.el.append(h('div.keys-row.keys-single', { role: 'toolbar', 'aria-label': 'Coding keys' }, ...built[0]));
     } else {
-      const left = [K(this.actionSpec('escape')), K(this.tabSpec()), this.joystick(),
-        K(this.modifierSpec('ctrl')), K(this.modifierSpec('shift')), K(this.modifierSpec('alt'))];
-      const right = this.mods.ctrl ? [h('div.keys-region', ...this.ctrlKeys().map(K))]
-        : [...region, ...symKeys];
       this.el.append(h('div.keys-row.keys-single', { role: 'toolbar', 'aria-label': 'Coding keys' },
-        h('div.keys-cluster', ...left), h('div.keys-gap'),
-        h('div.keys-cluster.keys-right', ...right, K(this.lineSpec()), K(this.cursorsSpec()), K(this.undoSpec()), K(this.moreSpec()))));
+        h('div.keys-cluster', ...built[0]), h('div.keys-gap'), h('div.keys-cluster.keys-right', ...built[1])));
     }
     this.renderMods();
     this.updateContext(true);
   }
 
-  /** The changing part: context keys, or the modifier / Ctrl layer. */
-  region() {
-    const K = (spec) => this.key(spec);
-    if (this.profile === 'tablet') return this.contextSlots();
-    if (this.layer === 'ctrl') {
-      return [K(this.modifierSpec('ctrl', { active: true })), h('div.keys-region', ...this.ctrlKeys().map(K))];
+  /** The spec of a fixed key of the bar (not ctx / sym / joystick). */
+  barKeySpec(id) {
+    switch (id) {
+      case 'tab': return this.tabSpec();
+      case 'mod': return this.modSpec(false);
+      case 'line': return this.lineSpec();
+      case 'cursors': return this.cursorsSpec();
+      case 'undo': return this.undoSpec();
+      case 'more': return this.moreSpec();
+      case 'esc': return this.actionSpec('escape');
+      case 'ctrl': case 'shift': case 'alt': return this.modifierSpec(id);
+      default:
+        if (id.startsWith('@') && ACTION_KEYS[id.slice(1)]) {
+          const name = id.slice(1);
+          return name === 'lineStart' || name === 'lineEnd' ? this.navSpec(name === 'lineStart' ? 'home' : 'end') : this.actionSpec(name);
+        }
+        if (id.startsWith('s:')) return this.symbolSpec(id.slice(2));
+        return null;
     }
-    if (this.layer === 'mod') {
-      // (Shift+Tab and ⏎; are on Tab and ↵ already: Home / End instead)
-      return [K(this.modSpec(true)), K(this.modifierSpec('ctrl')), K(this.modifierSpec('shift')), K(this.modifierSpec('alt')),
-        K(this.actionSpec('escape')), K(this.navSpec('home')), K(this.navSpec('end'))];
-    }
-    const slots = this.contextSlots();
-    return this.profile === 'phone'
-      ? [K(this.modSpec(false)), ...slots, K(this.cursorsSpec()), K(this.moreSpec())]
-      : [K(this.modSpec(false)), ...slots];
   }
 
-  contextSlots() {
-    const n = CTX_SLOTS[this.profile];
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      const btn = this.key({ label: '', title: '', tap: () => {} }, 'ctx');
-      this.ctxEls.push(btn);
-      out.push(btn);
+  /** The keys of the Mod layer or the Ctrl layer. */
+  layerKeys(layer, ctrlElsewhere) {
+    const K = (spec) => this.key(spec);
+    if (layer === 'ctrl') {
+      const region = h('div.keys-region', ...this.ctrlKeys().map(K));
+      return ctrlElsewhere ? [region] : [K(this.modifierSpec('ctrl', { active: true })), region];
     }
-    return out;
+    // (Shift+Tab and ⏎; are on Tab and ↵ already: Home / End instead)
+    return [K(this.modSpec(true)), K(this.modifierSpec('ctrl')), K(this.modifierSpec('shift')), K(this.modifierSpec('alt')),
+      K(this.actionSpec('escape')), K(this.navSpec('home')), K(this.navSpec('end'))];
+  }
+
+  contextSlot() {
+    const btn = this.key({ label: '', title: '', tap: () => {} }, 'ctx');
+    this.ctxEls.push(btn);
+    return btn;
   }
 
   /** Fills the context slots for where the cursor is (stable: a key that stays keeps its slot). */
@@ -265,15 +298,15 @@ export class KeysBar {
     let next = [];
     if (view) {
       const sit = situationAt(view.state, this.langId);
-      const esc = this.profile !== 'tablet' && (escapable(view.state) || (this.deps.isEscapable && this.deps.isEscapable()));
-      next = [...(esc ? ['@escape'] : []), ...contextKeys(sit).map((k) => (k.startsWith('@') ? k : `t:${k}`))];
+      const esc = !this.hasEsc && (escapable(view.state) || (this.deps.isEscapable && this.deps.isEscapable()));
+      next = [...(esc ? ['@escape'] : []), ...contextKeys(sit).map((k) => (k.startsWith('@') && ACTION_KEYS[k.slice(1)] ? k : `t:${k}`))]; // ("@media " is text)
     }
     // Room left: the language's next symbols.
     const syms = this.symbols();
-    for (const t of syms.slice(SYM_SLOTS[this.profile])) next.push(`s:${t}`);
+    for (const t of syms.slice(this.symCount)) next.push(`s:${t}`);
     // Nothing twice: not what the main row has ("()" when "(" is there,
     // ";" when ";" is), nor the same symbol as a context key and a filler.
-    const seen = new Set(syms.slice(0, SYM_SLOTS[this.profile]).map((t) => parseToken(t).insert));
+    const seen = new Set(syms.slice(0, this.symCount).map((t) => parseToken(t).insert));
     next = next.filter((id) => {
       const e = keyEssence(id);
       if (e == null) return true;
@@ -378,7 +411,7 @@ export class KeysBar {
         else if (cur === 1 && now - lastTap < 350) this.mods[name] = 2;
         else this.mods[name] = cur ? 0 : 1;
         lastTap = now;
-        if (this.profile !== 'tablet') this.layer = name === 'ctrl' && this.mods.ctrl ? 'ctrl' : 'main';
+        if (this.bar().flat().includes('mod')) this.layer = name === 'ctrl' && this.mods.ctrl ? 'ctrl' : 'main';
         this.render();
       },
     };
@@ -514,15 +547,33 @@ export class KeysBar {
 
   sheet() {
     const K = (spec) => this.key(spec);
-    const close = () => { this.sheetOpen = false; this.render(); };
-    // (no swipes in the sheet: a vertical drag scrolls it)
-    const wrap = (spec) => ({ ...spec, up: null, down: null, left: null, right: null, repeat: false, tap: () => { close(); spec.tap(); } });
-    const groups = [[`Symbols (${this.group})`, this.symbols()], ...MORE_GROUPS];
-    return h('div.keys-sheet', { role: 'dialog', 'aria-label': 'All keys' },
-      h('div.keys-sheet-head', h('span', 'All keys'), K({ label: '✕', cls: 'action', title: 'Close', tap: close })),
+    const close = () => { this.sheetOpen = false; this.pinning = false; this.render(); };
+    // (no swipes in the sheet: a vertical drag scrolls it). While pinning,
+    // a tap puts the key on the bar instead.
+    const wrap = (spec, id) => ({ ...spec, up: null, down: null, left: null, right: null, repeat: false,
+      tap: () => { if (this.pinning) { this.pin(id); return; } close(); spec.tap(); } });
+    const groups = [[`Symbols (${this.group})`, this.symbols().map((t) => `s:${t}`)], ...MORE_GROUPS.map(([name, keys]) => [name, keys.map(catalogId)])];
+    return h(`div.keys-sheet${this.pinning ? '.pinning' : ''}`, { role: 'dialog', 'aria-label': 'All keys' },
+      h('div.keys-sheet-head', h('span.keys-sheet-name', this.pinning ? 'Tap a key to put it on the bar' : 'All keys'),
+        K({ label: 'Pin', cls: `action pin-key${this.pinning ? ' armed' : ''}`, title: 'Pin a key to the bar: tap Pin, then the key',
+          tap: () => { this.pinning = !this.pinning; this.render(); } }),
+        K({ label: 'Customize', cls: 'action', title: 'Settings → Keys bar', tap: () => { close(); if (this.deps.openSettings) this.deps.openSettings('keysbar'); } }),
+        K({ label: '✕', cls: 'action', title: 'Close', tap: close })),
       ...groups.map(([name, keys]) => h('div.keys-sheet-group',
         h('div.keys-sheet-title', name),
-        h('div.keys-sheet-keys', ...keys.map((k) => K(wrap(k.startsWith('@') ? this.actionSpec(k.slice(1)) : this.symbolSpec(k))))))));
+        h('div.keys-sheet-keys', ...keys.map((id) => K(wrap(id.startsWith('@') ? this.actionSpec(id.slice(1)) : this.symbolSpec(id.slice(2)), id)))))));
+  }
+
+  /** Puts a key from the sheet on this device's bar (in place of the last context key). */
+  pin(id) {
+    const rows = pinToBar(this.bar(), this.profile, id);
+    this.pinning = false;
+    if (!rows || barProblem(rows, this.profile)) { toast('The bar is full: remove a key in Settings → Keys bar first.', 'warn'); this.render(); return; }
+    this.sheetOpen = false;
+    if (this.deps.saveBar) this.deps.saveBar(this.profile, rows);
+    else this.render();
+    const info = barKeyInfo(id);
+    toast(`${info ? info.label : 'The key'} is on the bar. Settings → Keys bar moves or removes it.`, 'success');
   }
 
   // ---- keys and their touch handling ------------------------------------------------
@@ -886,4 +937,16 @@ function keyEssence(id) {
 function closeBracketsOf(state) {
   const conf = state.languageDataAt('closeBrackets', state.selection.main.head)[0];
   return (conf && conf.brackets) || ['(', '[', '{', "'", '"'];
+}
+
+/** Which row a layer replaces: the one with Mod, else the one with the most context / symbol keys. */
+function layerRow(rows) {
+  const withMod = rows.findIndex((r) => r.includes('mod'));
+  if (withMod >= 0) return withMod;
+  let best = 0, most = -1;
+  rows.forEach((r, i) => {
+    const n = r.filter((id) => id === 'ctx' || id === 'sym').length;
+    if (n > most) { most = n; best = i; }
+  });
+  return best;
 }

@@ -45,7 +45,7 @@ export const GESTURE_DEFAULTS = Object.freeze({
   multiTapSlop: 30,          // px every tap may be from the first one
 });
 
-/** Settings → Touch & gestures → Swipe sensitivity. */
+/** Settings → Gestures → Swipe sensitivity. */
 export const SENSITIVITY_PRESETS = Object.freeze({
   strict: Object.freeze({ minSwipeDistance: 72, maxSwipeDuration: 400, minSwipeVelocity: 0.32, maxAngle: 25 }),
   normal: Object.freeze({ minSwipeDistance: 56, maxSwipeDuration: 500, minSwipeVelocity: 0.22, maxAngle: 35 }),

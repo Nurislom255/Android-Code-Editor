@@ -95,6 +95,25 @@ export function parseToken(token) {
   return { label: primary, insert: primary, alt: alts[0] || null, alts };
 }
 
+/**
+ * Why a symbol key can't be made of these fields — [tap, up, down, left,
+ * right] and the hold-only ones — or null.
+ */
+export function tokenProblem(vals, extra = []) {
+  if (!vals[0]) return 'A tap must type something.';
+  const swipes = vals.slice(1);
+  const lastSet = swipes.map(Boolean).lastIndexOf(true);
+  if (swipes.slice(0, lastSet).some((v) => !v)) return 'Fill the swipes in order (up, down, left, right): no gaps.';
+  for (const v of [...vals.filter(Boolean), ...extra]) {
+    if (/\s/.test(v)) return 'No spaces inside a key.';
+    if (v.length > 1 && v.includes('^')) return '^ can only be a key on its own.';
+  }
+  const parts = [vals[0], ...swipes.filter(Boolean), ...extra];
+  const k = parseToken(parts.join('^'));
+  if (k.insert !== parts[0] || k.alts.join('\u0000') !== parts.slice(1).join('\u0000')) return 'These can\'t be combined into one key.';
+  return null;
+}
+
 export function formatLayout(keys) {
   return keys.map((k) => [k.insert, ...(k.alts || (k.alt ? [k.alt] : []))].join('^')).join(' ');
 }
@@ -154,6 +173,119 @@ export function keysProfile({ screenWidth, screenHeight, touch }) {
   if (!touch) return 'tablet';
   if (Math.min(screenWidth, screenHeight) >= 600) return 'tablet';
   return screenWidth > screenHeight ? 'landscape' : 'phone';
+}
+
+/**
+ * The keys bar of each profile, as rows of key ids (Settings → Keys bar):
+ *   tab joystick mod line cursors undo more esc ctrl shift alt   the special keys
+ *   ctx       a context key (follows the code)
+ *   sym       the language's next symbol key (its layout above)
+ *   @name     an action key (ACTION_KEYS)
+ *   s:token   a fixed symbol key, e.g. "s:;" or "s:(^)^[]"
+ * The tablet's two rows are the left and right ends of its one row.
+ * Only the profiles the owner changed are stored; the rest follow these.
+ */
+export const DEFAULT_BAR = Object.freeze({
+  phone: [['mod', 'ctx', 'ctx', 'ctx', 'ctx', 'cursors', 'more'], ['tab', 'joystick', 'sym', 'sym', 'sym', 'line', 'undo']],
+  landscape: [['tab', 'joystick', 'mod', 'ctx', 'ctx', 'ctx', 'ctx', 'sym', 'sym', 'sym', 'line', 'cursors', 'undo', 'more']],
+  tablet: [['esc', 'tab', 'joystick', 'ctrl', 'shift', 'alt'],
+    ['ctx', 'ctx', 'ctx', 'ctx', 'ctx', 'ctx', 'sym', 'sym', 'sym', 'sym', 'sym', 'sym', 'line', 'cursors', 'undo', 'more']],
+});
+
+export const BAR_KEYS = Object.freeze({
+  tab: ['Tab', 'Tab · swipe up / hold: Shift+Tab'],
+  joystick: ['◉', 'Joystick: moves the cursor'],
+  mod: ['Mod', 'Ctrl · Shift · Alt · Esc · Home · End'],
+  ctx: ['ctx', 'Context key: changes with the code'],
+  sym: ['sym', "The language's next symbol key"],
+  line: ['↵', 'Line actions: new line, move, duplicate…'],
+  cursors: ['⫶', 'Multi-cursor'],
+  undo: ['↶', 'Undo · swipe up / hold: Redo'],
+  more: ['⋯', 'All keys'],
+  esc: ['Esc', 'Escape'],
+  ctrl: ['Ctrl', 'Ctrl (one-shot, double tap locks)'],
+  shift: ['Shift', 'Shift'],
+  alt: ['Alt', 'Alt'],
+});
+
+export const BAR_PROFILES = Object.freeze({
+  phone: { name: 'Phone', rows: ['Top row', 'Bottom row'], max: 8 },
+  landscape: { name: 'Phone, sideways', rows: ['Row'], max: 18 },
+  tablet: { name: 'Tablet', rows: ['Left end', 'Right end'], max: 22 },
+});
+
+/**
+ * The bar id of a key in the "More" catalog or a symbol layout: "@name" is an
+ * action key only when that action exists — "@" and "@^~" are symbols.
+ */
+export function catalogId(k) {
+  return k.startsWith('@') && ACTION_KEYS[k.slice(1)] ? k : `s:${k}`;
+}
+
+/** A key id's name and description, for the editor and tooltips. */
+export function barKeyInfo(id) {
+  if (BAR_KEYS[id]) return { label: BAR_KEYS[id][0], title: BAR_KEYS[id][1] };
+  if (id.startsWith('@') && ACTION_KEYS[id.slice(1)]) { const [label, title] = ACTION_KEYS[id.slice(1)]; return { label, title }; }
+  if (id.startsWith('s:')) { const k = parseToken(id.slice(2)); return { label: k.label, title: `Symbol ${k.label}${k.alts.length ? ` (${k.alts.join(' ')})` : ''}` }; }
+  return null;
+}
+
+const validBarKey = (id) => typeof id === 'string' && (!!BAR_KEYS[id] || (id.startsWith('@') && !!ACTION_KEYS[id.slice(1)])
+  || (/^s:\S{1,40}$/.test(id)));
+
+/** Why `rows` can't be the bar of `profile` — or null when it can. */
+export function barProblem(rows, profile) {
+  const p = BAR_PROFILES[profile];
+  if (!p || !Array.isArray(rows) || rows.length !== p.rows.length) return 'Wrong number of rows.';
+  for (const r of rows) {
+    if (!Array.isArray(r) || !r.length) return 'A row is empty.';
+    if (r.length > p.max) return `At most ${p.max} keys a row.`;
+    if (!r.every(validBarKey)) return 'Unknown key.';
+  }
+  const all = rows.flat();
+  if (!all.includes('tab')) return 'Tab must stay on the bar.';
+  if (!all.includes('more')) return '⋯ (all keys) must stay on the bar: it is the way to every other key.';
+  if (!all.includes('mod') && !['ctrl', 'shift', 'alt'].every((m) => all.includes(m))) return 'Keep Mod, or Ctrl, Shift and Alt.';
+  return null;
+}
+
+/** The stored bar changes, keeping only valid profiles. */
+export function normalizeBar(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const profile of Object.keys(BAR_PROFILES)) {
+    const rows = raw[profile];
+    if (rows && !barProblem(rows, profile)) out[profile] = rows.map((r) => r.slice());
+  }
+  return out;
+}
+
+/** The bar of `profile`: the owner's, else the default. */
+export function barFor(custom, profile) {
+  return (custom && custom[profile]) || DEFAULT_BAR[profile] || DEFAULT_BAR.phone;
+}
+
+/**
+ * "Pin" a key from the All-keys sheet: it takes the place of the last
+ * context key, else joins the row that has room (⋯'s row first).
+ * → the new rows, or null when the bar is full.
+ */
+export function pinToBar(rows, profile, id) {
+  const next = rows.map((r) => r.slice());
+  for (let i = next.length - 1; i >= 0; i--) {
+    const j = next[i].lastIndexOf('ctx');
+    if (j >= 0) { next[i][j] = id; return next; }
+  }
+  const max = BAR_PROFILES[profile].max;
+  const order = [next.findIndex((r) => r.includes('more')), ...next.keys()];
+  for (const i of order) {
+    if (i >= 0 && next[i].length < max) {
+      const at = next[i].indexOf('more');
+      next[i].splice(at >= 0 ? at : next[i].length, 0, id);
+      return next;
+    }
+  }
+  return null;
 }
 
 /**

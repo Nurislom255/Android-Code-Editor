@@ -277,12 +277,17 @@ svg { display: block; flex-shrink: 0; }
   display: flex;
   min-height: 0;
   position: relative;
+  /* With the keyboard open and the ⋯ sheet up there may be almost no room
+     left: what doesn't fit is cut, never drawn over the bars below. */
+  overflow: hidden;
 }
 
 #activitybar {
   display: flex;
   flex-direction: column;
   align-items: center;
+  overflow-y: auto;
+  scrollbar-width: none;
   width: 48px;
   padding: 4px 0;
   gap: 2px;
@@ -780,8 +785,85 @@ kbd {
 .diff-empty { padding: 20px; color: var(--text-faint); }
 
 /* ---- Settings ---------------------------------------------------------------- */
+/* The Settings view (ui/settingsView.js): over the workspace. Wide: pages on
+   the left, the page on the right. Phones: the list, or one page. */
+.settings-view { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; background: var(--bg); color: var(--text); padding-top: env(safe-area-inset-top); }
+.settings-view[hidden] { display: none; }
+.sv-head { display: flex; align-items: center; gap: 6px; padding: 6px 8px; min-height: 52px; border-bottom: 1px solid var(--border); background: var(--bg-panel); }
+.sv-back[hidden] { display: none; }
+.sv-title { font-size: 16px; font-weight: 600; margin: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-search { flex: 1; min-width: 0; max-width: 420px; margin-left: auto; }
+.sv-body { flex: 1; min-height: 0; display: flex; }
+.sv-nav { width: 240px; flex-shrink: 0; overflow-y: auto; overscroll-behavior: contain; border-right: 1px solid var(--border); background: var(--bg-panel); padding: 6px 0 40px; }
+.sv-nav-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 14px; text-align: left; background: none; border: 0; color: var(--text); font: inherit; cursor: pointer; }
+.sv-nav-item[aria-current="page"] { background: var(--accent-dim); color: var(--accent); }
+.sv-nav-icon { display: flex; color: var(--text-dim); flex-shrink: 0; }
+.sv-nav-item[aria-current="page"] .sv-nav-icon { color: var(--accent); }
+.sv-nav-text { display: flex; flex-direction: column; min-width: 0; }
+.sv-nav-title { font-size: 14px; }
+.sv-nav-desc { font-size: 12px; color: var(--text-faint); line-height: 1.35; }
+.sv-main { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 0 80px; }
+.sv-page-title { font-size: 18px; font-weight: 600; margin: 14px 14px 6px; }
+.sv-result-page { display: block; margin: 16px 14px 2px; padding: 0; font: inherit; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.sv-stub { width: 100%; text-align: left; background: none; border: 0; font: inherit; font-size: 13.5px; color: var(--accent); cursor: pointer; }
+.sv-empty { padding: 20px 14px; color: var(--text-faint); }
+.sv-head, .sv-nav, .sv-main { zoom: var(--ui-zoom, 1); }
+@media (min-width: 720px) { .sv-nav-desc { display: none; } }
+@media (max-width: 719.98px) {
+  .sv-nav { width: auto; flex: 1; border-right: 0; background: var(--bg); }
+  .settings-view[data-view="list"] .sv-main { display: none; }
+  .settings-view:not([data-view="list"]) .sv-nav { display: none; }
+  .settings-view[data-view="page"] .sv-search { display: none; }
+  .settings-view[data-view="page"] .sv-close { margin-left: auto; }
+  .sv-page-title { display: none; }
+}
+
+/* Settings → Keys bar (ui/keysBarEditor.js) and Keyboard shortcuts (ui/shortcutsEditor.js) */
+.kbe, .sse, .sc { padding: 2px 14px 8px; }
+.kbe .s-desc, .sse .s-desc, .sc .s-desc, .sc-edit .s-desc, .sse-form .s-desc { font-size: 12px; color: var(--text-faint); line-height: 1.4; }
+/* the phone's rows look like the bar itself: one line, keys sharing it */
+.kbe-phone .kbe-row { flex-wrap: nowrap; }
+.kbe-phone .kbe-key { flex: 1 1 0; min-width: 0; padding: 0 2px; overflow: hidden; }
+.kbe-phone .kbe-add { flex: 0 0 30px; min-width: 30px; padding: 0; }
+.sse .setting { padding-left: 0; padding-right: 0; }
+.kbe-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
+.kbe-tab { min-height: 36px; padding: 6px 12px; border-radius: 18px; border: 1px solid var(--border); background: var(--bg-panel-alt); color: var(--text-dim); font: inherit; font-size: 13px; cursor: pointer; }
+.kbe-tab[aria-selected="true"] { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.kbe-here { color: var(--text-faint); }
+.kbe-help { margin: 0 0 10px; }
+.kbe-row-wrap { margin-bottom: 10px; }
+.kbe-row-name { margin-bottom: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
+.kbe-row { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-panel); }
+.kbe-key, .kbe-add { min-width: 44px; height: 44px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-panel-alt); color: var(--text); font-family: var(--font-mono); font-size: 15px; cursor: pointer; }
+.kbe-key.kbe-special, .kbe-key.kbe-action { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-dim); }
+.kbe-key.kbe-ctx, .kbe-key.kbe-sym { border-style: dashed; font-family: var(--font-ui); font-size: 12px; color: var(--text-faint); }
+.kbe-add { border-style: dashed; color: var(--accent); font-size: 20px; }
+.kbe-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.kbe-warn { color: var(--warn); }
+.kbe-picker { display: flex; flex-direction: column; gap: 12px; max-height: calc(60vh / var(--ui-zoom, 1)); overflow-y: auto; }
+.kbe-pick-title { margin-bottom: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+.kbe-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px; }
+.kbe-pick { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel-alt); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.kbe-pick-label { min-width: 32px; text-align: center; font-family: var(--font-mono); font-size: 15px; }
+.kbe-pick-desc { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--text-dim); }
+.sse-keys { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0; }
+.sse-key { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 52px; min-height: 52px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-panel-alt); color: var(--text); cursor: pointer; }
+.sse-key.on-bar { border-color: var(--accent); }
+.sse-label { font-family: var(--font-mono); font-size: 17px; }
+.sse-alts { display: flex; gap: 4px; font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+.sse-form .field { margin-bottom: 8px; }
+.sc-filter { width: 100%; margin: 6px 0; }
+.sc-row { width: 100%; padding: 6px 2px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--border); color: var(--text); font: inherit; cursor: pointer; }
+.sc-key { padding: 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-panel-alt); font-family: var(--font-mono); font-size: 12.5px; white-space: nowrap; }
+.sc-capture { margin-bottom: 10px; padding: 14px; border: 2px dashed var(--border); border-radius: 10px; text-align: center; outline: none; }
+.sc-capture:focus { border-color: var(--accent); }
+.sc-capture-key { display: inline-block; margin-top: 8px; padding: 4px 12px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--font-mono); font-size: 18px; }
+.sc-typed { width: 100%; }
+.sc-msg { min-height: 1.4em; margin-top: 6px; }
+.sc-msg.error { color: var(--error); }
+
 .settings { padding: 4px 0 60px; }
-.settings h4 { margin: 16px 14px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+.settings h4, .sv-main h4 { margin: 16px 14px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
 .setting { display: flex; align-items: center; gap: 10px; padding: 7px 14px; min-height: 44px; }
 .setting.stacked { flex-direction: column; align-items: stretch; }
 .setting .s-text { flex: 1; min-width: 0; }
@@ -890,6 +972,8 @@ kbd {
 
 /* ---- Status bar ---------------------------------------------------------- */
 #statusbar {
+  position: relative;
+  z-index: 3; /* over anything that spills out of the panels above */
   display: flex;
   align-items: center;
   height: var(--statusbar-h);
@@ -930,6 +1014,8 @@ kbd {
    Rows of equal keys (≥ 44 px on a 360 px phone), no sideways scrolling;
    only the Ctrl shortcut strip and the "More" sheet scroll. */
 #keys-bar {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1024,7 +1110,11 @@ kbd {
 /* the "More" sheet: every key, grouped */
 .keys-sheet { max-height: calc(45vh / var(--ui-zoom, 1)); overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--border); padding: 0 2px 6px; }
 .keys-sheet-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 4px; font-family: var(--font-ui); font-weight: 600; font-size: 13px; color: var(--text-dim); }
-.keys-sheet-head .key { flex: 0 0 44px; }
+.keys-sheet-head { gap: 4px; }
+.keys-sheet-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.keys-sheet-head .key { flex: 0 0 auto; min-width: 44px; padding: 0 8px; }
+.keys-sheet.pinning .keys-sheet-name { color: var(--accent); }
+.key.pin-key.armed { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .keys-sheet-title { font-family: var(--font-ui); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 8px 2px 4px; }
 .keys-sheet-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; }
 .keys-sheet .key { touch-action: pan-y; }

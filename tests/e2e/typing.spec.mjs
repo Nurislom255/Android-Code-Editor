@@ -361,3 +361,58 @@ test('the other uses of the name under the cursor are highlighted (not in string
   await page.evaluate(() => window.__app.updateSettings({ wordHighlight: false }));
   await expect(marks).toHaveCount(0);
 });
+
+test.describe('several cursors', () => {
+  const doc = (page) => page.evaluate(() => window.__app.ws.view.state.doc.toString());
+  const cursors = (page) => page.evaluate(() => window.__app.ws.view.state.selection.ranges.length);
+  /** Types like an Android keyboard: an underlined composition, then committed. */
+  async function compose(page, steps) {
+    const cdp = await page.context().newCDPSession(page);
+    for (const t of steps) await cdp.send('Input.imeSetComposition', { text: t, selectionStart: t.length, selectionEnd: t.length });
+    await cdp.send('Input.insertText', { text: steps[steps.length - 1] });
+    await cdp.detach();
+  }
+
+  test('the for-loop snippet: typing renames index in all three places, keyboard or composition', async ({ page }) => {
+    await boot(page);
+    await newProject(page, 'mc', 'js');
+    await openFile(page, 'main.js');
+    await setText(page, '', 0);
+    await page.keyboard.type('for');
+    await expect(completionOpen(page)).toBeVisible();
+    await page.getByRole('option', { name: 'forloop', exact: true }).click(); // for … loop: index, index, index, bound
+    await expect.poll(() => cursors(page)).toBe(3);
+    await page.keyboard.type('i');
+    expect(await doc(page)).toContain('for (let i = 0; i < bound; i++)');
+    await compose(page, ['k', 'k2']);
+    expect(await doc(page)).toContain('for (let ik2 = 0; ik2 < bound; ik2++)');
+  });
+
+  test('when the keyboard input reaches only the first cursor (Firefox for Android), the others follow', async ({ page }) => {
+    await boot(page);
+    await newProject(page, 'mc3', 'js');
+    await openFile(page, 'main.js');
+    await setText(page, 'for (let index = 0; index < bound; index++) {}', 9);
+    await page.evaluate(() => { for (let i = 0; i < 3; i++) window.__app.run('selectNext'); });
+    await expect.poll(() => cursors(page)).toBe(3);
+    // the edit CodeMirror makes from Firefox's DOM change: the first "index" only
+    await page.evaluate(() => {
+      const v = window.__app.ws.view, s = v.state, main = s.selection.main;
+      const tr = s.update({ changes: { from: main.from, to: main.to, insert: 'n' }, selection: s.selection.replaceRange(s.selection.constructor.cursor(main.from + 1)), userEvent: 'input.type.compose' });
+      if (!s.facet(v.constructor.inputHandler).some((h) => h(v, main.from, main.to, 'n', () => tr))) v.dispatch(tr);
+    });
+    expect(await doc(page)).toBe('for (let n = 0; n < bound; n++) {}');
+    expect(await cursors(page)).toBe(3);
+  });
+
+  test('Ctrl+D selections: a composition replaces every one, once', async ({ page }) => {
+    await boot(page);
+    await newProject(page, 'mc2', 'js');
+    await openFile(page, 'main.js');
+    await setText(page, 'let total = 1; total += total;\nlog(total);', 5);
+    await page.evaluate(() => { const r = window.__app.run; r.call(window.__app, 'selectNext'); r.call(window.__app, 'selectNext'); r.call(window.__app, 'selectNext'); r.call(window.__app, 'selectNext'); });
+    await expect.poll(() => cursors(page)).toBe(4);
+    await compose(page, ['s', 'su', 'sum']);
+    expect(await doc(page)).toBe('let sum = 1; sum += sum;\nlog(sum);');
+  });
+});
