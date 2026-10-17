@@ -132,6 +132,17 @@ export function haptic(settings, ms = 8) {
 }
 
 /**
+ * After a long-press opened a menu, the browser may still send a click when
+ * the finger lifts — to whatever is under it now: an item of that menu.
+ * This swallows that one click (anywhere, for a moment).
+ */
+export function swallowNextClick(ms = 350) {
+  const swallow = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); };
+  document.addEventListener('click', swallow, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener('click', swallow, true), ms);
+}
+
+/**
  * Long press (touch / pen, `ms`) or right-click (mouse) on `el` → fn(event).
  * The press then does nothing else: the click that follows is swallowed, and
  * the element shows `.armed` while the menu it opens is being chosen from.
@@ -152,11 +163,7 @@ export function onLongPress(el, fn, { ms = 480, slop = 10, getSettings = () => n
   });
   el.addEventListener('pointermove', (e) => { if (p && !p.fired && Math.hypot(e.clientX - p.x, e.clientY - p.y) > slop) cancel(); });
   const end = () => {
-    if (p && p.fired) {
-      const swallow = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); };
-      el.addEventListener('click', swallow, { capture: true, once: true });
-      setTimeout(() => el.removeEventListener('click', swallow, true), 400);
-    }
+    if (p && p.fired) swallowNextClick();
     cancel();
   };
   el.addEventListener('pointerup', end);

@@ -154,3 +154,21 @@ test('status bar: one line, never cut off — what does not fit is in ⋯', asyn
     }
   }
 });
+
+test('tablet with the keyboard up: the activity bar keeps whole buttons and scrolls instead of squeezing them', async ({ page }) => {
+  await boot(page, { keysBarMode: 'always' });
+  test.skip(await page.evaluate(() => window.__app.layout.compact), 'the activity bar is on wide screens');
+  await newProject(page, 'kb', 'js');
+  await openFile(page, 'main.js');
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: vp.width, height: 300 }); // what is left above a tablet keyboard
+  await page.evaluate(() => window.__app.ws.view.focus());
+  await expect(page.locator('#keys-bar')).toBeVisible();
+  const boxes = await page.locator('#activitybar .activity').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { top: r.top, h: r.height }; }));
+  for (const b of boxes) expect(b.h).toBeGreaterThanOrEqual(40);
+  for (let i = 1; i < boxes.length; i++) expect(boxes[i].top).toBeGreaterThanOrEqual(boxes[i - 1].top + boxes[i - 1].h - 0.5); // no overlap
+  // the last one (Settings) is reachable by scrolling the bar
+  const settings = page.locator('#activitybar .activity[data-panel="settings"]');
+  await settings.scrollIntoViewIfNeeded();
+  await expect(settings).toBeInViewport();
+});

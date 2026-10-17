@@ -13,7 +13,7 @@ build, and how we know it is done.
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0) — see "Phase 4 — result". Waiting for the owner's test on the phone |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
@@ -615,6 +615,15 @@ fix; now about 1 ms).
 | No selection on chrome | The whole interface is `user-select: none`; the code, inputs, console output, diffs, dialog and toast messages are selectable | Done the other way round (allow-list) so new UI is covered by default |
 | Project actions | Tap = switch project; hold / right-click = Rename, Switch, New, Import .zip / folder, Export .zip, Close, Delete (in-app projects); the name shows *armed* while the menu is open | Rename changes the shown name only (the in-app folder keeps its first name, so sessions and history stay attached). **Not built:** renaming a device folder itself (can't be tested without the APK), and "Project settings" (there are no per-project settings yet) |
 
+### After Phase 3 — fixes from the owner's test (v2.6.1)
+
+| Report | Cause | Fix |
+|---|---|---|
+| ↑ / ↓ can't pick in the autocomplete list | The keys bar's arrows and the joystick called the cursor commands directly, past CodeMirror's "arrows move in the open list" keys | With the list open, ↑ ↓ (keys bar, joystick, no modifier) move in the list |
+| The handle between the code and the live preview doesn't work | It was 5 px wide: a finger landed on the preview page (an iframe), which kept the touch | A 25 px grab area and a grip; while a divider or the panel bar is dragged, preview pages ignore the pointer |
+| Tablet, keyboard up: the activity bar's icons get squeezed | The buttons were allowed to shrink | They keep their size (smaller, all alike, when the bar is short) and the bar scrolls |
+| Phone: Settings opened from the drawer — no way back to Files / Search / Git | Settings closed the drawer and forgot it | ← (now shown on the Settings list) and Android Back go back to the drawer, on the panel it showed; ✕ goes to the code |
+
 ---
 
 ## Phase 4 — Tabs and file explorer (reported issue 6)
@@ -642,6 +651,36 @@ fix; now about 1 ms).
 - "Open Editors" list, a filter box, auto-reveal of the active file, compact
   single-child folders.
 - Delete goes to a 7-day trash, so file operations can be undone.
+
+### Phase 4 — result (v2.7.0)
+
+Built: preview tabs and `keepDoc` in `app/workspace.js`; drag-to-split in
+`app/chrome.js` (`splitWithTab` in `app.js`); a rewritten `ui/fileTree.js`
+(selection, target folder, in-place editing, multi-select, compact folders,
+filter, folders opening in place while dragging); `ui/openEditors.js`;
+`storage/trash.js` (its own small IndexedDB database); pure helpers in
+`core/explorer.js`. Startup bundle: main.js 332 → 352 KB (+6 %). Tests:
+`tests/e2e/explorer.spec.mjs` (the phase's acceptance tests, now real),
+`tests/unit/explorer.test.mjs`; older tests moved from dialogs to in-place
+editing.
+
+| Item | Shipped | Differences from the plan |
+|---|---|---|
+| Drag a tab to an edge → split | Over the right half of the code (the lower half on a phone) a dashed "Split" zone shows; drop: the tab moves into the new pane. When split, dropping on the other pane moves it there | The only tab of a pane is shown in both panes instead of moved (moving it would close the pane it came from) |
+| Preview tabs | A tap in the file tree or on a search result opens an *italic* tab that the next one replaces. Typing, saving, dragging it or double-tapping its tab keeps it; so does double-tapping the file in the tree (wide screens — on a phone the first tap closes the drawer). Quick open and Open from menus open normal tabs (as VS Code does). Setting: Files → Preview tabs | Untitled tabs are no longer italic (italic now means "preview") |
+| Target folder | A tap selects a row; New File / New Folder / Paste / Upload go into the selected folder, or the selected file's folder; nothing selected: the project root | — |
+| In-place create and rename | An editable row in the tree; Enter or leaving the field keeps a valid name; Esc cancels; a bad name is explained under the field. F2 renames with a keyboard | — |
+| Drag and drop | Holding a dragged entry over a closed folder for 0.6 s opens it, adding its rows without redrawing the tree. "Moved …" has **Undo**. Several selected entries move together. On a compact "a/b" row, the part under the finger is the target | — |
+| Cut / copy / paste, multi-select | Menu → Select (then taps add / remove), Ctrl/⌘-click, Shift-click; a bar with Cut, Copy, Delete. Paste never overwrites ("name copy.js"). Ctrl+C / X / V, Delete with a keyboard | — |
+| Open Editors, filter, auto-reveal, compact folders | Open editors above the tree (folded to a count by default; unsaved dot, ✕). Filter box: matching files from the whole project as a list. The tree follows the active tab. `a/b/c` rows for single-child folders. Settings: Files → File tree follows the open file, Compact folders | The filter lists matches (with their folder) rather than greying the tree, so a match deep in a closed folder shows too |
+| Trash | Delete asks nothing: the entry goes to the trash (Undo on the message), Files ⋯ → Trash lists the last 7 days with Restore / Delete for good. Restore puts it back where it was, or "name copy" if that place is taken. Older entries are dropped when the project opens | Over 50 MB at once is not kept: it asks, then deletes for good. A deleted file that had unsaved edits stays open as an untitled buffer (as before); Undo restores the file on disk, the buffer stays |
+
+Found while testing:
+- **A long-press menu could act by itself.** The menu opened under the
+  finger, and the click the browser sends when the finger lifts landed on the
+  item now under it — in the test, *Delete*. Menus opened by a long-press now
+  open clear of the finger, and that one click is swallowed (tree, tabs, the
+  project name).
 
 ---
 

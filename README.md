@@ -6,12 +6,12 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
-What's next: see **[ROADMAP.md](ROADMAP.md)** (tabs & explorer, built-in
-Python, C, C++ and Rust). Phase 1 — typing correctness — is done (see
-*Typing*); Phase 2 — the new **keys bar**, Settings pages, a keys-bar editor
-and your own keyboard shortcuts — and Phase 3 — the VS Code look — are built
-(see *Keys bar*, *Settings* and *Look & feel*). What each phase is tested
-with: **[TESTS.md](TESTS.md)**.
+What's next: see **[ROADMAP.md](ROADMAP.md)** (built-in Python, C, C++ and
+Rust). Phase 1 — typing correctness — is done (see *Typing*); Phase 2 — the
+new **keys bar**, Settings pages, a keys-bar editor and your own keyboard
+shortcuts —, Phase 3 — the VS Code look — and Phase 4 — tabs and the file
+explorer — are built (see *Keys bar*, *Settings*, *Look & feel* and *Tabs &
+files*). What each phase is tested with: **[TESTS.md](TESTS.md)**.
 
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
@@ -144,6 +144,30 @@ its shortcut. Tap one, then press the new shortcut — or type it, like
 to one command: giving it to another moves it. The new one is shown in the
 command palette, the tooltips and the shortcuts list; the old one stops
 working (also inside the editor).
+
+---
+
+## Tabs & files (ROADMAP Phase 4)
+
+- **Preview tabs**: a tap on a file opens it in an *italic* tab that the next
+  file you tap replaces — browsing doesn't pile up tabs. Typing in it, saving
+  or double-tapping its tab keeps it.
+- **Split by dragging**: hold a tab, drag it onto the right half of the code
+  (the lower half on a phone): a "Split" zone shows; let go.
+- **The file tree** works like VS Code's:
+  - tap a folder, then **+** (new file) or the new-folder button: it is
+    created *in that folder*, named right in the tree (Enter keeps it, Esc
+    cancels). With a file selected, its folder;
+  - long-press a file or folder: Rename (in place), Cut, Copy, Paste,
+    Select (then tap more), Duplicate, Delete…;
+  - drag a file onto a folder — hold it over a closed folder and it opens;
+    the "Moved" message has **Undo**;
+  - **Delete** goes to the trash for 7 days: Undo right away, or Files ⋯ →
+    Trash to restore later;
+  - a **filter** box, **Open editors** (your open tabs, with ✕), the tree
+    following the open file, and `src/main/java` shown as one row (Settings
+    → Files & saving).
+- With a keyboard: F2 rename, Delete, Ctrl+C / X / V in the tree.
 
 ---
 
@@ -288,14 +312,16 @@ src/
              gestures.js (recognizer) · textFormat.js (BOM/EOL/encoding) ·
              editorconfig.js · lineDiff.js (Myers) · fuzzy.js · search.js ·
              ignore.js · navHistory.js · settings.js · inspect.js · linkify.js ·
-             keysLayout.js (the keys bar as data) · keybindings.js (shortcuts)
+             keysLayout.js (the keys bar as data) · keybindings.js (shortcuts) ·
+             explorer.js (free names, selections, the trash's 7 days)
   storage/   ProjectFs implementations (File System Access / OPFS handles,
-             Capacitor), IndexedDB, recovery store, local history, secrets
+             Capacitor), IndexedDB, recovery store, local history, secrets,
+             trash.js (deleted files, 7 days)
   editor/    CodeMirror setup, languages, gesture layer, outline, sticky
              scroll, expand selection, syntax lint, git gutter, snippets
   app/       workspace (documents, panes, tabs, save, recovery), composition
              root (app.js), chrome (tabs/status bar), preview controller
-  ui/        layout, file tree, palette, panels, keys bar, dialogs;
+  ui/        layout, file tree, open editors, palette, panels, keys bar, dialogs;
              settingsView.js · keysBarEditor.js · shortcutsEditor.js (Settings,
              loaded the first time it is opened)
   run/       JS runner, preview builder, Prettier client

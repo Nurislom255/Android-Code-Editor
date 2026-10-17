@@ -23,27 +23,28 @@ test('file tree: create in a folder, rename, delete (with long-press / right-cli
     await folder.click({ button: 'right' });
   }
   await page.getByRole('menuitem', { name: 'New file here' }).click();
-  await page.locator('.modal input').fill('util.js');
-  await page.locator('.modal').getByRole('button', { name: 'OK' }).click();
+  // named in the tree itself (Phase 4)
+  await page.locator('.tree-edit input').fill('util.js');
+  await page.locator('.tree-edit input').press('Enter');
   await expect(page.locator('.tab.active .tab-name')).toHaveText('util.js');
   expect(await page.evaluate(() => window.__app.project.fs.exists('src/util.js'))).toBe(true);
 
   // rename (through the same action the menu uses)
-  // not awaited inside the page: the action waits for the dialog we answer below
+  // not awaited inside the page: the action waits for the name typed below
   await page.evaluate(() => { window.__app.actions.rename('src/util.js', 'file'); });
-  await page.locator('.modal input').fill('helpers.js');
-  await page.locator('.modal').getByRole('button', { name: 'OK' }).click();
+  await page.locator('.tree-edit input').fill('helpers.js');
+  await page.locator('.tree-edit input').press('Enter');
   await expect(page.locator('.tab.active .tab-name')).toHaveText('helpers.js');
   expect(await page.evaluate(() => window.__app.project.fs.exists('src/helpers.js'))).toBe(true);
 
+  // delete: to the trash, no question
   await page.evaluate(() => { window.__app.actions.remove('src/helpers.js', 'file'); });
-  await page.locator('.modal').getByRole('button', { name: 'Delete' }).click();
   await expect(page.locator('.tab', { hasText: 'helpers.js' })).toHaveCount(0);
   expect(await page.evaluate(() => window.__app.project.fs.exists('src/helpers.js'))).toBe(false);
 });
 
 test('file tree: drag a file into a folder and a folder to the project root', async ({ page, hasTouch }) => {
-  await boot(page);
+  await boot(page, { compactFolders: false });
   await newProject(page, 'dm', 'web');
   await writeProjectFile(page, 'src/lib/util.js', 'export const x = 1;\n');
   await openFile(page, 'style.css');

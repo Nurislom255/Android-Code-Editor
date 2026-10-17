@@ -20,7 +20,7 @@ export const PAGES = [
   { id: 'keysbar', title: 'Keys bar', icon: 'keyboardHide', desc: 'Which keys, where; symbols per language' },
   { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'command', desc: 'For a Bluetooth or USB keyboard' },
   { id: 'gestures', title: 'Gestures', icon: 'gesture', desc: 'Swipes on the code, sensitivity, vibration' },
-  { id: 'files', title: 'Files & saving', icon: 'save', desc: 'Autosave, hidden files, local history' },
+  { id: 'files', title: 'Files & saving', icon: 'save', desc: 'Autosave, file tree, tabs, hidden files, history' },
   { id: 'run', title: 'Run', icon: 'play', desc: 'Time limit, preview' },
   { id: 'git', title: 'Git', icon: 'git', desc: 'Author, CORS proxy' },
   { id: 'snippets', title: 'Snippets', icon: 'copy', desc: 'Your own autocomplete snippets' },
@@ -78,9 +78,14 @@ export class SettingsView {
   get isOpen() { return !this.el.hidden; }
   get wide() { return matchMedia(WIDE).matches; }
 
-  /** Opens Settings, at a page (id) or at the list. */
-  open(page = null) {
+  /**
+   * Opens Settings, at a page (id) or at the list. `returnTo`: where ← and
+   * Android Back go from the list (the phone's drawer it was opened from);
+   * ✕ always goes straight back to the code.
+   */
+  open(page = null, { returnTo = null } = {}) {
     if (!this.isOpen) {
+      this.returnTo = returnTo;
       this.el.hidden = false;
       // Off the code: the soft keyboard and the keys bar go away.
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -106,6 +111,7 @@ export class SettingsView {
   }
 
   close() {
+    this.returnTo = null;
     if (this.depth > 0) { this.closing = true; history.go(-this.depth); } else this.hide();
   }
 
@@ -120,7 +126,10 @@ export class SettingsView {
   hide() {
     this.el.hidden = true;
     this.page = null;
+    const back = this.returnTo;
+    this.returnTo = null;
     if (this.deps.onClose) this.deps.onClose();
+    if (back) back();
   }
 
   // ---- drawing ------------------------------------------------------------
@@ -132,7 +141,10 @@ export class SettingsView {
     const info = PAGES.find((p) => p.id === page);
     this.el.dataset.view = searching ? 'search' : page ? 'page' : 'list';
     this.title.textContent = searching ? 'Search' : !wide && info ? info.title : 'Settings';
-    this.backBtn.hidden = !(searching || (!wide && page));
+    this.backBtn.hidden = !(searching || (!wide && (page || this.returnTo)));
+    const backLabel = !searching && !page && this.returnTo ? 'Back to the side panels' : 'Back';
+    this.backBtn.title = backLabel;
+    this.backBtn.setAttribute('aria-label', backLabel);
     this.nav.textContent = '';
     for (const p of PAGES) {
       this.nav.append(h('button.sv-nav-item', {
@@ -242,6 +254,9 @@ export class SettingsView {
         select('autosave', { off: 'Off', delay: 'After a pause in typing', blur: 'When leaving the app' }, 'Autosave', 'Unsaved work is always mirrored for crash recovery, whatever you choose here.', 'save'),
         num('autosaveDelay', 'Autosave delay (ms)', null, 300, 60000, 100),
         text('ignoreList', 'Hidden & ignored names', 'Hidden in the file tree and skipped by search / quick open (along with .gitignore).', DEFAULTS.ignoreList),
+        toggle('previewTabs', 'Preview tabs', 'A tap on a file opens it in a temporary tab (name in italics) that the next file you tap replaces. Typing in it, saving or double-tapping its tab keeps it.', 'tabs italic temporary'),
+        toggle('autoReveal', 'File tree follows the open file', 'Switching tabs shows that file in the tree (its folders open).', 'reveal explorer'),
+        toggle('compactFolders', 'Compact folders', 'A folder that holds only one folder shows as one row, like src/main/java.', 'explorer tree'),
         num('historyDays', 'Keep local history (days)', null, 1, 90, 1, 'snapshots'),
         num('historyMaxPerFile', 'Snapshots per file', null, 5, 500, 1, 'local history'),
       ];

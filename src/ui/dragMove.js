@@ -8,7 +8,7 @@
 // A quick swipe still scrolls the list: dragging needs the hold first.
 // What can be dropped where is up to the caller (find / drop).
 
-import { h, haptic } from './dom.js';
+import { h, haptic, swallowNextClick } from './dom.js';
 import { closeMenus } from './overlays.js';
 
 const MOUSE_SLOP = 6;   // px before a mouse press becomes a drag
@@ -87,6 +87,8 @@ export function dragMove(list, selector, o) {
     // The click that follows would open the item: not after the menu or a
     // move (after a drag that went nowhere it may: that was a sloppy click).
     if (p.state === 'held' || (p.state === 'drag' && dropIt && target)) eatClick = true;
+    // The menu opened under the finger: lifting it must not tap an item of it.
+    if (p.state === 'held') swallowNextClick();
     if (p.state !== 'drag') return;
     mark(p, null);
     p.chip.remove();
@@ -99,7 +101,7 @@ export function dragMove(list, selector, o) {
   const hold = (p) => {
     clearTimeout(p.timer);
     p.state = 'held';
-    o.menu(p.item, { x: p.x0, y: p.y0 });
+    o.menu(p.item, { x: p.x0, y: p.y0, gap: 18 }); // clear of the finger
   };
 
   function onMove(e) {
@@ -147,6 +149,6 @@ export function dragMove(list, selector, o) {
       if (press.state === 'down') hold(press);
       return;
     }
-    o.menu(item, { x: e.clientX, y: e.clientY });
+    o.menu(item, { x: e.clientX, y: e.clientY, gap: e.pointerType === 'touch' ? 18 : 0 });
   });
 }

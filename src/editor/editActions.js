@@ -19,7 +19,7 @@ import {
   simplifySelection, deleteCharForward, cursorPageUp, cursorPageDown, cursorMatchingBracket,
 } from '@codemirror/commands';
 import {
-  completionStatus, acceptCompletion, startCompletion, closeCompletion, clearSnippet,
+  completionStatus, acceptCompletion, startCompletion, closeCompletion, clearSnippet, moveCompletionSelection,
   hasNextSnippetField, hasPrevSnippetField, nextSnippetField, prevSnippetField,
 } from '@codemirror/autocomplete';
 import { openSearchPanel, closeSearchPanel, searchPanelOpen, selectNextOccurrence, selectSelectionMatches } from '@codemirror/search';
@@ -187,6 +187,11 @@ export function cursorsOnLines(view) {
  */
 export function arrow(view, dir, { shift = false, ctrl = false, alt = false } = {}) {
   if (!view) return null;
+  // With the suggestion list open, ↑ ↓ pick in the list (as a keyboard's
+  // arrows do), not move the cursor away and close it.
+  if ((dir === 'up' || dir === 'down') && !shift && !ctrl && !alt && completionStatus(view.state) === 'active') {
+    return moveCompletionSelection(dir === 'down')(view) ? dir : null;
+  }
   if (alt && (dir === 'up' || dir === 'down')) return (dir === 'up' ? lineUp : lineDown)(view);
   const sub = alt && !ctrl;
   const table = {

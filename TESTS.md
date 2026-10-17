@@ -28,7 +28,7 @@ npm run test:phase -- base 1 2 3    # several phases
 ```
 
 Which files belong to which phase: [`tests/phases.json`](tests/phases.json).
-Phases not built yet (4–7) already have their **acceptance tests** in
+Phases not built yet (5–7) already have their **acceptance tests** in
 `tests/e2e/phaseN.spec.mjs`, written as `test.fixme` with the steps and the
 expected result: they show as *skipped* until the phase replaces them with
 real tests. Read them as the definition of done.
@@ -147,13 +147,45 @@ On the device
       bars (immersive mode) needs a native plugin — the web Fullscreen API
       works in Chrome; in the APK, Zen mode is the alternative for now.
 
-## Phase 4 — Tabs and file explorer (not built)
+## Phase 4 — Tabs and file explorer
 
-Acceptance tests (`tests/e2e/phase4.spec.mjs`, fixme): split by dragging a
-tab to an edge; preview tabs; the tapped folder is the target for New File;
-inline create / rename; folders open while dragging and Undo after a move;
-cut / copy / paste and multi-select; Open Editors, filter, auto-reveal,
-compact folders; delete to a 7-day trash and restore.
+Automated
+- Unit `explorer`: free names for pasted copies ("a copy.js", "a copy
+  2.js"; never overwrite), a selected folder covers what is inside it, no
+  move into itself, Shift-ranges, the filter (every word, names first), the
+  trash's 7 days.
+- e2e `explorer` (the phase's acceptance tests, written ahead, now real):
+  - dragging a tab over the right half (phone: lower half) of the code shows
+    the drop zone and splits, with the tab in the new pane;
+  - preview tabs: a tap opens an italic tab the next tap replaces; typing,
+    double-tapping the tab (or, on wide screens, the file in the tree)
+    keeps it;
+  - the tapped folder (or the tapped file's folder) gets New File / New
+    Folder; nothing selected → the project root;
+  - create and rename in the tree: the name's stem selected, a bad name
+    explained in place, Esc cancels, the open tab follows a rename;
+  - a dragged file held over a closed folder opens it without ending the
+    drag; "Moved …" Undo moves it back;
+  - Select + taps, Copy, Paste into a folder (a clash gets " copy", nothing
+    overwritten), Cut + Paste moves;
+  - compact `a/b/c` rows, the tree following the active tab, Open editors
+    (count, rows, ✕), the filter list;
+  - Delete → trash with Undo; a folder restored from Files ⋯ → Trash with
+    its contents and empty folders; entries older than 7 days dropped when
+    the project opens;
+  - a long-press menu never acts when the finger lifts (it opens clear of
+    the finger).
+- e2e `workspace`: create / rename / delete from the tree menu, now in place.
+
+On the device
+- [ ] Tap a few files in the tree: one italic tab follows; type in one: it
+      stays.
+- [ ] Long-press a tab, drag it to the lower half of the code: split.
+- [ ] Tap a folder, then New file (+): named in the tree, created inside it.
+- [ ] Long-press a file near the bottom of the tree: the menu opens above,
+      and lifting the finger does nothing.
+- [ ] Drag a file over a closed folder and wait: it opens; drop; Undo.
+- [ ] Delete a folder, then Files ⋯ → Trash → Restore.
 
 ## Phase 5 — Built-in runtimes (not built)
 

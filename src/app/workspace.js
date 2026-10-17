@@ -53,6 +53,7 @@ class Pane {
     this.host = host;
     this.tabs = [];
     this.activeId = null;
+    this.previewId = null; // the pane's preview tab (see Workspace.openPath)
     this.states = new Map();
     this.scroll = new Map();
     this.view = new EditorView({
@@ -217,6 +218,7 @@ export class Workspace {
   }
 
   _afterDocChange(doc, state, userEdit = false) {
+    if (userEdit && doc.preview) this.keepDoc(doc.id);
     const dirty = !sameText(state.doc, doc.saved);
     if (dirty !== doc.dirty) {
       doc.dirty = dirty;
@@ -400,12 +402,12 @@ export class Workspace {
     return state;
   }
 
-  _addToPane(pane, doc, { selection, activate = true, text = null } = {}) {
+  _addToPane(pane, doc, { selection, activate = true, text = null, index = null } = {}) {
     if (!pane.tabs.includes(doc.id)) {
       const content = text ?? (this.stateOf(doc.id)?.doc.toString() ?? doc.saved.toString());
       pane.states.set(doc.id, this._buildState(doc, content, selection));
-      // Insert next to the active tab, like most editors.
-      const at = pane.activeId != null ? pane.tabs.indexOf(pane.activeId) + 1 : pane.tabs.length;
+      // Insert next to the active tab, like most editors (or where asked).
+      const at = index != null ? Math.min(index, pane.tabs.length) : pane.activeId != null ? pane.tabs.indexOf(pane.activeId) + 1 : pane.tabs.length;
       pane.tabs.splice(at, 0, doc.id);
       this._loadLanguageFor(doc);
       this._loadGitBase(doc);
@@ -461,6 +463,15 @@ export class Workspace {
     this.saveSessionSoon();
   }
 
+  /** A preview tab becomes a normal one (edited, saved, double-tapped, dragged). */
+  keepDoc(docId) {
+    const doc = this.docs.get(docId);
+    if (!doc || !doc.preview) return;
+    doc.preview = false;
+    for (const p of this.panes) if (p && p.previewId === docId) p.previewId = null;
+    this.emit('docs', { doc });
+  }
+
   async _readDoc(path) {
     const fs = this.project.fs;
     const { bytes, lastModified, size } = await fs.readBytes(path);
@@ -513,10 +524,16 @@ export class Workspace {
    * Opens a project file (or focuses it if already open).
    * @returns {Promise<object|null>} the document
    */
-  async openPath(path, { paneIndex = this.activePane, line = null, col = 1, activate = true, quiet = false, recordNav = true, focus = true } = {}) {
+  /**
+   * Opens a project file in a pane. `preview`: as a preview tab (VS Code's
+   * single-click tab, name in italics): the next file opened this way
+   * replaces it, until it is edited, saved or double-tapped (keepDoc).
+   */
+  async openPath(path, { paneIndex = this.activePane, line = null, col = 1, activate = true, quiet = false, recordNav = true, focus = true, preview = false } = {}) {
     if (!this.project) return null;
     const pane = this.panes[paneIndex] || this.pane;
     let doc = [...this.docs.values()].find((d) => d.kind === 'project' && d.path === path);
+    if (doc && !preview && doc.preview) this.keepDoc(doc.id); // opened for good this time
     if (recordNav && this.activeDoc && this.activeDoc.path) {
       this.nav.push({ path: this.activeDoc.path, line: this.view.state.doc.lineAt(this.view.state.selection.main.head).number });
     }
@@ -544,7 +561,18 @@ export class Workspace {
       if (info.mixedEol && !quiet) this.ui.toast(`${doc.name} mixes line endings; saving will use ${info.eol === EOL.CRLF ? 'CRLF' : 'LF'} throughout.`, 'warn');
       if (doc.degrade.reason && !quiet) this.ui.toast(`Highlighting is off for ${doc.name} because ${doc.degrade.reason}.`, 'info');
     }
-    this._addToPane(pane, doc, { activate });
+    let index = null;
+    if (preview && !pane.tabs.includes(doc.id)) {
+      // The pane's previous preview tab gives its place to this one.
+      const old = pane.previewId != null ? this.docs.get(pane.previewId) : null;
+      if (old && old.preview && !old.dirty && pane.tabs.includes(old.id)) {
+        index = pane.tabs.indexOf(old.id);
+        await this.closeTab(pane.index, old.id, { force: true, collapse: false });
+      }
+      doc.preview = true;
+      pane.previewId = doc.id;
+    }
+    this._addToPane(pane, doc, { activate, index });
     if (activate) {
       this.showDoc(pane.index, doc.id, { focus });
       if (line != null) this.revealLine(doc.id, line, col);
@@ -683,6 +711,7 @@ export class Workspace {
     if (!doc.dirty) await this.recovery.remove(doc.key);
     if (doc.kind === 'project') await this.history.snapshot(doc.key, doc.path, text);
     this.emit('docs', { doc });
+    this.keepDoc(doc.id);
     this.emit('saved', { doc });
     if (!quiet) this.ui.toast(`Saved ${doc.name}`, 'success', 1200);
     return true;
@@ -770,6 +799,7 @@ export class Workspace {
     }
     const idx = pane.tabs.indexOf(docId);
     pane.tabs.splice(idx, 1);
+    if (pane.previewId === docId) pane.previewId = null;
     pane.states.delete(docId);
     pane.scroll.delete(docId);
     if (pane.activeId === docId) {
@@ -877,6 +907,7 @@ export class Workspace {
 
   /** Drag and drop of a tab: into pane `toPane`, before tab `beforeId` (null = at the end). */
   placeTab(fromPane, docId, toPane, beforeId) {
+    this.keepDoc(docId);
     if (fromPane !== toPane) this.moveTab(fromPane, docId, toPane);
     const tabs = this.panes[toPane] && this.panes[toPane].tabs;
     if (!tabs || beforeId === docId || !tabs.includes(docId)) return;

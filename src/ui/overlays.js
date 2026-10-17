@@ -158,7 +158,9 @@ export function popupMenu(items, at) {
   // Menus are zoomed with the interface (--ui-zoom): their left/top are too.
   const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1;
   menu.style.left = `${Math.max(8, Math.min(at.x, vw - r.width - 8)) / z}px`;
-  menu.style.top = `${Math.max(8, at.y + r.height > vh - 8 ? at.y - r.height : at.y) / z}px`;
+  // `gap`: keep that far from the point (a finger is there), above or below it.
+  const gap = at.gap || 0;
+  menu.style.top = `${Math.max(8, at.y + gap + r.height > vh - 8 ? at.y - gap - r.height : at.y + gap) / z}px`;
   const first = menu.querySelector('.menu-item:not([disabled])');
   if (first) first.focus({ preventScroll: true });
   menu.addEventListener('keydown', (e) => {
