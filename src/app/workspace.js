@@ -15,7 +15,7 @@
 import { EditorView } from '@codemirror/view';
 import { EditorState, Transaction, Annotation, Text } from '@codemirror/state';
 import { comp, buildExtensions, wrapExtension, readOnlyExtension, indentExtension, lineNumbersExtension,
-  closeBracketsExtension, lintExtension, stickyExtension, fastScrollExtension, wordHighlightExtension, langDataExtension } from '../editor/setup.js';
+  closeBracketsExtension, lintExtension, stickyExtension, fastScrollExtension, wordHighlightExtension, bracketColorsExtension, indentGuidesExtension, langDataExtension } from '../editor/setup.js';
 import { setEditorEnv } from '../editor/context.js';
 import { languageForName, loadLanguage, languageById } from '../editor/languages.js';
 import { setGitBase } from '../editor/gitGutter.js';
@@ -942,6 +942,8 @@ export class Workspace {
     if (prev.stickyScroll !== next.stickyScroll) this.reconfigure(() => comp.sticky.reconfigure(stickyExtension(next.stickyScroll)));
     if (prev.fastScroll !== next.fastScroll) this.reconfigure(() => comp.fastScroll.reconfigure(fastScrollExtension(next.fastScroll)));
     if (prev.wordHighlight !== next.wordHighlight) this.reconfigure(() => comp.wordHighlight.reconfigure(wordHighlightExtension(next.wordHighlight)));
+    if (prev.bracketPairColors !== next.bracketPairColors) this.reconfigure(() => comp.bracketColors.reconfigure(bracketColorsExtension(next.bracketPairColors)));
+    if (prev.indentGuides !== next.indentGuides) this.reconfigure(() => comp.indentGuides.reconfigure(indentGuidesExtension(next.indentGuides)));
     if (prev.tabWidth !== next.tabWidth || prev.insertSpaces !== next.insertSpaces) {
       this.reconfigure((doc) => {
         if (doc.indentSource !== 'settings') return null;

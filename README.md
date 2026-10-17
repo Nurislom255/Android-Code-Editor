@@ -6,11 +6,12 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
-What's next: see **[ROADMAP.md](ROADMAP.md)** (VS Code look, tabs &
-explorer, built-in Python, C, C++ and Rust). Phase 1 — typing correctness —
-is done (see *Typing*); Phase 2 — the new **keys bar**, Settings pages, a
-keys-bar editor and your own keyboard shortcuts — is built (see *Keys bar*
-and *Settings*).
+What's next: see **[ROADMAP.md](ROADMAP.md)** (tabs & explorer, built-in
+Python, C, C++ and Rust). Phase 1 — typing correctness — is done (see
+*Typing*); Phase 2 — the new **keys bar**, Settings pages, a keys-bar editor
+and your own keyboard shortcuts — and Phase 3 — the VS Code look — are built
+(see *Keys bar*, *Settings* and *Look & feel*). What each phase is tested
+with: **[TESTS.md](TESTS.md)**.
 
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
@@ -146,6 +147,34 @@ working (also inside the editor).
 
 ---
 
+## Look & feel (ROADMAP Phase 3)
+
+- **Themes** like VS Code: Dark Modern (default), Light Modern, High
+  Contrast, Monokai — Settings → Appearance or the palette's *Color theme*.
+  "Follow the phone" picks Dark or Light Modern.
+- **Status bar by state**: blue with a project open, purple with none,
+  orange while code runs.
+- **Bracket pairs** coloured by nesting (gold, orchid, blue; a closer with
+  nothing to close is red) and **indent guides** — both in Settings → Editor.
+  The file tree colours names by git status (modified, added, untracked).
+- **Icons**: VS Code's Codicons for the interface, Material Icon Theme icons
+  by file type and folder name in the tree and tabs.
+- **Long-press any icon** to see what it does (phones never show hover
+  tooltips). Long-presses that already mean something (keys, tabs, files,
+  the code) keep their meaning.
+- **Project name**: tap to switch project; **hold** it (right-click with a
+  mouse) for *Rename project*, New, Import, Export .zip, Close and Delete.
+  Rename changes the name shown in the app; files and folders stay as they are.
+- **Zen mode** (palette, `Ctrl+Alt+Z`): only the code and the keys bar;
+  leave with the corner button or Esc Esc. **Fullscreen** (`F11`, the button
+  on tablets). On a phone the **title bar slides away** while you scroll the
+  code down (Settings → Appearance).
+- The interface is not text: a long-press on a button or label never starts
+  selecting it. The code, console output and messages stay selectable.
+- Small entrance animations; with Android's *Remove animations* on, none.
+
+---
+
 ## Typing (ROADMAP Phase 1)
 
 - **Automatic semicolons** (C, C++, Java, C#, JS, TS; never Python/Kotlin),
@@ -244,6 +273,7 @@ working (also inside the editor).
 | Push/pull in a plain browser | Works, but GitHub's git servers don't send CORS headers, so requests go through the proxy configured in Settings → Git |
 | Device folders (Option B, all-files access) | `CapacitorProjectFs` is implemented and unit-tested against a fake plugin, **not yet run on a real device** — see `CAPACITOR_SETUP.md` |
 | Haptics in the APK | `navigator.vibrate` needs the `VIBRATE` permission in the Android manifest |
+| Immersive mode in the APK (hide Android's status and navigation bars) | Needs a small native plugin; the web Fullscreen API isn't available in the WebView. Zen mode works everywhere |
 | Real-device keyboard matrix (Gboard, Samsung, SwiftKey) | Tested in emulated Chromium only; real keyboards differ — please test on your phone (ROADMAP lists the Phase 1 checks) |
 
 ---
@@ -286,13 +316,32 @@ npm run serve        # http://localhost:5173  (must be http(s): modules, workers
 npm test             # unit tests (Node)
 npm run test:e2e     # end-to-end tests (Playwright, Chromium)
 npm run check        # all of the above
+npm run test:phase -- 3   # the tests of one ROADMAP phase (see TESTS.md)
 ```
+
+Icons are generated, not hand-edited: `scripts/icons.mjs` reads the
+`@vscode/codicons` and `material-icon-theme` packages (unpacked with
+`npm pack`) and writes `src/ui/codicons.js` and `src/ui/fileIcons.js`.
 
 The e2e tests drive real touch input through the Chrome DevTools Protocol with
 explicit timestamps, so swipe speed in tests is exact; they also run git
-push/pull/clone against a local `git http-backend` server. Tests that press
+push/pull/clone against a local `git http-backend` server. Timing tests
+(`perf.spec.mjs`) run last and alone, so they measure the editor, not the
+other tests sharing the CPU. Tests that press
 Enter/Backspace in the editor run on the desktop project only: in Android
 emulation CodeMirror drops a share of synthetic Enter/Backspace presses
 (details in ROADMAP.md, Phase 1 result).
 
 To wrap as an APK, see **[CAPACITOR_SETUP.md](CAPACITOR_SETUP.md)**.
+
+## Credits
+
+- Interface icons: [Codicons](https://github.com/microsoft/vscode-codicons)
+  by Microsoft, licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) (a subset, path
+  numbers rounded).
+- File and folder icons:
+  [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)
+  (MIT).
+- Editor: [CodeMirror](https://codemirror.net/) (MIT); git:
+  [isomorphic-git](https://isomorphic-git.org/) (MIT).

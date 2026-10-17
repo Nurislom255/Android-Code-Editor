@@ -12,7 +12,7 @@ build, and how we know it is done.
 | 0 | Real-device test loop (diagnostics) | Small | Skipped for now: the owner's reports were enough to find every bug so far. Build it when a bug can't be reproduced |
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
-| 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
+| 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
@@ -45,8 +45,11 @@ pushed to the branch and this table updated.
    tools), with Gboard at minimum. v2's emulated tests passed while real-phone
    bugs remained — emulation is necessary but not enough.
 2. Every new behaviour gets an automated test (`tests/unit` for pure logic,
-   `tests/e2e` for UI). Behaviour that only a real keyboard app can produce goes
-   into `tests/manual/CHECKLIST.md`.
+   `tests/e2e` for UI). **[TESTS.md](TESTS.md)** lists, per phase, the tests
+   that must pass and the checks to do on the device; `tests/phases.json`
+   maps phases to test files (`npm run test:phase -- N`). Phases not built
+   yet already have acceptance tests (`tests/e2e/phaseN.spec.mjs`, as
+   `test.fixme`): turn those into real tests when building the phase.
 3. Heavy features load lazily (separate chunks); the startup bundle must not
    grow by more than ~10 % per phase without a reason written here.
 4. `npm run check` passes, `docs/` is rebuilt, README updated, then push.
@@ -580,6 +583,38 @@ listed in 2.3; the customization survives a reload.
   record and, for a device folder, offer to rename the folder. Give the
   long-press the "armed" feedback above.
 
+### Phase 3 — result (v2.6.0)
+
+Built: four themes as CSS token sets (`styles.css`, classes on `<html>`),
+`editor/bracketColors.js` (bracket pairs + indent guides),
+`scripts/icons.mjs` → `ui/codicons.js` and `ui/fileIcons.js` (generated;
+the file icons are their own chunk), `ui/fileTypeIcons.js`,
+`ui/tooltips.js`, `onLongPress` and `BUZZ` in `ui/dom.js`, project rename
+in `storage/projects.js`, view modes in `app.js`. Startup bundle: main.js
+320 → 331 KB (+3 %); file icons 43 KB, loaded right after start without
+holding it up. Tests: `tests/unit/bracketColors.test.mjs`,
+`tests/unit/icons.test.mjs`, `tests/e2e/lookfeel.spec.mjs` (see TESTS.md).
+
+Typing speed with the editor extras (measured in the 5,000-line benchmark
+file): letters and digits only shift the bracket marks and indent guides,
+and brackets are recounted 150 ms after typing pauses (a letter can, rarely,
+turn code into a regex); simple-mode languages (Go, Rust, Kotlin…) remember
+which brackets are open above the screen instead of rescanning up to 300 KB
+per keystroke (that cost 14 ms per key in a 5,000-line Go file before the
+fix; now about 1 ms).
+
+| Item | Shipped | Differences from the plan |
+|---|---|---|
+| Colour | Accent `#0078d4` (fills) / `#4daafc` (text on dark); status bar blue / purple (no project) / orange (running); bracket pairs by depth (gold, orchid, blue, red for a stray closer) from the syntax tree, so brackets in strings and comments don't count; indent guides (blank lines follow VS Code's rule); git status colours names in the tree, folders holding changes too | `if` / `return` / `import` are purple as in VS Code (a separate token colour). Both editor extras can be switched off (Settings → Editor) |
+| Themes | Dark Modern (default), Light Modern, High Contrast, Monokai; "Follow the phone" = Dark / Light Modern; palette: *Color theme* | High Contrast shows the status-bar states as a coloured top border (its bar stays black) |
+| Icons | Codicons for the interface (CC BY 4.0, credited in About and README); Material Icon Theme for 44 file types and 14 folder names (MIT); activity bar 56 px with 24 px icons on touch screens | Kept our own drawings where Codicons has no match: cursors, joystick, hide keyboard, gestures, format, command palette. The Kotlin icon's gradient is one colour; the CSS-folder icon (uses `<use>`) left out |
+| Long-press → tooltip | Any icon button with a title, on touch: bubble + light buzz, the button does not fire | Not on the keys bar, tabs, tree rows, the code or the project name: their long-press already does something |
+| Full screen | Zen mode (code + keys bar; corner button, Esc Esc, `Ctrl+Alt+Z`); Fullscreen (`F11`, button on wide screens); the phone's title bar slides away while *you* scroll down (not when the editor follows the cursor) — setting in Appearance | **APK immersive mode not built**: needs a native plugin and can't be tested here; in the APK, Fullscreen says so and Zen mode is the way |
+| Welcome, motion | Welcome with the logo, start cards, recent projects with icons, theme / keys bar / settings buttons; entrance animations 90–240 ms; none with *reduce motion* | — |
+| Interaction states | One rule set: pressed (darker fill at once), armed (accent fill), active (accent tint), disabled (faded, no taps), busy (slow pulse); vibration strengths `BUZZ.tap / armed / hold` | Older keys-bar code keeps its own (already matching) values |
+| No selection on chrome | The whole interface is `user-select: none`; the code, inputs, console output, diffs, dialog and toast messages are selectable | Done the other way round (allow-list) so new UI is covered by default |
+| Project actions | Tap = switch project; hold / right-click = Rename, Switch, New, Import .zip / folder, Export .zip, Close, Delete (in-app projects); the name shows *armed* while the menu is open | Rename changes the shown name only (the in-app folder keeps its first name, so sessions and history stay attached). **Not built:** renaming a device folder itself (can't be tested without the APK), and "Project settings" (there are no per-project settings yet) |
+
 ---
 
 ## Phase 4 — Tabs and file explorer (reported issue 6)
@@ -726,8 +761,8 @@ covers everything in this list except where noted.
    abort the merge.
 7. **Stash:** save, list, apply, pop, drop.
 8. **Tags:** create (light or annotated), push, delete.
-9. **From the file tree:** coloured git status (with Phase 3), *Add to
-   .gitignore*, *Show history of this file*.
+9. **From the file tree:** ~~coloured git status~~ (shipped in Phase 3),
+   *Add to .gitignore*, *Show history of this file*.
 10. **APK:** use Android's native HTTP for push / pull, so the app needs no CORS
     proxy (the web version still does).
 

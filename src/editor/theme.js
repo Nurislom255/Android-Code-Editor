@@ -12,7 +12,8 @@ import { tagHighlighter, tags as t } from '@lezer/highlight';
 
 const highlighter = tagHighlighter([
   { tag: t.comment, class: 'tok-comment' },
-  { tag: [t.keyword, t.controlKeyword, t.moduleKeyword, t.operatorKeyword, t.definitionKeyword, t.modifier], class: 'tok-keyword' },
+  { tag: [t.controlKeyword, t.moduleKeyword], class: 'tok-control' }, // if / return / import: purple in VS Code
+  { tag: [t.keyword, t.operatorKeyword, t.definitionKeyword, t.modifier], class: 'tok-keyword' },
   { tag: [t.string, t.special(t.string), t.attributeValue, t.character], class: 'tok-string' },
   { tag: [t.regexp, t.escape], class: 'tok-regexp' },
   { tag: [t.number, t.integer, t.float], class: 'tok-number' },

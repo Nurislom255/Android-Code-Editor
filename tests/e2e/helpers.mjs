@@ -153,3 +153,15 @@ export async function dragItem(page, hasTouch, from, to, at = { x: 0.5, y: 0.5 }
   await expect(page.locator('.drag-chip')).toBeVisible();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
+
+/** Holds a finger on an element for `ms`, then lifts it (touch projects only). */
+export async function longPress(page, locator, ms = 650) {
+  await locator.click({ trial: true }); // waits until it is visible and has stopped moving (a drawer sliding in)
+  const b = await locator.boundingBox();
+  const at = { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [at] });
+  await page.waitForTimeout(ms);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+}

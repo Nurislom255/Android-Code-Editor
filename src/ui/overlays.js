@@ -57,7 +57,7 @@ export async function confirm(title, message, okLabel = 'OK', kind = 'primary') 
 /**
  * @returns {Promise<string|null>}
  */
-export function prompt({ title, label = '', value = '', placeholder = '', okLabel = 'OK', validate = null, selectBase = true, multiline = false }) {
+export function prompt({ title, label = '', value = '', placeholder = '', okLabel = 'OK', validate = null, selectBase = true, multiline = false, message = null }) {
   return new Promise((resolve) => {
     const input = multiline
       ? h('textarea.input.input-multiline', { rows: 6, placeholder, spellcheck: 'false', autocapitalize: 'off' })
@@ -76,6 +76,7 @@ export function prompt({ title, label = '', value = '', placeholder = '', okLabe
     });
     const m = modal([
       h('h2.modal-title', title),
+      message ? h('p.modal-message', message) : null,
       h('label.field', label ? h('span.field-label', label) : null, input, error),
       h('div.modal-buttons',
         h('button.btn', { onclick: () => m.close(null) }, 'Cancel'),
@@ -150,6 +151,7 @@ export function popupMenu(items, at) {
     }, it.icon ? h('span.menu-icon', { html: icon(it.icon, 16) }) : h('span.menu-icon'), h('span.menu-label', it.label), it.hint ? h('span.menu-hint', it.hint) : null));
   }
   const layer = h('div.menu-layer', { onpointerdown: (e) => { if (e.target === layer) closeMenus(); } }, menu);
+  layer._onClose = at.onClose || null;
   root().append(layer);
   const r = menu.getBoundingClientRect();
   const vw = window.innerWidth, vh = window.innerHeight;
@@ -170,5 +172,8 @@ export function popupMenu(items, at) {
 }
 
 export function closeMenus() {
-  for (const el of document.querySelectorAll('.menu-layer')) el.remove();
+  for (const el of document.querySelectorAll('.menu-layer')) {
+    el.remove();
+    if (el._onClose) el._onClose();
+  }
 }

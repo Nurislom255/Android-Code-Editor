@@ -8,29 +8,10 @@
 // (with a mouse: just drag).
 
 import { h, icon } from './dom.js';
+import { fileIcon, folderIcon } from './fileTypeIcons.js';
 import { popupMenu } from './overlays.js';
 import { dragMove } from './dragMove.js';
-import { extname, dirname, basename } from '../core/paths.js';
-
-const TYPE_BADGES = {
-  '.js': ['JS', '#e8c547', '#1a1a1a'], '.mjs': ['JS', '#e8c547', '#1a1a1a'], '.cjs': ['JS', '#e8c547', '#1a1a1a'],
-  '.jsx': ['JX', '#61dafb', '#10202a'], '.ts': ['TS', '#3178c6', '#fff'], '.tsx': ['TX', '#3178c6', '#fff'],
-  '.html': ['<>', '#e5683b', '#fff'], '.htm': ['<>', '#e5683b', '#fff'], '.css': ['#', '#5b8ef0', '#fff'],
-  '.scss': ['S', '#cd6799', '#fff'], '.json': ['{}', '#a8a03c', '#fff'], '.md': ['M↓', '#6b8fb3', '#fff'],
-  '.py': ['Py', '#3d78b0', '#ffd43b'], '.c': ['C', '#5c6bc0', '#fff'], '.h': ['H', '#7986cb', '#fff'],
-  '.cpp': ['C+', '#00599c', '#fff'], '.hpp': ['H+', '#00599c', '#fff'], '.java': ['Jv', '#e76f00', '#fff'],
-  '.kt': ['Kt', '#8f62e8', '#fff'], '.go': ['Go', '#00add8', '#fff'], '.rs': ['Rs', '#b7410e', '#fff'],
-  '.sh': ['$', '#4caf50', '#fff'], '.yml': ['Y', '#cb171e', '#fff'], '.yaml': ['Y', '#cb171e', '#fff'],
-  '.svg': ['Sv', '#ffb13b', '#1a1a1a'], '.png': ['Im', '#26a69a', '#fff'], '.jpg': ['Im', '#26a69a', '#fff'],
-  '.jpeg': ['Im', '#26a69a', '#fff'], '.gif': ['Im', '#26a69a', '#fff'], '.webp': ['Im', '#26a69a', '#fff'],
-  '.txt': ['Tx', '#8a919c', '#fff'], '.sql': ['Sq', '#e38c00', '#fff'], '.xml': ['X', '#8a6d3b', '#fff'],
-};
-
-export function fileBadge(name) {
-  const b = TYPE_BADGES[extname(name)];
-  if (!b) return h('span.file-icon', { html: icon('file', 16), style: { color: 'var(--text-faint)' } });
-  return h('span.file-icon', { style: { background: b[1], color: b[2] } }, b[0]);
-}
+import { dirname, basename } from '../core/paths.js';
 
 export class FileTree {
   /**
@@ -101,7 +82,7 @@ export class FileTree {
         onclick: () => this.activate(e),
       },
       h('span.twisty', { html: e.kind === 'directory' ? icon('chevronRight', 14) : '' }),
-      e.kind === 'directory' ? h('span.file-icon', { html: icon(open ? 'folderOpen' : 'folder', 16), style: { color: 'var(--accent)' } }) : fileBadge(e.name),
+      e.kind === 'directory' ? folderIcon(e.name, open) : fileIcon(e.name),
       h('span.tname', e.name),
       h('span.tbadge'));
       this.rows.set(e.path, row);
@@ -148,6 +129,9 @@ export class FileTree {
   decorate() {
     const { active, dirty } = this.deps.getOpenState();
     const badges = this.deps.getGitBadges ? this.deps.getGitBadges() : new Map();
+    // Folders holding changes are tinted too, as in VS Code.
+    const changedDirs = new Set();
+    for (const p of badges.keys()) for (let i = p.lastIndexOf('/'); i > 0; i = p.lastIndexOf('/', i - 1)) changedDirs.add(p.slice(0, i));
     for (const [path, row] of this.rows) {
       row.classList.toggle('active', path === active);
       row.classList.toggle('dirty', dirty.has(path));
@@ -155,6 +139,7 @@ export class FileTree {
       const letter = badges.get(path) || '';
       b.textContent = letter;
       b.className = `tbadge ${letter}`;
+      row.dataset.git = letter || (row.dataset.kind === 'directory' && changedDirs.has(path) ? 'dir' : '');
     }
   }
 

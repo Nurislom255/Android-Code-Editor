@@ -8,7 +8,7 @@ import { dirname } from '../core/paths.js';
 import { eolLabel } from '../core/textFormat.js';
 import { symbolPathAt } from '../editor/outline.js';
 import { symbolsFor } from '../editor/viewPlugins.js';
-import { fileBadge } from '../ui/fileTree.js';
+import { fileIcon } from '../ui/fileTypeIcons.js';
 
 export function renderTabBar(app, paneIndex) {
   const ws = app.ws;
@@ -39,7 +39,7 @@ export function renderTabBar(app, paneIndex) {
       onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); ws.closeTab(paneIndex, id); } },
       onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ws.showDoc(paneIndex, id); } },
     },
-    fileBadge(doc.name),
+    fileIcon(doc.name),
     h('span.tab-name', doc.name),
     showDir ? h('span.tab-dir', dirname(doc.path)) : null,
     doc.locked ? h('span', { html: icon('lock', 12), title: 'Read-only' }) : null,
@@ -160,7 +160,11 @@ export function renderStatus(app) {
   const add = (key, content, opts = {}) => items.push({ key, content, ...opts });
   if (app.gitBranch) add('branch', [h('span', { html: icon('branch', 14) }), app.gitBranch], { title: 'Git branch', menu: `Git branch: ${app.gitBranch}`, onclick: () => app.showPanel('git') });
   const { errors, warnings } = app.problemCounts || { errors: 0, warnings: 0 };
-  add('problems', `✖ ${errors}  ⚠ ${warnings}`, { cls: errors ? 'err' : warnings ? 'warn' : '', title: 'Problems', onclick: () => app.bottom.toggle('problems') });
+  const problems = `Problems: ${errors} error${errors === 1 ? '' : 's'}, ${warnings} warning${warnings === 1 ? '' : 's'}`;
+  add('problems', [h('span', { html: icon('error', 14) }), String(errors), h('span.sb-gap', { html: icon('warning', 14) }), String(warnings)], {
+    cls: errors ? 'err' : warnings ? 'warn' : '', title: 'Problems', label: problems, menu: problems,
+    onclick: () => app.bottom.toggle('problems'),
+  });
   add('spacer', null, { spacer: true });
   const doc = ws.activeDoc;
   if (!doc) {
@@ -194,6 +198,10 @@ export function renderStatus(app) {
   // Always last; shown only when some items had to make room (see fitStatus).
   add('more', '⋯', { title: 'More', label: 'More status items', onclick: (e) => overflowMenu(e, items) });
   const bar = document.getElementById('statusbar');
+  // Coloured by state, as in VS Code: blue normally, purple with no project
+  // open, orange while code runs.
+  bar.classList.toggle('sb-none', !app.project);
+  bar.classList.toggle('sb-running', !!app.codeRunning);
   reconcile(bar, items);
   if (!bar._fitQueued) {
     bar._fitQueued = true;
@@ -300,15 +308,16 @@ export function renderWelcome(app, paneIndex) {
   const card = (iconName, title, desc, run) => h('button.action-card', { type: 'button', onclick: run }, h('span', { html: icon(iconName, 22) }), h('span.ac-text', h('span.ac-title', title), h('span.ac-desc', desc)));
   const recent = (app.recentFiles || []).slice(0, 6);
   el.append(h('div.welcome',
-    h('h1', app.project.meta.name),
-    h('p.sub', 'Pick a file from the sidebar, or:'),
+    h('div.welcome-hero',
+      h('span.welcome-logo', { html: icon('folderOpen', 40) }),
+      h('div', h('h1', app.project.meta.name), h('p.sub', 'Pick a file from the sidebar, or start here. Hold the project name for rename, export and more.'))),
     h('div.action-grid',
       card('search', 'Quick open', 'Find a file by name (Ctrl+P)', () => app.palette.open('')),
       card('newFile', 'New file', 'Create a file in the project', () => app.actions.newFile('')),
       card('files', 'Browse files', 'Show the project tree', () => app.showPanel('files')),
       card('command', 'All commands', 'Ctrl+Shift+P · two-finger tap', () => app.palette.open('>'))),
     recent.length ? h('h3', 'Recent files') : null,
-    recent.length ? h('div.project-list', recent.map((p) => h('div.project-row', h('button.pr-main', { type: 'button', onclick: () => app.ws.openPath(p) }, h('span.pr-name', p.split('/').pop()), h('span.pr-meta', p))))) : null,
+    recent.length ? h('div.project-list', recent.map((p) => h('div.project-row', fileIcon(p.split('/').pop()), h('button.pr-main', { type: 'button', onclick: () => app.ws.openPath(p) }, h('span.pr-name', p.split('/').pop()), h('span.pr-meta', p))))) : null,
     h('h3', 'Coding on a touch screen'),
     gestureCheatSheet(app),
   ));

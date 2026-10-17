@@ -17,6 +17,13 @@ import { validateName } from '../core/paths.js';
 
 const BROWSER_ROOT = 'projects';
 
+/**
+ * The OPFS folder of a browser project: the name it was created with.
+ * Renaming a project changes only the name shown (`name`), never the folder,
+ * so nothing keyed by the project (sessions, history, recent files) moves.
+ */
+export const browserDir = (p) => p.dir || p.name;
+
 async function browserRoot() {
   if (!isOpfsSupported()) throw fsError('ENOTSUP', 'This browser has no private file storage (OPFS).');
   const opfs = await navigator.storage.getDirectory();
@@ -45,12 +52,11 @@ export async function listProjects() {
       const root = await browserRoot();
       const names = [];
       for await (const [name, h] of root.entries()) if (h.kind === 'directory') names.push(name);
-      const byId = new Map(known.map((p) => [p.id, p]));
+      const byDir = new Set(known.filter((p) => p.kind === 'browser').map(browserDir));
       for (const name of names) {
-        const id = `browser:${name}`;
-        if (!byId.has(id)) known.push({ id, kind: 'browser', name, lastOpened: 0 });
+        if (!byDir.has(name)) known.push({ id: `browser:${name}`, kind: 'browser', name, dir: name, lastOpened: 0 });
       }
-      known = known.filter((p) => p.kind !== 'browser' || names.includes(p.name));
+      known = known.filter((p) => p.kind !== 'browser' || names.includes(browserDir(p)));
     } catch { /* ignore */ }
   }
   return known.sort((a, b) => (b.lastOpened || 0) - (a.lastOpened || 0));
@@ -69,22 +75,42 @@ export async function createBrowserProject(name) {
   const problem = validateName(name);
   if (problem) throw new Error(problem);
   const root = await browserRoot();
+  if ((await listProjects()).some((p) => p.name === name)) throw fsError('EEXIST', `A project named "${name}" already exists.`);
   try {
     await root.getDirectoryHandle(name);
-    throw fsError('EEXIST', `A project named "${name}" already exists.`);
+    // the folder of a project that was renamed since
+    throw fsError('EEXIST', `The name "${name}" is still used by a renamed project's folder. Pick another.`);
   } catch (err) {
     if (err.code === 'EEXIST') throw err;
   }
   await root.getDirectoryHandle(name, { create: true });
-  const project = { id: `browser:${name}`, kind: 'browser', name, lastOpened: Date.now() };
+  const project = { id: `browser:${name}`, kind: 'browser', name, dir: name, lastOpened: Date.now() };
   await touchProject(project);
   return project;
 }
 
-export async function deleteBrowserProject(name) {
+/** @param {object|string} project  a browser project, or its folder name */
+export async function deleteBrowserProject(project) {
+  const dir = typeof project === 'string' ? project : browserDir(project);
   const root = await browserRoot();
-  await root.removeEntry(name, { recursive: true });
-  await forgetProject(`browser:${name}`);
+  await root.removeEntry(dir, { recursive: true });
+  await forgetProject(typeof project === 'string' ? `browser:${project}` : project.id);
+}
+
+/**
+ * Renames a project as shown in the app. Files and folders are not touched
+ * (a folder on the device keeps its own name). Returns the updated record.
+ */
+export async function renameProject(project, name) {
+  name = name.trim();
+  const problem = validateName(name);
+  if (problem) throw new Error(problem);
+  if (name === project.name) return project;
+  if ((await listProjects()).some((p) => p.id !== project.id && p.name === name)) throw fsError('EEXIST', `Another project is already called "${name}".`);
+  const { fs, ...rest } = project;
+  const next = { ...rest, name, ...(project.kind === 'browser' ? { dir: browserDir(project) } : {}) };
+  await put('projects', next);
+  return next;
 }
 
 export async function pickFolderProject() {
@@ -125,7 +151,7 @@ export async function requestFolderPermission(project) {
 export async function fsForProject(project) {
   if (project.kind === 'browser') {
     const root = await browserRoot();
-    const dir = await root.getDirectoryHandle(project.name);
+    const dir = await root.getDirectoryHandle(browserDir(project));
     return new HandleProjectFs(dir, { kind: 'browser', id: project.id, name: project.name });
   }
   if (project.kind === 'folder') {
