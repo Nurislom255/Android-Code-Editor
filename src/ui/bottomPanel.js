@@ -53,6 +53,7 @@ export class BottomPanel {
       document.removeEventListener('pointermove', move, true);
       document.removeEventListener('pointerup', end, true);
       document.removeEventListener('pointercancel', end, true);
+      document.body.classList.remove('resizing');
       if (!was.active) return;
       this.el.classList.remove('resizing');
       const px = this.el.getBoundingClientRect().height;
@@ -67,6 +68,9 @@ export class BottomPanel {
     head.addEventListener('pointerdown', (e) => {
       if ((e.pointerType === 'mouse' && e.button !== 0) || this.el.classList.contains('maximized')) return;
       s = { id: e.pointerId, y: e.clientY, h0: this.el.getBoundingClientRect().height, active: false };
+      // A quick drag down would reach the preview page before it counts as a
+      // resize, and the page (an iframe) would keep the pointer.
+      document.body.classList.add('resizing');
       // On the document: a quick drag leaves the bar before it is recognised.
       document.addEventListener('pointermove', move, true);
       document.addEventListener('pointerup', end, true);

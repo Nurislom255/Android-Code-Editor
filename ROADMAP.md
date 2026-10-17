@@ -615,6 +615,15 @@ fix; now about 1 ms).
 | No selection on chrome | The whole interface is `user-select: none`; the code, inputs, console output, diffs, dialog and toast messages are selectable | Done the other way round (allow-list) so new UI is covered by default |
 | Project actions | Tap = switch project; hold / right-click = Rename, Switch, New, Import .zip / folder, Export .zip, Close, Delete (in-app projects); the name shows *armed* while the menu is open | Rename changes the shown name only (the in-app folder keeps its first name, so sessions and history stay attached). **Not built:** renaming a device folder itself (can't be tested without the APK), and "Project settings" (there are no per-project settings yet) |
 
+### After Phase 3 — fixes from the owner's test (v2.6.1)
+
+| Report | Cause | Fix |
+|---|---|---|
+| ↑ / ↓ can't pick in the autocomplete list | The keys bar's arrows and the joystick called the cursor commands directly, past CodeMirror's "arrows move in the open list" keys | With the list open, ↑ ↓ (keys bar, joystick, no modifier) move in the list |
+| The handle between the code and the live preview doesn't work | It was 5 px wide: a finger landed on the preview page (an iframe), which kept the touch | A 25 px grab area and a grip; while a divider or the panel bar is dragged, preview pages ignore the pointer |
+| Tablet, keyboard up: the activity bar's icons get squeezed | The buttons were allowed to shrink | They keep their size (smaller, all alike, when the bar is short) and the bar scrolls |
+| Phone: Settings opened from the drawer — no way back to Files / Search / Git | Settings closed the drawer and forgot it | ← (now shown on the Settings list) and Android Back go back to the drawer, on the panel it showed; ✕ goes to the code |
+
 ---
 
 ## Phase 4 — Tabs and file explorer (reported issue 6)

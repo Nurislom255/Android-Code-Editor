@@ -78,9 +78,14 @@ export class SettingsView {
   get isOpen() { return !this.el.hidden; }
   get wide() { return matchMedia(WIDE).matches; }
 
-  /** Opens Settings, at a page (id) or at the list. */
-  open(page = null) {
+  /**
+   * Opens Settings, at a page (id) or at the list. `returnTo`: where ← and
+   * Android Back go from the list (the phone's drawer it was opened from);
+   * ✕ always goes straight back to the code.
+   */
+  open(page = null, { returnTo = null } = {}) {
     if (!this.isOpen) {
+      this.returnTo = returnTo;
       this.el.hidden = false;
       // Off the code: the soft keyboard and the keys bar go away.
       if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -106,6 +111,7 @@ export class SettingsView {
   }
 
   close() {
+    this.returnTo = null;
     if (this.depth > 0) { this.closing = true; history.go(-this.depth); } else this.hide();
   }
 
@@ -120,7 +126,10 @@ export class SettingsView {
   hide() {
     this.el.hidden = true;
     this.page = null;
+    const back = this.returnTo;
+    this.returnTo = null;
     if (this.deps.onClose) this.deps.onClose();
+    if (back) back();
   }
 
   // ---- drawing ------------------------------------------------------------
@@ -132,7 +141,10 @@ export class SettingsView {
     const info = PAGES.find((p) => p.id === page);
     this.el.dataset.view = searching ? 'search' : page ? 'page' : 'list';
     this.title.textContent = searching ? 'Search' : !wide && info ? info.title : 'Settings';
-    this.backBtn.hidden = !(searching || (!wide && page));
+    this.backBtn.hidden = !(searching || (!wide && (page || this.returnTo)));
+    const backLabel = !searching && !page && this.returnTo ? 'Back to the side panels' : 'Back';
+    this.backBtn.title = backLabel;
+    this.backBtn.setAttribute('aria-label', backLabel);
     this.nav.textContent = '';
     for (const p of PAGES) {
       this.nav.append(h('button.sv-nav-item', {

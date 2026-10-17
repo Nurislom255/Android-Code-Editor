@@ -156,3 +156,35 @@ test('a shortcut changed in Settings works, the old one stops; a pressed one is 
   await page.keyboard.press('Control+Shift+K');
   expect(await editorText(page)).toBe('one');
 });
+
+test('phone: Settings opened from the drawer — ← and Android Back return to the drawer, on its panel; ✕ goes to the code', async ({ page }) => {
+  test.skip(!narrow(page), 'narrow screens');
+  await boot(page);
+  await newProject(page, 'dr', 'js');
+  // the drawer, on Search
+  await page.locator('#btn-sidebar').click();
+  await page.locator('.sidebar-tabs .activity[data-panel="search"]').click();
+  await expect(page.locator('#app')).toHaveClass(/drawer-open/);
+  // → Settings from the drawer's tabs
+  await page.locator('.sidebar-tabs .activity[data-panel="settings"]').click();
+  await expect(view(page)).toBeVisible();
+  await expect(page.locator('#app')).not.toHaveClass(/drawer-open/);
+  // the list has a ← now: back to the drawer, still on Search
+  await view(page).getByRole('button', { name: 'Back to the side panels' }).click();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#app')).toHaveClass(/drawer-open/);
+  await expect(page.locator('.side-panel[data-panel="search"]')).toHaveClass(/active/);
+  // a page, then Android Back twice: page → list → the drawer
+  await page.locator('.sidebar-tabs .activity[data-panel="settings"]').click();
+  await nav(page, 'Editor').click();
+  await page.goBack();
+  await expect(view(page).locator('.sv-nav')).toBeVisible();
+  await page.goBack();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#app')).toHaveClass(/drawer-open/);
+  // ✕ closes Settings and the drawer stays closed: straight to the code
+  await page.locator('.sidebar-tabs .activity[data-panel="settings"]').click();
+  await view(page).getByRole('button', { name: 'Close settings' }).click();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#app')).not.toHaveClass(/drawer-open/);
+});

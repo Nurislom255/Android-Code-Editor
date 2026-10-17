@@ -98,11 +98,13 @@ function drag(handle, { start, move, end }) {
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     handle.classList.add('dragging');
+    document.body.classList.add('resizing');
     const s0 = start();
     const x0 = e.clientX, y0 = e.clientY;
     const onMove = (ev) => move(s0, ev.clientX - x0, ev.clientY - y0);
     const onUp = () => {
       handle.classList.remove('dragging');
+      document.body.classList.remove('resizing');
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
       handle.removeEventListener('pointercancel', onUp);

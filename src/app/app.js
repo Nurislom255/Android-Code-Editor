@@ -469,8 +469,15 @@ export class App {
         },
       });
     }
+    // Opened from the phone's drawer: ← / Back from the Settings list comes
+    // back to the drawer, on the panel it showed (Files, Search, Git…).
+    let returnTo = null;
+    if (this.layout.compact && this.layout.isSidebarVisible()) {
+      const panel = this.activePanel;
+      returnTo = () => { if (this.layout.compact) { this.showPanel(panel || 'files'); } };
+    }
     if (this.layout.compact) this.layout.closeDrawer();
-    this.settingsView.open(page);
+    this.settingsView.open(page, { returnTo });
   }
 
   togglePanel(id) {

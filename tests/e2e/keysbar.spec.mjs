@@ -266,6 +266,22 @@ test('joystick: the line end is a wall; pushing on for a moment goes to the next
   expect(await head(page)).toBe(4);
 });
 
+test('with the suggestion list open, joystick ↑ ↓ pick in the list instead of moving the cursor', async ({ page }) => {
+  await scratch(page, 'style.css', 'h3 {\n  font-f|\n}');
+  await page.evaluate(() => window.__app.run('autocomplete'));
+  const list = page.locator('.cm-tooltip-autocomplete');
+  await expect(list).toBeVisible();
+  const selected = () => list.locator('li[aria-selected="true"]').textContent();
+  const first = await selected();
+  const at = await head(page);
+  await dragJoystick(page, { dy: 50, n: 10, ms: 60 }); // slowly down: one step
+  await expect.poll(selected).not.toBe(first);
+  expect(await head(page)).toBe(at); // the cursor stayed in the word
+  await expect(list).toBeVisible();
+  await dragJoystick(page, { dy: -50, n: 10, ms: 60 }); // and back up
+  await expect.poll(selected).toBe(first);
+});
+
 test('joystick: a quick flick right goes to the line end', async ({ page }) => {
   await setup(page, 'alpha beta gamma', 0);
   await dragJoystick(page, { dx: 64, n: 2, ms: 40 });

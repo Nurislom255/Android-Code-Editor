@@ -522,6 +522,7 @@ input, textarea, select, [contenteditable], .cm-editor, .console-lines,
 .activity {
   width: 44px;
   height: 44px;
+  flex-shrink: 0; /* never squeezed: with the keyboard open the bar scrolls instead */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -593,6 +594,13 @@ input, textarea, select, [contenteditable], .cm-editor, .console-lines,
 #app.layout-compact #activitybar { display: none; }
 /* Touch screens: 24 px icons in a 56 px bar (ROADMAP Phase 3) */
 @media (pointer: coarse) { #activitybar { width: 56px; } #activitybar .activity { width: 52px; height: 52px; } #activitybar .activity svg { width: 24px; height: 24px; } }
+/* Short bar (a tablet with the keyboard and the keys bar up): every button
+   a bit smaller, all the same size; if they still don't fit, the bar scrolls. */
+#activitybar { container-type: size; container-name: activitybar; }
+@container activitybar (max-height: 360px) {
+  #activitybar .activity { width: 44px; height: 40px; }
+  #activitybar .activity svg { width: 20px; height: 20px; }
+}
 #app.layout-compact #sidebar-resizer { display: none; }
 #app.layout-compact #sidebar {
   position: absolute;
@@ -656,10 +664,24 @@ input, textarea, select, [contenteditable], .cm-editor, .console-lines,
   cursor: col-resize;
   flex-shrink: 0;
   touch-action: none;
+  position: relative;
+}
+/* A finger needs more than 5 px: an invisible 25 px grab area, mostly over
+   the second pane (the first one's right edge has the fast-scroll thumb),
+   and a grip that shows where to hold. */
+.pane-divider::before { content: ''; position: absolute; z-index: 6; top: 0; bottom: 0; left: -4px; right: -16px; }
+.pane-divider::after {
+  content: ''; position: absolute; z-index: 6; top: 50%; left: 50%; width: 4px; height: 36px;
+  transform: translate(-50%, -50%); border-radius: 2px; background: var(--text-faint); opacity: 0.6;
 }
 :where(.can-hover) .pane-divider:hover, .pane-divider.dragging { background: var(--accent-dim); }
+.pane-divider.dragging::after { background: var(--accent); opacity: 1; }
 #app.layout-compact #editor-area { flex-direction: column; }
 #app.layout-compact .pane-divider { width: auto; height: 5px; cursor: row-resize; }
+#app.layout-compact .pane-divider::before { left: 0; right: 0; top: -4px; bottom: -16px; }
+#app.layout-compact .pane-divider::after { width: 36px; height: 4px; }
+/* While a divider is dragged, a preview page under the finger must not take the pointer. */
+body.resizing iframe { pointer-events: none; }
 
 .tab-bar {
   display: flex;

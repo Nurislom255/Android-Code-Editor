@@ -167,3 +167,38 @@ test('format reports syntax errors instead of mangling the file', async ({ page 
   await expect(page.locator('.toast-error')).toContainText('Format failed');
   expect(await editorText(page)).toBe('let = ;\n');
 });
+
+test('the divider between the code and a side preview: grabbed a little off the line, dragged over the page', async ({ page, hasTouch }) => {
+  await boot(page);
+  await newProject(page, 'pd', 'web');
+  test.skip(await page.evaluate(() => window.__app.preview.placement() !== 'side'), 'side preview: wide screens');
+  await runCommand(page, 'run');
+  await expect(page.locator('#preview-side')).toBeVisible();
+  await expect(page.locator('#preview-side iframe')).toBeVisible();
+  const width = () => page.locator('#pane-0').evaluate((el) => el.getBoundingClientRect().width);
+  const before = await width();
+  const d = await page.locator('#pane-divider').boundingBox();
+  // grab 8 px into the preview side (a finger is never exactly on a 5 px line) and pull left
+  const x = d.x + d.width + 8, y = d.y + d.height / 2;
+  if (hasTouch) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x - 15 * i, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 120, y, { steps: 8 });
+    await page.mouse.up();
+  }
+  expect(await width()).toBeLessThan(before - 100);
+  // and back to the right, across the preview page
+  const after = await width();
+  const d2 = await page.locator('#pane-divider').boundingBox();
+  await page.mouse.move(d2.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(d2.x + 200, y, { steps: 10 });
+  await page.mouse.up();
+  expect(await width()).toBeGreaterThan(after + 150);
+  await expect(page.locator('body')).not.toHaveClass(/resizing/);
+});
