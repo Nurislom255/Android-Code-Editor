@@ -157,6 +157,21 @@ test('a shortcut changed in Settings works, the old one stops; a pressed one is 
   expect(await editorText(page)).toBe('one');
 });
 
+test('wide screens (a tablet): Settings has a ← that closes it, back to where you were', async ({ page }) => {
+  test.skip(narrow(page), 'wide screens');
+  await boot(page);
+  await newProject(page, 'tb', 'js');
+  await page.locator('#activitybar .activity[data-panel="settings"]').click();
+  await expect(view(page)).toBeVisible();
+  const back = view(page).locator('.sv-back');
+  await expect(back).toBeVisible();
+  await nav(page, 'Editor').click();
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#sidebar')).toBeVisible();
+});
+
 test('phone: Settings opened from the drawer — ← and Android Back return to the drawer, on its panel; ✕ goes to the code', async ({ page }) => {
   test.skip(!narrow(page), 'narrow screens');
   await boot(page);
@@ -187,4 +202,78 @@ test('phone: Settings opened from the drawer — ← and Android Back return to 
   await view(page).getByRole('button', { name: 'Close settings' }).click();
   await expect(view(page)).toBeHidden();
   await expect(page.locator('#app')).not.toHaveClass(/drawer-open/);
+});
+
+test('two-key shortcuts (Ctrl+K, then a key): a panel lists the second keys; Esc cancels; Ctrl+K F closes the project', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'ch', 'js');
+  await openFile(page, 'main.js');
+  await setText(page, 'let a = 1;   \nlet b = 2;', 0);
+  await page.evaluate(() => window.__app.ws.view.focus());
+  const pill = page.locator('.chord-pill');
+  // Ctrl+K: waiting, with what comes next
+  await page.keyboard.press('Control+k');
+  await expect(pill).toBeVisible();
+  await expect(pill).toContainText('Ctrl+K');
+  await expect(pill.locator('.chord-row', { hasText: 'Close project' }).locator('kbd')).toHaveText('F');
+  await page.keyboard.press('Escape');
+  await expect(pill).toHaveCount(0);
+  expect(await editorText(page)).toBe('let a = 1;   \nlet b = 2;');
+  // Ctrl held for both: Ctrl+K Ctrl+C comments the line, Ctrl+K Ctrl+X trims the spaces
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('Control+c');
+  await expect(pill).toHaveCount(0);
+  await expect.poll(() => editorText(page)).toBe('// let a = 1;   \nlet b = 2;');
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('Control+x');
+  await expect.poll(() => editorText(page)).toBe('// let a = 1;\nlet b = 2;');
+  // a second key nothing has: said, and nothing is typed
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('q');
+  await expect(page.locator('.toast', { hasText: 'Ctrl+K Q is not a shortcut' })).toBeVisible();
+  expect(await editorText(page)).toBe('// let a = 1;\nlet b = 2;');
+  // the example: Ctrl+K, then F — close the project (as VS Code closes the folder)
+  await page.keyboard.press('Control+k');
+  await page.keyboard.press('f');
+  await expect.poll(() => page.evaluate(() => window.__app.project)).toBeNull();
+  // listed with the others
+  await page.evaluate(() => window.__app.showShortcuts());
+  await expect(page.locator('.help-table tr', { hasText: 'Close project' })).toContainText('Ctrl+K F');
+});
+
+test('Settings: two keys pressed one after the other make a two-key shortcut; Ctrl+K alone is refused', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'ch2', 'js');
+  await openFile(page, 'main.js');
+  await page.evaluate(() => window.__app.openSettings('shortcuts'));
+  await view(page).getByLabel('Find a command or a key').fill('soft wrap');
+  await view(page).locator('.sc-row', { hasText: 'Toggle soft wrap' }).click();
+  const modal = page.locator('.modal');
+  await modal.locator('.sc-capture').focus();
+  // Ctrl+K alone: it starts other shortcuts
+  await page.keyboard.press('Control+k');
+  await expect(modal.locator('.sc-capture-key')).toHaveText('Ctrl+K');
+  await expect(modal.locator('.sc-msg')).toContainText('waits for a second key');
+  // …then Z right after: Ctrl+K Z
+  await page.keyboard.press('z');
+  await expect(modal.locator('.sc-capture-key')).toHaveText('Ctrl+K Z');
+  await expect(modal.locator('.sc-msg')).not.toHaveClass(/error/);
+  await modal.getByRole('button', { name: 'Save' }).click();
+  await expect(view(page).locator('.sc-row', { hasText: 'Toggle soft wrap' }).locator('.sc-key')).toHaveText('Ctrl+K Z');
+  // typed works too
+  await view(page).getByLabel('Find a command or a key').fill('reindent');
+  await view(page).locator('.sc-row', { hasText: 'Reindent file' }).click();
+  await modal.getByLabel('Type the shortcut').fill('ctrl+k, ctrl+i');
+  await expect(modal.locator('.sc-capture-key')).toHaveText('Ctrl+K Ctrl+I');
+  await modal.getByRole('button', { name: 'Cancel' }).click();
+  await view(page).getByRole('button', { name: 'Close settings' }).click();
+  // and it works
+  await page.evaluate(() => window.__app.ws.view.focus());
+  const wrap = () => page.evaluate(() => !!window.__app.ws.activeDoc.wrap);
+  const before = await wrap();
+  await page.keyboard.press('Control+k');
+  await expect(page.locator('.chord-pill .chord-row', { hasText: 'Toggle soft wrap' })).toBeVisible();
+  await page.keyboard.press('z');
+  await expect.poll(wrap).toBe(!before);
+  await page.evaluate(() => window.__app.updateSettings({ keyBindings: {} }));
 });

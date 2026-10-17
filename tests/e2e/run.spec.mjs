@@ -168,6 +168,88 @@ test('format reports syntax errors instead of mangling the file', async ({ page 
   expect(await editorText(page)).toBe('let = ;\n');
 });
 
+test('Run on a script a page loads (app.js) shows that page — the console has no document', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'pg', 'web'); // index.html loads main.js and app.js
+  await openFile(page, 'app.js');
+  await setText(page, "console.log('app.js loaded');\ndocument.addEventListener('DOMContentLoaded', () => {\n  document.querySelector('h1').textContent = 'From app.js';\n});\n");
+  await runCommand(page, 'run');
+  const frame = page.frameLocator('iframe.preview-frame');
+  await expect(frame.locator('h1')).toHaveText('From app.js');
+  await runCommand(page, 'toggleConsole');
+  await expect(consoleLines(page).filter({ hasText: 'app.js loaded' })).toHaveCount(1);
+  await expect(consoleLines(page).filter({ hasText: 'is not defined' })).toHaveCount(0);
+  // a script no page loads still runs in the console — and says why `document` is missing
+  await writeProjectFile(page, 'lone.js', "document.title = 'x';\n");
+  await openFile(page, 'lone.js');
+  await runCommand(page, 'run');
+  await expect(page.locator('#console-view .console-line.error')).toContainText('document is not defined');
+  await expect(consoleLines(page).filter({ hasText: 'needs a web page' })).toHaveCount(1);
+});
+
+test('split code and a side preview: each divider moves only its two neighbours, without a jump', async ({ page, hasTouch }) => {
+  await boot(page);
+  await newProject(page, 'dv', 'web');
+  test.skip(await page.evaluate(() => window.__app.preview.placement() !== 'side'), 'side preview: wide screens');
+  await openFile(page, 'index.html');
+  await runCommand(page, 'split');
+  await runCommand(page, 'run');
+  await expect(page.locator('#preview-side iframe')).toBeVisible();
+  const w = (sel) => page.locator(sel).evaluate((el) => el.getBoundingClientRect().width);
+  const drag = async (sel, dx) => {
+    const d = await page.locator(sel).boundingBox();
+    const x = d.x + d.width / 2, y = d.y + d.height / 2;
+    if (hasTouch) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let i = 1; i <= 6; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + (dx * i) / 6, y }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await cdp.detach();
+    } else {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + dx, y, { steps: 6 });
+      await page.mouse.up();
+    }
+  };
+  const [a0, b0, c0] = [await w('#pane-0'), await w('#pane-1'), await w('#preview-side')];
+  // a 3 px nudge of the code divider moves it 3 px — no jump
+  await drag('#pane-divider', 3);
+  expect(Math.abs(await w('#pane-0') - (a0 + 3))).toBeLessThan(2);
+  expect(Math.abs(await w('#preview-side') - c0)).toBeLessThan(2);
+  // the preview has its own divider: it resizes the preview against the second pane
+  await expect(page.locator('#preview-divider')).toBeVisible();
+  await drag('#preview-divider', -60);
+  expect(Math.abs(await w('#preview-side') - (c0 + 60))).toBeLessThan(3);
+  expect(Math.abs(await w('#pane-1') - (b0 - 3 - 60))).toBeLessThan(3);
+  expect(Math.abs(await w('#pane-0') - (a0 + 3))).toBeLessThan(2);
+});
+
+test('the divider between two code panes follows the finger from where it is (phone: up and down)', async ({ page, hasTouch }) => {
+  await boot(page);
+  await newProject(page, 'dv2', 'web');
+  await openFile(page, 'index.html');
+  await runCommand(page, 'split');
+  const vertical = await page.evaluate(() => window.__app.layout.compact);
+  const size = () => page.locator('#pane-0').evaluate((el, v) => { const r = el.getBoundingClientRect(); return v ? r.height : r.width; }, vertical);
+  const s0 = await size();
+  const d = await page.locator('#pane-divider').boundingBox();
+  const x = d.x + d.width / 2, y = d.y + d.height / 2;
+  const to = (k) => (vertical ? { x, y: y + k } : { x: x + k, y });
+  if (hasTouch) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+    for (const k of [2, 4, 40]) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [to(k)] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    for (const k of [2, 4, 40]) await page.mouse.move(to(k).x, to(k).y);
+    await page.mouse.up();
+  }
+  expect(Math.abs(await size() - (s0 + 40))).toBeLessThan(2);
+});
+
 test('the divider between the code and a side preview: grabbed a little off the line, dragged over the page', async ({ page, hasTouch }) => {
   await boot(page);
   await newProject(page, 'pd', 'web');
@@ -177,7 +259,7 @@ test('the divider between the code and a side preview: grabbed a little off the 
   await expect(page.locator('#preview-side iframe')).toBeVisible();
   const width = () => page.locator('#pane-0').evaluate((el) => el.getBoundingClientRect().width);
   const before = await width();
-  const d = await page.locator('#pane-divider').boundingBox();
+  const d = await page.locator('#preview-divider').boundingBox();
   // grab 8 px into the preview side (a finger is never exactly on a 5 px line) and pull left
   const x = d.x + d.width + 8, y = d.y + d.height / 2;
   if (hasTouch) {
@@ -194,7 +276,7 @@ test('the divider between the code and a side preview: grabbed a little off the 
   expect(await width()).toBeLessThan(before - 100);
   // and back to the right, across the preview page
   const after = await width();
-  const d2 = await page.locator('#pane-divider').boundingBox();
+  const d2 = await page.locator('#preview-divider').boundingBox();
   await page.mouse.move(d2.x + 2, y);
   await page.mouse.down();
   await page.mouse.move(d2.x + 200, y, { steps: 10 });

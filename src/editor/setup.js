@@ -19,7 +19,7 @@ import { syntaxLinter } from './syntaxLint.js';
 import { gitGutter } from './gitGutter.js';
 import { snippetSource } from './snippets.js';
 import { docInfo } from './context.js';
-import { openFilesWordSource, pathSource, composeCompletion } from './completions.js';
+import { openFilesWordSource, pathSource, composeCompletion, completionKeys } from './completions.js';
 import { emmetSource, tagNameSource, proseEnter } from './emmet.js';
 import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
@@ -115,6 +115,7 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     proseEnter, // before autocompletion(): its Enter binding has the same precedence
     autocompletion({ activateOnTyping: true, closeOnBlur: true, icons: true, maxRenderedOptions: 60 }),
     composeCompletion,
+    completionKeys,
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),

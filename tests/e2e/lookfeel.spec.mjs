@@ -154,6 +154,27 @@ test('long-press an icon: its name in a bubble, and the button does not fire', a
   await expect(page.locator('.palette')).toBeVisible();
 });
 
+test('a mouse resting on an icon shows its name — on Android, whose browsers never show a title (desktop: the browser does)', async ({ page, isMobile }) => {
+  await boot(page);
+  await newProject(page, 'tip3', 'js');
+  const btn = page.locator('#btn-palette');
+  await btn.click({ trial: true });
+  const b = await btn.boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  if (!isMobile) {
+    await page.waitForTimeout(800);
+    await expect(page.locator('.tip')).toHaveCount(0); // the browser's own tooltip, not a second one
+    return;
+  }
+  await expect(page.locator('.tip')).toHaveText(/Command palette/);
+  // moving away hides it; a click still works and leaves no bubble
+  await page.mouse.move(b.x + b.width / 2, b.y + 300);
+  await expect(page.locator('.tip')).toHaveCount(0);
+  await btn.click();
+  await expect(page.locator('.palette')).toBeVisible();
+  await expect(page.locator('.tip')).toHaveCount(0);
+});
+
 test('long-press keeps its own meaning on tree rows and keys (no tooltip there)', async ({ page, hasTouch }) => {
   test.skip(!hasTouch, 'touch');
   await boot(page);

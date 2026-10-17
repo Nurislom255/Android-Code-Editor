@@ -352,7 +352,9 @@ test('a tab held at the edge of the bar does not scroll the bar until it is move
   expect(await bar.evaluate((el) => el.scrollLeft)).toBe(0);
   // moved to the edge, it does scroll on (to reach the tabs beyond it)
   const r = await bar.boundingBox();
-  const t = await page.locator('#pane-0 .tab', { hasText: 'f01.js' }).boundingBox();
+  const tabF01 = page.locator('#pane-0 .tab', { hasText: 'f01.js' });
+  let t = null;
+  await expect.poll(async () => (t = await tabF01.boundingBox())).not.toBeNull(); // (the bar may be redrawing after the drop)
   const cdp2 = await page.context().newCDPSession(page);
   const y = t.y + t.height / 2;
   await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: t.x + t.width / 2, y }] });
@@ -443,7 +445,7 @@ test('explorer: Delete goes to a 7-day trash and can be restored', async ({ page
   await expect(entry).toContainText('7 days left');
   await entry.getByRole('button', { name: 'Restore' }).click();
   await expect.poll(() => exists(page, 'src/a.js')).toBe(true);
-  expect(await exists(page, 'src/empty/.keep')).toBe(true);
+  await expect.poll(() => exists(page, 'src/empty/.keep')).toBe(true); // restored one file after another
   expect(await page.evaluate(async () => new TextDecoder().decode((await window.__app.project.fs.readBytes('src/a.js')).bytes))).toBe('original a');
   await expect(page.locator('.trash-row')).toHaveCount(0);
   // after 7 days it is gone for good (dropped when the project opens)

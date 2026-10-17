@@ -4,6 +4,10 @@
 // touch a long press (and a light buzz) shows the same text in a bubble. The
 // press then does nothing else: lifting the finger does not "click".
 //
+// Android's browsers never show a title on hover, even with a mouse or a
+// trackpad on a tablet: there, hovering shows the same bubble. (Desktop
+// browsers show the title themselves — two tooltips would be one too many.)
+//
 // Places where a long press already means something keep it: the keys bar
 // (symbol fans, repeat), tabs and tree rows (menu + drag), the editor (text
 // selection) and the project name (project actions).
@@ -13,6 +17,8 @@ import { haptic, BUZZ } from './dom.js';
 export const TIP_DELAY = 450; // ms
 const SLOP = 10;             // px a finger may wander and still be "holding"
 const TIP_SHOWN = 1500;      // ms after the finger lifts
+const HOVER_DELAY = 500;     // ms a mouse rests on something before its tip shows
+const HOVER_AGAIN = 80;      // ms when a tip was just showing (moving along a toolbar)
 
 const TARGET = 'button[title], [role="button"][title], a[title]';
 const SKIP = '#keys-bar, .keys-sheet, .tab, .tree-row, .cm-editor, #btn-project, [data-no-tip]';
@@ -23,10 +29,12 @@ export function tipText(el) {
   return (el.getAttribute('title') || '').trim();
 }
 
-export function installTooltips({ getSettings = () => null } = {}) {
+export function installTooltips({ getSettings = () => null, hoverTips = /Android/i.test(navigator.userAgent) } = {}) {
   let press = null; // { el, x, y, timer, fired }
   let bubble = null;
   let hideTimer = 0;
+  let hover = null; // { el, timer }
+  let hoverShownAt = 0;
 
   const hide = () => {
     clearTimeout(hideTimer);
@@ -94,4 +102,34 @@ export function installTooltips({ getSettings = () => null } = {}) {
     if (press && press.el.contains(e.target)) e.preventDefault();
   }, true);
   window.addEventListener('scroll', hide, true);
+
+  // ---- hover (mouse / trackpad / pen), where the browser shows no title ----
+  if (!hoverTips) return;
+  const endHover = () => {
+    if (!hover) return;
+    clearTimeout(hover.timer);
+    if (hover.shown) { hide(); hoverShownAt = Date.now(); }
+    hover = null;
+  };
+  document.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch' || press) return;
+    const el = e.target.closest && e.target.closest('[title]');
+    if (hover && hover.el === el) return;
+    endHover();
+    if (!el || el.closest('.cm-content')) return;
+    const text = (el.getAttribute('title') || '').trim();
+    if (!text) return;
+    const h = hover = { el, shown: false };
+    h.timer = setTimeout(() => {
+      if (hover !== h || !el.isConnected) return;
+      h.shown = true;
+      show(el, text);
+    }, Date.now() - hoverShownAt < 600 ? HOVER_AGAIN : HOVER_DELAY);
+  }, true);
+  document.addEventListener('pointerout', (e) => {
+    if (!hover || e.pointerType === 'touch') return;
+    if (e.relatedTarget && hover.el.contains(e.relatedTarget)) return; // still inside it
+    endHover();
+  }, true);
+  document.addEventListener('pointerdown', endHover, true);
 }

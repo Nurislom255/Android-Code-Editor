@@ -10,7 +10,7 @@ import { Workspace, minimalChange, externalAnno } from './workspace.js';
 import { PreviewController } from './previewController.js';
 import { renderTabBar, renderCrumbs, renderConflict, renderStatus, renderWelcome, gestureCheatSheet, tabMenu } from './chrome.js';
 import { normalizeSettings, ignoreNames, GESTURE_ACTIONS, DEFAULTS, themeClasses, THEMES } from '../core/settings.js';
-import { comboFromEvent, effectiveKey, resolveCombo, parseCombo, normalizeBindings } from '../core/keybindings.js';
+import { comboFromEvent, effectiveKey, resolveCombo, parseBinding, normalizeBindings, chordsFrom } from '../core/keybindings.js';
 import { IgnoreRules } from '../core/ignore.js';
 import { dirname, basename, join, validateName, normalize } from '../core/paths.js';
 import { RecoveryStore } from '../storage/recovery.js';
@@ -18,6 +18,7 @@ import { LocalHistory } from '../storage/localHistory.js';
 import { kv } from '../storage/db.js';
 import { putInTrash, listTrash, restoreFromTrash, deleteFromTrash, purgeTrash } from '../storage/trash.js';
 import { topLevel, canMoveInto, freeName, daysLeft, orderEntries, reorderNames, relocateOrder } from '../core/explorer.js';
+import { scriptsOf, pagesNear, PAGE_ONLY } from '../core/pages.js';
 import { walkFiles, isFolderPickerSupported, isOpfsSupported } from '../storage/projectFs.js';
 import { getCapacitorFilesystem } from '../storage/capacitorFs.js';
 import {
@@ -234,9 +235,12 @@ export class App {
     const side = !$('#preview-side').classList.contains('hidden');
     $('#app').classList.toggle('split', split);
     $('#pane-1').classList.toggle('hidden', !split);
-    $('#pane-divider').classList.toggle('hidden', !(split || side));
+    $('#pane-divider').classList.toggle('hidden', !split);
+    $('#preview-divider').classList.toggle('hidden', !side);
     $('#btn-split').classList.toggle('active', split);
-    if (!split && !side) { $('#pane-0').style.flex = ''; }
+    // A column shown or hidden: the columns start equal again.
+    const cols = `${split}/${side}/${this.layout ? this.layout.compact : ''}`;
+    if (cols !== this._cols) { this._cols = cols; for (const id of ['#pane-0', '#pane-1', '#preview-side']) $(id).style.flex = ''; }
     if (this.ws) for (const p of this.ws.panes) if (p) p.view.requestMeasure();
     if (this.preview && this.preview.target && this.preview.mountedIn && this.preview.placement() !== this.preview.mountedIn) this.preview.mount();
   }
@@ -279,6 +283,16 @@ export class App {
       this.ws._addToPane(this.ws.panes[paneIndex], doc, { selection: { anchor: st.selection.main.anchor, head: st.selection.main.head } });
       this.ws.showDoc(paneIndex, doc.id);
     }
+  }
+
+  /** Ctrl+1 / Ctrl+2 (as in VS Code): the cursor goes to that pane; Ctrl+2 splits first if needed. */
+  focusPane(i) {
+    if (i === 1 && !this.ws.isSplit()) this.toggleSplit();
+    const p = this.ws.panes[i];
+    if (!p || p.visible === false) return null;
+    this.ws.setActivePane(i);
+    p.view.focus();
+    return i === 0 ? 'First pane' : 'Second pane';
   }
 
   /**
@@ -1245,7 +1259,12 @@ export class App {
     const doc = this.ws.activeDoc;
     if (!doc) { toast('Open a file to run it.', 'warn'); return; }
     const id = doc.lang.id;
-    if (id === 'javascript') return this.runJs(doc);
+    if (id === 'javascript') {
+      // A page's script runs in that page (the console has no `document`).
+      const page = await this.pageForScript(doc);
+      if (page) { this.hint(`${doc.name} runs in ${page}`); return this.preview.open(page); }
+      return this.runJs(doc);
+    }
     if (id === 'html' || id === 'markdown') {
       if (doc.kind !== 'project' && this.project == null) { this.preview.open(doc.name); return; }
       return this.preview.open(doc.path || doc.name);
@@ -1265,8 +1284,22 @@ export class App {
     toast(`No runner for ${doc.lang.name}. Run works for .js, and previews .html / .md.`, 'warn');
   }
 
+  /** The project's HTML page that loads this script (<script src>), or null. */
+  async pageForScript(doc) {
+    if (!doc.path || !this.project) return null;
+    const target = this.preview.target && this.preview.target.path;
+    const pages = pagesNear(doc.path, await this.projectFiles());
+    if (target && pages.includes(target)) pages.unshift(target); // the page already shown first
+    for (const p of pages.slice(0, 40)) {
+      const r = await this.readForPreview(p);
+      if (r && r.text != null && scriptsOf(p, r.text).includes(doc.path)) return p;
+    }
+    return null;
+  }
+
   runJs(doc) {
     const code = this.ws.textOf(doc.id);
+    let explained = false;
     const filename = doc.path || doc.name;
     this.bottom.show('console');
     this.bottom.clear();
@@ -1280,7 +1313,14 @@ export class App {
       code, filename,
       stdin: this.bottom.stdin,
       timeLimit: this.settings.runTimeLimit,
-      onOutput: (e) => this.bottom.log(e),
+      onOutput: (e) => {
+        this.bottom.log(e);
+        // "document is not defined": say why, once
+        if (!explained && e.level === 'error' && PAGE_ONLY.test(e.text || '')) {
+          explained = true;
+          this.bottom.log({ level: 'info', text: `This code needs a web page: the console has no page (no document, window, alert…). Load it from an HTML file — <script src="${doc.name}"></script> — and Run shows that page.` });
+        }
+      },
       onClear: () => this.bottom.clear(),
       onInput: (q) => this.bottom.requestInput(q),
       onSyntaxError: () => {
@@ -1454,6 +1494,9 @@ export class App {
       indent: { label: 'Indent line', key: 'Ctrl+]', run: (v) => E.indent(v) },
       outdent: { label: 'Outdent line', key: 'Ctrl+[', run: (v) => E.outdent(v) },
       toggleComment: { label: 'Toggle comment', key: 'Ctrl+/', run: (v) => E.toggleComment(v) },
+      addLineComment: { label: 'Add line comment', key: 'Ctrl+K Ctrl+C', run: (v) => E.addLineComment(v) },
+      removeLineComment: { label: 'Remove line comment', key: 'Ctrl+K Ctrl+U', run: (v) => E.removeLineComment(v) },
+      trimWhitespace: { label: 'Trim trailing whitespace', key: 'Ctrl+K Ctrl+X', run: (v) => E.trimTrailingWhitespace(v) },
       duplicateLine: { label: 'Duplicate line', key: 'Shift+Alt+↓', run: (v) => E.duplicateLine(v) },
       lineUp: { label: 'Move line up', key: 'Alt+↑', run: (v) => E.lineUp(v) },
       lineDown: { label: 'Move line down', key: 'Alt+↓', run: (v) => E.lineDown(v) },
@@ -1488,8 +1531,8 @@ export class App {
       shrinkSelection: { label: 'Shrink selection', key: 'Alt+Shift+←', run: (v) => E.shrinkSelection(v) },
       find: { label: 'Find / replace in file', key: 'Ctrl+F', run: (v) => E.find(v) },
       hideKeyboard: { label: 'Hide keyboard', run: (v) => E.hideKeyboard(v) },
-      foldAll: { label: 'Fold all', run: (v) => (v && foldAll(v) ? 'Folded' : null) },
-      unfoldAll: { label: 'Unfold all', run: (v) => (v && unfoldAll(v) ? 'Unfolded' : null) },
+      foldAll: { label: 'Fold all', key: 'Ctrl+K Ctrl+0', run: (v) => (v && foldAll(v) ? 'Folded' : null) },
+      unfoldAll: { label: 'Unfold all', key: 'Ctrl+K Ctrl+J', run: (v) => (v && unfoldAll(v) ? 'Unfolded' : null) },
       reindent: { label: 'Reindent file', run: (v) => { if (!v) return null; v.dispatch({ selection: { anchor: 0, head: v.state.doc.length } }); indentSelection(v); return 'Reindented'; } },
       format: { label: 'Format document (Prettier)', key: 'Shift+Alt+F', run: () => this.formatDoc() },
       // files
@@ -1501,21 +1544,24 @@ export class App {
       newUntitled: { label: 'New untitled file', run: () => ws.newUntitled() },
       openFiles: { label: 'Open files (outside a project)…', run: () => this.openLooseFiles() },
       closeTab: { label: 'Close tab', key: 'Alt+W', run: docOr((d) => ws.closeTab(ws.activePane, d.id)) },
-      closeAll: { label: 'Close all tabs', run: () => ws.closeAll() },
+      closeAll: { label: 'Close all tabs', key: 'Ctrl+K W', run: () => ws.closeAll() },
+      closeSaved: { label: 'Close saved tabs', key: 'Ctrl+K U', run: async () => { const p = ws.panes[ws.activePane]; for (const id of [...(p ? p.tabs : [])]) if (!ws.docs.get(id)?.dirty) await ws.closeTab(ws.activePane, id); } },
+      keepEditor: { label: 'Keep the preview tab open', key: 'Ctrl+K Enter', run: docOr((d) => { ws.keepDoc(d.id); return 'Kept open'; }) },
+      copyPath: { label: 'Copy path of the active file', key: 'Ctrl+K P', run: docOr((d) => this.copyText(d.path || d.name)) },
       quickOpen: { label: 'Go to file…', key: 'Ctrl+P', run: () => this.palette.open('') },
-      revealActive: { label: 'Reveal active file in tree', run: docOr((d) => d.path && this.revealInTree(d.path)) },
+      revealActive: { label: 'Reveal active file in tree', key: 'Ctrl+K R', run: docOr((d) => d.path && this.revealInTree(d.path)) },
       toggleWrap: { label: 'Toggle soft wrap', run: docOr((d) => { ws.setWrap(d.id, !d.wrap); return d.wrap ? 'Wrap on' : 'Wrap off'; }) },
       toggleLock: { label: 'Toggle read-only lock', run: docOr((d) => { ws.setLocked(d.id, !d.locked); return d.locked ? 'Locked' : 'Unlocked'; }) },
-      changeLanguage: { label: 'Change language mode…', run: () => this.pickLanguage() },
+      changeLanguage: { label: 'Change language mode…', key: 'Ctrl+K M', run: () => this.pickLanguage() },
       compareSaved: { label: 'Compare with saved version', run: docOr((d) => showDiff(`${d.name}: saved → current`, d.saved.toString(), ws.textOf(d.id))) },
       // projects
       switchProject: { label: 'Switch project…', run: () => this.showProjectModal() },
       newProject: { label: 'New project…', run: () => this.newBrowserProject() },
-      openFolder: { label: 'Open folder…', run: () => (isFolderPickerSupported() ? this.openFolder() : toast('This browser cannot open device folders; use a project or Import.', 'warn')) },
+      openFolder: { label: 'Open folder…', key: 'Ctrl+K Ctrl+O', run: () => (isFolderPickerSupported() ? this.openFolder() : toast('This browser cannot open device folders; use a project or Import.', 'warn')) },
       importZip: { label: 'Import .zip as project…', run: () => $('#zip-input').click() },
       exportZip: { label: 'Export project as .zip', run: () => this.exportZip() },
       renameProject: { label: 'Rename project…', run: () => (this.project ? this.renameCurrentProject() : toast('No project is open.', 'warn')) },
-      closeProject: { label: 'Close project', run: () => this.closeProject() },
+      closeProject: { label: 'Close project', key: 'Ctrl+K F', run: () => this.closeProject() },
       projectActions: { label: 'Project actions…', run: () => this.projectMenu() },
       cloneRepo: { label: 'Git: clone repository…', run: () => this.cloneRepo() },
       // navigation & view
@@ -1538,18 +1584,20 @@ export class App {
       toggleConsole: { label: 'Toggle console', key: 'Ctrl+J', run: () => this.bottom.toggle('console') },
       showProblems: { label: 'Show problems', run: () => this.bottom.show('problems') },
       split: { label: 'Split editor', key: 'Ctrl+\\', run: () => this.toggleSplit() },
+      focusPane1: { label: 'Focus the first code pane', key: 'Ctrl+1', run: () => this.focusPane(0) },
+      focusPane2: { label: 'Focus the second code pane (splits if needed)', key: 'Ctrl+2', run: () => this.focusPane(1) },
       focusOtherPane: { label: 'Focus other pane', run: () => { const o = ws.activePane === 0 ? 1 : 0; if (ws.panes[o] && ws.panes[o].visible !== false) { ws.setActivePane(o); ws.panes[o].view.focus(); } } },
       zoomIn: { label: 'Zoom in (font)', key: 'Ctrl+=', run: zoom(1) },
       zoomOut: { label: 'Zoom out (font)', key: 'Ctrl+-', run: zoom(-1) },
       zoomReset: { label: 'Reset font size', key: 'Ctrl+0', run: zoom(0) },
       toggleTheme: { label: 'Toggle dark / light theme', run: () => this.updateSettings({ theme: document.documentElement.classList.contains('theme-dark') ? 'light' : 'dark' }) },
-      pickTheme: { label: 'Color theme…', run: () => this.pickTheme() },
-      shortcuts: { label: 'Keyboard shortcuts', run: () => this.showShortcuts() },
+      pickTheme: { label: 'Color theme…', key: 'Ctrl+K T', run: () => this.pickTheme() },
+      shortcuts: { label: 'Keyboard shortcuts', key: 'Ctrl+K Ctrl+S', run: () => this.showShortcuts() },
       gestureGuide: { label: 'Touch gestures guide', run: () => this.showGestureGuide() },
       // run
       run: { label: 'Run file / preview', key: 'F5', run: () => (this.runner.running ? this.runner.stop('stopped') : this.runActive()) },
       stop: { label: 'Stop running script', run: () => this.runner.stop('stopped') },
-      preview: { label: 'Preview HTML / Markdown', run: docOr((d) => this.preview.open(d.path || d.name)) },
+      preview: { label: 'Preview HTML / Markdown', key: 'Ctrl+K V', run: docOr((d) => this.preview.open(d.path || d.name)) },
       navigatePrevProblem: { label: 'Show problems panel', run: () => this.bottom.show('problems') },
     };
     this._commands = c;
@@ -1564,7 +1612,7 @@ export class App {
   /** Every command's default shortcut, canonical ("" = none). */
   defaultBindings() {
     if (!this._defaultBindings) {
-      this._defaultBindings = Object.fromEntries(Object.entries(this.commands()).map(([id, c]) => [id, parseCombo(c.key) || '']));
+      this._defaultBindings = Object.fromEntries(Object.entries(this.commands()).map(([id, c]) => [id, parseBinding(c.key) || '']));
     }
     return this._defaultBindings;
   }
@@ -1624,7 +1672,7 @@ export class App {
     const map = [
       ['Mod-s', 'save'], ['Mod-Shift-s', 'saveAll'], ['Mod-p', 'quickOpen'], ['Mod-Shift-p', 'commandPalette'], ['F1', 'commandPalette'],
       ['Mod-g', 'goToLine'], ['Mod-Shift-o', 'goToSymbol'], ['F5', 'run'], ['Mod-Shift-f', 'searchProject'],
-      ['Mod-b', 'toggleSidebar'], ['Mod-\\', 'split'], ['Alt-Shift-ArrowRight', 'expandSelection'], ['Alt-Shift-ArrowLeft', 'shrinkSelection'],
+      ['Mod-b', 'toggleSidebar'], ['Mod-\\', 'split'], ['Mod-1', 'focusPane1'], ['Mod-2', 'focusPane2'], ['Alt-Shift-ArrowRight', 'expandSelection'], ['Alt-Shift-ArrowLeft', 'shrinkSelection'],
       ['Alt-Shift-f', 'format'], ['Mod-=', 'zoomIn'], ['Mod-+', 'zoomIn'], ['Mod--', 'zoomOut'], ['Mod-0', 'zoomReset'],
       ['Ctrl-Tab', 'nextTab'], ['Ctrl-Shift-Tab', 'prevTab'], ['Alt-PageDown', 'nextTab'], ['Alt-PageUp', 'prevTab'],
       ['Alt-w', 'closeTab'], ['Ctrl-Alt--', 'navigateBack'], ['Ctrl-Shift--', 'navigateForward'], ['Mod-j', 'toggleConsole'],
@@ -1635,6 +1683,7 @@ export class App {
     ].map(([k, cmd]) => [parseKey(k), cmd]);
     this.shortcutTable = map;
     document.addEventListener('keydown', (e) => {
+      if (this.onChordKey(e)) return;
       if (e.key === 'Escape' && this.zen) {
         const now = Date.now();
         if (now - (this._zenEsc || 0) < 600) { this._zenEsc = 0; this.toggleZen(false); return; }
@@ -1678,6 +1727,60 @@ export class App {
         }
       }
     }, true);
+  }
+
+  // ---- two-key shortcuts (VS Code's chords: Ctrl+K, then another key) ----------------
+
+  /** The keys of a two-key shortcut: its first key (then it waits), its second. true = handled. */
+  onChordKey(e) {
+    if (this.chord) {
+      if (CHORD_IGNORE.has(e.key)) return true; // Ctrl pressed again for "Ctrl+K Ctrl+0": still waiting
+      e.preventDefault();
+      e.stopPropagation();
+      const first = this.chord.first;
+      this.endChord();
+      if (e.key === 'Escape') return true;
+      const second = comboFromEvent(e, { mac: isMac, anyKey: true });
+      const hit = second && chordsFrom(first, this.defaultBindings(), this.userBindings()).find(([k]) => k === `${first} ${second}`);
+      if (hit) this.run(hit[1]);
+      else toast(`${first} ${second || '…'} is not a shortcut.`, 'info', 1800);
+      return true;
+    }
+    if (isModalOpen()) return false;
+    const t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select') && !t.closest('.cm-editor')) return false; // a text field keeps its keys
+    const combo = comboFromEvent(e, { mac: isMac });
+    const next = combo ? chordsFrom(combo, this.defaultBindings(), this.userBindings()) : [];
+    if (!next.length) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    this.startChord(combo, next);
+    return true;
+  }
+
+  /** Waiting for the second key: a panel lists what each one does (VS Code says it in the status bar). */
+  startChord(first, next) {
+    this.endChord();
+    const cmds = this.commands();
+    const MAX = 30;
+    const pill = h('div.chord-pill', { role: 'status', 'aria-live': 'polite' },
+      h('div.chord-head', h('kbd', first), h('span', 'pressed — now the second key'), h('span.chord-esc', 'Esc cancels')),
+      h('div.chord-rows', next.slice(0, MAX).map(([k, id]) => h('div.chord-row', h('kbd', k.slice(first.length + 1)), h('span', cmds[id] ? cmds[id].label : id)))),
+      next.length > MAX ? h('div.chord-more', `+${next.length - MAX} more — Keyboard shortcuts lists them all`) : null);
+    document.body.append(pill);
+    const cancel = () => this.endChord();
+    window.addEventListener('blur', cancel);
+    document.addEventListener('pointerdown', cancel, true);
+    this.chord = { first, pill, cancel };
+  }
+
+  endChord() {
+    const c = this.chord;
+    if (!c) return;
+    this.chord = null;
+    c.pill.remove();
+    window.removeEventListener('blur', c.cancel);
+    document.removeEventListener('pointerdown', c.cancel, true);
   }
 
   showShortcuts() {
@@ -1930,6 +2033,8 @@ export class App {
 const FIELD_SAFE = new Set(['save', 'saveAll', 'quickOpen', 'commandPalette', 'toggleSidebar', 'searchProject']);
 /** Shortcuts that only mean something while typing in the editor. */
 const EDITOR_ONLY = new Set(['newlineBelow', 'completeStatement', 'newlineAbove']);
+// Keys that don't end the wait for a two-key shortcut's second key.
+const CHORD_IGNORE = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph', 'CapsLock', 'OS', 'Fn']);
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '');
 
@@ -1951,6 +2056,9 @@ function keyMatches(e, s) {
   if (s.key === '+') return e.key === '+' || e.code === 'Equal';
   if (e.shiftKey !== s.shift) return false;
   if (CODE_KEYS[s.key]) return e.code === CODE_KEYS[s.key] || e.key === s.key;
+  // Not a Latin letter (another alphabet, or "Unidentified" from a keyboard
+  // still composing a word): the physical key decides.
+  if (!/^[a-z]$/i.test(e.key) && ((/^[a-z]$/i.test(s.key) && e.code === `Key${s.key.toUpperCase()}`) || (/^\d$/.test(s.key) && e.code === `Digit${s.key}`))) return true;
   return e.key.toLowerCase() === s.key.toLowerCase();
 }
 
