@@ -13,7 +13,7 @@ build, and how we know it is done.
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0, fixed in v2.8.1) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
 | 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
@@ -702,6 +702,12 @@ Found while testing:
 Changed: a compact `a/b/c` row is now dragged as a whole (it moves `a`
 with everything in it; before, it moved only `c`), since its place in the
 list is `a`'s.
+
+### After v2.8.0 — fixes (v2.8.1)
+
+| Report | Cause | Fix |
+|---|---|---|
+| Sometimes, sliding a long-pressed tab slides the tab bar instead | Three things could do it. **1.** v2.8.0 moved the "don't scroll while dragging" listener from the list to the page, added only when the finger lands — but a browser decides *as the finger lands* whether it may wait for a page to stop scrolling, counting only listeners already on the element under it; so on a phone a bar long enough to scroll scrolled under the dragged tab (headless Chromium never shows this, so the test checks the listener itself through the DevTools protocol). **2.** A tab picked up near the bar's edge (one cut off by it) started the edge auto-scroll at once, even while moving away from the edge. **3.** After any drop the bar was rebuilt and jumped back to the active tab | **1.** The listener is on each list (tab bars, tree, Open editors) from the start; the page one stays for a tab moved into the other bar. **2.** The edge scrolls only once the finger has moved 8 px toward it. **3.** The bar scrolls to the active tab only when the active tab changes |
 
 ---
 

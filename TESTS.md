@@ -182,7 +182,13 @@ Automated
     lands at the top of the files; the middle of a folder still moves it
     inside; Files ⋯ → Sort A–Z forgets the order (v2.8.0);
   - tabs and Open editors: the dragged tab's slot moves, the others slide
-    aside; the tab order follows (v2.8.0).
+    aside; the tab order follows (v2.8.0);
+  - a dragged tab or row never scrolls its list: the tab bar, the tree and
+    Open editors have their non-passive touchmove listener before any finger
+    lands (checked through the DevTools protocol — headless Chromium lets
+    the page stop a scroll either way); after the drop the bar doesn't jump
+    to the active tab; a tab held at the bar's edge doesn't scroll it until
+    moved toward that edge, and then does (v2.8.1).
 - e2e `workspace`: create / rename / delete from the tree menu, now in place.
 
 On the device
@@ -200,6 +206,9 @@ On the device
 - [ ] The same with a tab in the tab bar, and in Open editors.
 - [ ] Firefox for Android: the same drags (the list must not scroll under
       the finger).
+- [ ] Open 10+ tabs; long-press one, including the one cut off at the
+      screen's edge, and slide it: the bar doesn't slide; move it to the
+      edge on purpose: the bar scrolls on.
 
 ## Phase 5 — Built-in runtimes (not built)
 
