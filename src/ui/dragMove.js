@@ -21,7 +21,8 @@ import { closeMenus } from './overlays.js';
 const MOUSE_SLOP = 6;   // px before a mouse press becomes a drag
 const TOUCH_SLOP = 10;  // px a finger may wander and still be holding still
 const HOLD_MS = 480;
-const EDGE = 36;        // px from the list's edge where it scrolls by itself
+const EDGE = 36;        // px from the list's edge where it scrolls by itself…
+const TOWARD = 8;       // …once the finger has moved this far toward that edge
 const SLIDE_MS = 160;   // the other items moving aside
 
 const zoomOf = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--ui-zoom')) || 1;
@@ -107,7 +108,10 @@ export function dragMove(list, selector, o) {
     const [pos, lo, hi, across, a0, a1] = o.axis === 'x' ? [p.x, r.left, r.right, p.y, r.top, r.bottom] : [p.y, r.top, r.bottom, p.x, r.left, r.right];
     const over = across >= a0 && across <= a1; // e.g. not while over the other pane's tab bar
     const d = !over ? 0 : pos < lo + EDGE ? -(lo + EDGE - pos) : pos > hi - EDGE ? pos - (hi - EDGE) : 0;
-    if (d) {
+    // An item picked up near the edge (a tab cut off by it) must not slide
+    // the list away at once: only a finger moving toward the edge scrolls.
+    const start = o.axis === 'x' ? p.x0 : p.y0;
+    if (d && (d < 0 ? pos < start - TOWARD : pos > start + TOWARD)) {
       const step = Math.max(-14, Math.min(14, d / 3));
       if (o.axis === 'x') list.scrollLeft += step; else list.scrollTop += step;
       place(p);
@@ -214,9 +218,15 @@ export function dragMove(list, selector, o) {
     if (p.state === 'held') { if (moved >= TOUCH_SLOP && p.canDrag) startDrag(p); return; }
     place(p);
   }
-  // Once the hold is recognised the page must not scroll under the finger
-  // (on the document: the item may have moved into another list).
+  // Once the hold is recognised the list must not scroll under the finger.
+  // The browser decides when the finger lands whether it may wait for a
+  // listener to say "don't scroll", and only for listeners already on the
+  // element under it: so one stays on the list all the time (one added at
+  // the press came too late — the tab bar scrolled while a tab was dragged).
+  // The one on the document, added at the press, covers an item that moved
+  // into another list (a tab into the other pane's bar).
   function onTouchMove(e) { if (press && press.state !== 'down' && e.cancelable) e.preventDefault(); }
+  list.addEventListener('touchmove', onTouchMove, { passive: false });
   function onUp(e) { if (press && e.pointerId === press.id) finish(true); }
   function onCancel(e) { if (press && e.pointerId === press.id) finish(false); }
 

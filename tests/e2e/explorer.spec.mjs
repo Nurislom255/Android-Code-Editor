@@ -276,6 +276,93 @@ test('tabs and Open editors: a dragged tab lifts and the others slide aside to m
   await expect.poll(domRows).toEqual(['index.html', 'style.css', 'main.js']);
 });
 
+/**
+ * Non-passive touchmove listeners on an element (DevTools protocol). A
+ * browser only lets a page stop a touch from scrolling if such a listener
+ * was there when the finger landed — one added at the press is too late.
+ */
+async function blockingTouchMove(page, selector) {
+  const cdp = await page.context().newCDPSession(page);
+  const { result } = await cdp.send('Runtime.evaluate', { expression: `document.querySelector(${JSON.stringify(selector)})` });
+  const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId });
+  await cdp.detach();
+  return listeners.filter((l) => l.type === 'touchmove' && !l.passive).length;
+}
+
+test('a long-pressed tab or row drags — its list never scrolls under the finger (a full tab bar, a long tree)', async ({ page, hasTouch }) => {
+  test.skip(!hasTouch, 'touch only: a mouse never scrolls the list');
+  await project(page, { compactFolders: false, openEditorsOpen: true });
+  const names = Array.from({ length: 40 }, (_, i) => `f${String(i).padStart(2, '0')}.js`);
+  await page.evaluate(async (list) => { for (const n of list) await window.__app.project.fs.writeBytes(n, new Uint8Array(0)); }, names);
+  await page.evaluate(() => window.__app.tree.refresh());
+  for (const n of names.slice(0, 12)) await openFile(page, n);
+  // each list can stop the browser's scrolling before any finger is down
+  for (const sel of ['#pane-0 .tab-bar', '#sidebar .tree', '.oe-list']) expect(await blockingTouchMove(page, sel), sel).toBeGreaterThan(0);
+  // the tab bar overflows; from its start, drag a tab to the left: the bar must not scroll instead
+  const bar = page.locator('#pane-0 .tab-bar');
+  await bar.evaluate((el) => { el.scrollLeft = 0; });
+  expect(await bar.evaluate((el) => el.scrollWidth > el.clientWidth + 50)).toBe(true);
+  const tab = (name) => page.locator('#pane-0 .tab', { hasText: name });
+  await dragItem(page, hasTouch, tab('f02.js'), tab('f00.js'), { x: 0.2, y: 0.5 }); // both fully shown (nothing scrolls them into view)
+  await expect.poll(() => tabNames(page)).toEqual(['f02.js', 'f00.js', 'f01.js', ...names.slice(3, 12)]);
+  await page.waitForTimeout(300); // after the drop, the bar doesn't jump to the active tab (f11, far right)
+  expect(await bar.evaluate((el) => el.scrollLeft)).toBe(0);
+  // the same in a long file tree: drag a row up, the tree stays put
+  await files(page);
+  const scroller = page.locator('#sidebar .tree');
+  await scroller.evaluate((el) => { el.scrollTop = 0; });
+  expect(await scroller.evaluate((el) => el.scrollHeight > el.clientHeight + 100)).toBe(true);
+  const before = await page.evaluate(() => window.__app.tree.order());
+  await dragItem(page, hasTouch, row(page, 'f05.js'), row(page, 'f02.js'), { x: 0.5, y: 0.3 });
+  await expect.poll(() => page.evaluate(() => window.__app.tree.order().filter((p) => /^f0[0-6]/.test(p))))
+    .toEqual(['f00.js', 'f01.js', 'f05.js', 'f02.js', 'f03.js', 'f04.js', 'f06.js']);
+  await page.waitForTimeout(300);
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBe(0);
+  expect(before.length).toBe(await page.evaluate(() => window.__app.tree.order().length));
+});
+
+test('a tab held at the edge of the bar does not scroll the bar until it is moved toward that edge', async ({ page, hasTouch }) => {
+  test.skip(!hasTouch, 'touch only');
+  await project(page);
+  const names = Array.from({ length: 12 }, (_, i) => `f${String(i).padStart(2, '0')}.js`);
+  await page.evaluate(async (list) => { for (const n of list) await window.__app.project.fs.writeBytes(n, new Uint8Array(0)); }, names);
+  for (const n of names) await openFile(page, n);
+  const bar = page.locator('#pane-0 .tab-bar');
+  await bar.evaluate((el) => { el.scrollLeft = 0; });
+  // the tab cut off by the bar's right edge, held 12 px from that edge
+  const edge = await bar.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const t = [...el.querySelectorAll('.tab')].find((x) => x.getBoundingClientRect().right > r.right);
+    return { name: t.querySelector('.tab-name').textContent, x: r.right - 12, y: r.top + r.height / 2 };
+  });
+  const to = await page.locator('#pane-0 .tab', { hasText: 'f00.js' }).boundingBox();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: edge.x, y: edge.y }] });
+  await page.waitForTimeout(650);
+  // lifted and moved a little — away from the edge, still near it: the bar stays put
+  for (const dx of [-4, -8, -12, -14]) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: edge.x + dx, y: edge.y }] }); await page.waitForTimeout(40); }
+  await expect(page.locator('.drag-lift')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await bar.evaluate((el) => el.scrollLeft)).toBe(0);
+  // then to the first tab
+  for (let i = 1; i <= 8; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: edge.x - 14 + ((to.x + 10 - edge.x + 14) * i) / 8, y: edge.y }] }); await page.waitForTimeout(20); }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect.poll(async () => (await tabNames(page))[0]).toBe(edge.name);
+  expect(await bar.evaluate((el) => el.scrollLeft)).toBe(0);
+  // moved to the edge, it does scroll on (to reach the tabs beyond it)
+  const r = await bar.boundingBox();
+  const t = await page.locator('#pane-0 .tab', { hasText: 'f01.js' }).boundingBox();
+  const cdp2 = await page.context().newCDPSession(page);
+  const y = t.y + t.height / 2;
+  await cdp2.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: t.x + t.width / 2, y }] });
+  await page.waitForTimeout(650);
+  for (let i = 1; i <= 8; i++) { await cdp2.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: t.x + t.width / 2 + ((r.x + r.width - 6 - t.x - t.width / 2) * i) / 8, y }] }); await page.waitForTimeout(20); }
+  await expect.poll(() => bar.evaluate((el) => el.scrollLeft)).toBeGreaterThan(50);
+  await cdp2.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp2.detach();
+});
+
 test('explorer: cut / copy / paste and multi-select', async ({ page, hasTouch }) => {
   await project(page, { compactFolders: false });
   await writeProjectFile(page, 'lib/keep.txt', 'k');

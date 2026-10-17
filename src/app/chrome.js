@@ -56,7 +56,9 @@ export function renderTabBar(app, paneIndex) {
     doc.locked ? h('span', { html: icon('lock', 12), title: 'Read-only' }) : null,
     h('span.tab-close', { role: 'button', 'aria-label': `Close ${doc.name}`, html: icon('close', 14), onclick: (e) => { e.stopPropagation(); ws.closeTab(paneIndex, id); } }));
     bar.append(tab);
-    if (active) requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+    // Bring the active tab into view when it changes — not on every rebuild
+    // (after dragging another tab the bar jumped to the active one).
+    if (active && bar._shownActive !== id) { bar._shownActive = id; requestAnimationFrame(() => tab.scrollIntoView({ block: 'nearest', inline: 'nearest' })); }
   }
   // The split can always be closed from the second pane (the titlebar's split
   // button is hidden on narrow screens).
