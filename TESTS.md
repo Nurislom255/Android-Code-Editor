@@ -153,7 +153,9 @@ Automated
 - Unit `explorer`: free names for pasted copies ("a copy.js", "a copy
   2.js"; never overwrite), a selected folder covers what is inside it, no
   move into itself, Shift-ranges, the filter (every word, names first), the
-  trash's 7 days.
+  trash's 7 days; a folder's dragged order (saved order wins, folders stay
+  on top, new names follow A–Z, a rename keeps its place, a moved folder's
+  inner orders move with it).
 - e2e `explorer` (the phase's acceptance tests, written ahead, now real):
   - dragging a tab over the right half (phone: lower half) of the code shows
     the drop zone and splits, with the tab in the new pane;
@@ -174,7 +176,13 @@ Automated
     its contents and empty folders; entries older than 7 days dropped when
     the project opens;
   - a long-press menu never acts when the finger lifts (it opens clear of
-    the finger).
+    the finger);
+  - a file dragged between two rows: while held, its empty slot is already
+    there; let go, it stays — after a reload too; let go above a folder, it
+    lands at the top of the files; the middle of a folder still moves it
+    inside; Files ⋯ → Sort A–Z forgets the order (v2.8.0);
+  - tabs and Open editors: the dragged tab's slot moves, the others slide
+    aside; the tab order follows (v2.8.0).
 - e2e `workspace`: create / rename / delete from the tree menu, now in place.
 
 On the device
@@ -186,6 +194,12 @@ On the device
       and lifting the finger does nothing.
 - [ ] Drag a file over a closed folder and wait: it opens; drop; Undo.
 - [ ] Delete a folder, then Files ⋯ → Trash → Restore.
+- [ ] Hold a file and drag it up the tree slowly: the row lifts with a
+      shadow, the other rows slide aside smoothly; let go between two files —
+      it stays; close and reopen the app — still there.
+- [ ] The same with a tab in the tab bar, and in Open editors.
+- [ ] Firefox for Android: the same drags (the list must not scroll under
+      the finger).
 
 ## Phase 5 — Built-in runtimes (not built)
 

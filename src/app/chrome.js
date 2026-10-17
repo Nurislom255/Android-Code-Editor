@@ -10,11 +10,13 @@ import { symbolPathAt } from '../editor/outline.js';
 import { symbolsFor } from '../editor/viewPlugins.js';
 import { fileIcon } from '../ui/fileTypeIcons.js';
 
+let tabDragging = false; // a tab is lifted: no bar is rebuilt under it (it may be in the other pane's bar)
+
 export function renderTabBar(app, paneIndex) {
   const ws = app.ws;
   const pane = ws.panes[paneIndex];
   const bar = document.querySelector(`#pane-${paneIndex} .tab-bar`);
-  if (!pane || !bar || bar._dragging) return;
+  if (!pane || !bar || tabDragging) return;
   // Rebuild only when something shown changed. Rebuilding on every focus
   // change replaced the ✕ under the finger between touch-down and touch-up,
   // so the first tap on a tab in the other pane did nothing.
@@ -71,32 +73,35 @@ export function renderTabBar(app, paneIndex) {
       ignore: '.tab-close',
       getSettings: () => app.settings,
       menu: (tab, at) => tabMenu(app, paneIndex, Number(tab.dataset.docId), at),
-      label: (tab) => tab.querySelector('.tab-name').textContent,
       find: (tab, el, x, y) => tabDropTarget(app, tab, el, x, y),
       drop: (tab, t) => (t.split
         ? app.splitWithTab(paneIndex, Number(tab.dataset.docId))
         : app.ws.placeTab(paneIndex, Number(tab.dataset.docId), t.pane, t.before)),
-      onDragChange: (on) => { bar._dragging = on; if (!on) renderTabBar(app, paneIndex); },
+      onDragChange: (on) => { tabDragging = on; if (!on) for (const i of [0, 1]) renderTabBar(app, i); },
     });
   }
 }
 
 /**
- * Where a dragged tab would land: next to the tab under the pointer, at the
- * end of a tab bar, on the other pane (its end), or — over the right half of
- * the code (the lower half on a phone) with no split yet — a new split.
+ * Where a dragged tab would land: before or after the tab under the pointer
+ * (the tab itself moves there, the others slide aside), at the end of a tab
+ * bar — this pane's or the other's — or, over the code: the other pane, or
+ * with no split yet, over its right half (a phone: lower half), a new split.
  */
 function tabDropTarget(app, tab, el, x, y) {
   const bar = el && el.closest('.pane .tab-bar');
   if (!bar) return editorDropTarget(app, tab, el, x, y);
   const pane = Number(bar.closest('.pane').dataset.pane);
+  const end = bar.querySelector('.split-close'); // stays last
+  const slot = (next) => ({ pane, before: next && next.matches('.tab') ? Number(next.dataset.docId) : null, slot: { parent: bar, before: next } });
   const over = el.closest('.tab');
-  if (!over) return { el: bar, cls: 'drop-end', pane, before: null };
+  if (!over) return slot(end);
   if (over === tab) return null;
   const r = over.getBoundingClientRect();
-  if (x < r.left + r.width / 2) return { el: over, cls: 'drop-before', pane, before: Number(over.dataset.docId) };
-  const next = over.nextElementSibling;
-  return { el: over, cls: 'drop-after', pane, before: next && next.matches('.tab') ? Number(next.dataset.docId) : null };
+  if (x < r.left + r.width / 2) return slot(over);
+  let next = over.nextElementSibling;
+  if (next === tab) next = next.nextElementSibling;
+  return slot(next);
 }
 
 function editorDropTarget(app, tab, el, x, y) {
@@ -119,7 +124,7 @@ function editorDropTarget(app, tab, el, x, y) {
   return { el: zone, cls: 'show', split: true };
 }
 
-function tabMenu(app, paneIndex, docId, at) {
+export function tabMenu(app, paneIndex, docId, at) {
   const ws = app.ws;
   const doc = ws.docs.get(docId);
   const pane = ws.panes[paneIndex];
@@ -130,6 +135,7 @@ function tabMenu(app, paneIndex, docId, at) {
     { label: 'Close others', run: () => ws.closeOthers(paneIndex, docId) },
     { label: 'Close tabs to the right', run: async () => { for (const id of pane.tabs.slice(pane.tabs.indexOf(docId) + 1)) if (!(await ws.closeTab(paneIndex, id))) break; } },
     { label: 'Close saved', run: async () => { for (const id of [...pane.tabs]) if (!ws.docs.get(id)?.dirty) await ws.closeTab(paneIndex, id); } },
+    doc.preview && { label: 'Keep open', hint: 'not a preview', run: () => ws.keepDoc(docId) },
     '-',
     { label: paneIndex === 0 ? (app.layout.compact ? 'Open in split view (below)' : 'Open in right pane') : (app.layout.compact ? 'Move to the upper pane' : 'Move to left pane'), icon: 'split', run: () => app.openInPane(doc, other, paneIndex === 1) },
     doc.path && { label: 'Reveal in file tree', icon: 'files', run: () => app.revealInTree(doc.path) },

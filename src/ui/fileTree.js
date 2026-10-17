@@ -8,8 +8,11 @@
 //                  and New File / New Folder go into the selected folder (or
 //                  the selected file's folder).
 //   long-press     the menu (rename, cut / copy / paste, select…); keep
-//                  moving after it to drag the entry (or the selection) into
-//                  another folder. Hovering over a closed folder opens it.
+//                  moving after it to drag the entry (or the selection):
+//                  between two rows it stays there (each folder remembers
+//                  its own order; folders stay above files), onto the middle
+//                  of a folder it goes inside. Hovering over a closed folder
+//                  opens it.
 //   Select         (menu) taps then add / remove rows; a bar acts on them.
 //   mouse          Ctrl/⌘-click adds to the selection, Shift-click a range.
 //   keyboard       F2 rename, Delete, Ctrl+C / X / V, Enter, Esc.
@@ -21,17 +24,22 @@ import { fileIcon, folderIcon } from './fileTypeIcons.js';
 import { popupMenu } from './overlays.js';
 import { dragMove } from './dragMove.js';
 import { dirname, basename, join } from '../core/paths.js';
-import { rangeBetween, filterPaths, canMoveInto } from '../core/explorer.js';
+import { rangeBetween, filterPaths, canMoveInto, orderEntries } from '../core/explorer.js';
 
 const HOVER_OPEN_MS = 600; // dragging over a closed folder this long opens it
 const DOUBLE_TAP_MS = 450;
+
+const depthOf = (row) => Number(row.style.getPropertyValue('--depth')) || 0;
+/** The entry a row stands for in its folder: a compact "a/b/c" row is "a". */
+const entryOf = (row) => row.dataset.top || row.dataset.path;
 
 export class FileTree {
   /**
    * @param {HTMLElement} container
    * @param {object} deps {getFs, isHidden(name), onOpen(path, {keep}), onKeep(path), onExpandChange(list),
    *   getGitBadges():Map, getOpenState():{active, dirty:Set}, getSettings(), listAll():Promise<string[]>,
-   *   actions:{newFile, newFolder, rename, remove, removeMany, move, moveMany, cut, copy, paste, canPaste, …}}
+   *   getOrder(dir):string[]|null (the folder's custom order),
+   *   actions:{newFile, newFolder, rename, remove, removeMany, move, moveMany, place, sortAZ, cut, copy, paste, canPaste, …}}
    */
   constructor(container, deps) {
     this.el = container;
@@ -45,6 +53,7 @@ export class FileTree {
     this.multi = false;        // touch selection mode (taps add / remove)
     this.filter = '';
     this.lastTap = null;
+    this.afterDrag = []; // renders waiting for a drag to end
     this.el.classList.add('tree');
     this.el.setAttribute('role', 'tree');
     this.el.tabIndex = -1;
@@ -53,16 +62,20 @@ export class FileTree {
     this.el.append(this.bar, this.rowsEl);
     dragMove(this.el, '.tree-row:not(.tree-edit)', {
       axis: 'y',
+      lockAxis: true,
       getSettings: deps.getSettings,
       menu: (row, at) => this.menu(row.dataset.path, row.dataset.kind, at),
-      label: (row) => (this.dragged(row).length > 1 ? `${this.dragged(row).length} items` : basename(row.dataset.path)),
-      find: (row, el) => this.dropTarget(row, el),
+      badge: (row) => this.dragged(row).length,
+      find: (row, el, x, y) => this.dropTarget(row, el, x, y),
       drop: (row, t) => {
         const paths = this.dragged(row);
-        if (paths.length > 1) deps.actions.moveMany(paths, t.dir);
-        else deps.actions.move(row.dataset.path, row.dataset.kind, t.dir);
+        const a = deps.actions;
+        this.dropped = true;
+        if (t.slot) a.place(paths, t.dir, t.before);
+        else if (paths.length > 1) a.moveMany(paths, t.dir);
+        else a.move(paths[0], row.dataset.kind, t.dir);
       },
-      onDragChange: (on) => { this.dragging = on; if (!on) this.hoverEnd(); },
+      onDragChange: (on, row) => this.dragChange(on, row),
     });
     this.el.addEventListener('keydown', (e) => this.onKey(e));
   }
@@ -85,7 +98,8 @@ export class FileTree {
       try { entries = fs ? await fs.list(dir) : []; } catch { entries = []; }
       this.cache.set(dir, entries);
     }
-    return this.cache.get(dir).filter((e) => !this.deps.isHidden(e.name));
+    const order = this.deps.getOrder ? this.deps.getOrder(dir) : null;
+    return orderEntries(this.cache.get(dir), order).filter((e) => !this.deps.isHidden(e.name));
   }
 
   /** Re-reads the given folders (or all expanded ones) from storage. */
@@ -113,6 +127,8 @@ export class FileTree {
   // ---- drawing --------------------------------------------------------------------------
 
   async render() {
+    // Not under a dragging finger: the drag would lose its row. After it.
+    if (this.dragging) await new Promise((resolve) => this.afterDrag.push(resolve));
     const fs = this.deps.getFs();
     const frag = document.createDocumentFragment();
     this.rows.clear();
@@ -167,7 +183,7 @@ export class FileTree {
       : chain.flatMap((c, i) => [i ? h('span.tsep', '/') : null, h('span.tseg', { dataset: { seg: c.path } }, c.name)]);
     const row = h('button.tree-row.dir', {
       type: 'button', role: 'treeitem', 'aria-expanded': String(open), class: open ? 'open' : '',
-      style: { '--depth': depth }, dataset: { path: deep.path, kind: 'directory' }, title: deep.path,
+      style: { '--depth': depth }, dataset: { path: deep.path, kind: 'directory', ...(chain.length > 1 ? { top: chain[0].path } : {}) }, title: deep.path,
       onclick: (ev) => this.tap(deep.path, 'directory', ev),
     },
     h('span.twisty', { html: icon('chevronRight', 14) }),
@@ -261,10 +277,11 @@ export class FileTree {
       h('button.icon-btn.small', { type: 'button', 'aria-label': 'Stop selecting', title: 'Stop selecting', html: icon('close', 16), onclick: () => this.clearSelection() }));
   }
 
-  /** What a drag moves: the selection if the row is part of it, else the row. */
+  /** What a drag moves: the selection if the row is part of it, else the row. A compact "a/b/c" row moves "a". */
   dragged(row) {
     const p = row.dataset.path;
-    return this.selected.has(p) && this.selected.size > 1 ? [...this.selected] : [p];
+    const paths = this.selected.has(p) && this.selected.size > 1 ? [...this.selected] : [p];
+    return paths.map((x) => { const r = this.rows.get(x); return r ? entryOf(r) : x; });
   }
 
   // ---- reveal, collapse ---------------------------------------------------------------------
@@ -318,21 +335,106 @@ export class FileTree {
   // ---- drag and drop --------------------------------------------------------------------
 
   /**
-   * Where a dragged entry would go: the folder under the finger (or the part
-   * of a compact "a/b" row), the folder of the file under it, or the project
-   * root below the last row. A closed folder held over opens.
+   * Where a dragged entry would go, from where the finger is on a row:
+   *   a file row         upper half → before it, lower half → after it
+   *   a folder row       upper quarter → before it, lower quarter → after
+   *                      it (an open folder: its first entry), the middle →
+   *                      into it (held there, a closed folder opens)
+   *   below the rows     the end of the project root
+   * "Before / after" is a slot: the entry keeps that place (custom order).
+   * Folders stay above files: a slot among the other kind moves to the edge.
    */
-  dropTarget(row, el) {
-    if (!el || !this.el.contains(el) || this.bar.contains(el)) { this.hoverEnd(); return null; }
-    const over = el.closest('.tree-row');
-    const seg = el.closest('.tseg');
-    const dir = !over || over.classList.contains('tree-edit') ? ''
-      : seg ? seg.dataset.seg
-        : over.dataset.kind === 'directory' ? over.dataset.path : dirname(over.dataset.path);
-    this.hoverOver(over && over.dataset.kind === 'directory' && !over.classList.contains('open') ? over.dataset.path : null);
+  dropTarget(row, el, x, y) {
+    if (!el || !this.el.contains(el) || this.bar.contains(el) || this.filter) { this.hoverEnd(); return null; }
     const paths = this.dragged(row);
-    if (!paths.every((p) => canMoveInto(p, dir))) return null;
-    return dir ? { el: this.rowFor(dir), cls: 'drop-into', dir } : { el: this.el, cls: 'drop-root', dir };
+    const canGo = (dir) => paths.every((p) => dirname(p) === dir || canMoveInto(p, dir));
+    const over = el.closest('.tree-row');
+    if (over === row || (over && over.classList.contains('tree-edit'))) { this.hoverEnd(); return null; }
+    if (!over) { this.hoverEnd(); return canGo('') ? this.slotAt(row, '', null) : null; }
+    const r = over.getBoundingClientRect();
+    const f = (y - r.top) / (r.height || 1);
+    const isDir = over.dataset.kind === 'directory';
+    if (isDir && f > 0.25 && f < 0.75) {
+      const seg = el.closest('.tseg');
+      const dir = seg ? seg.dataset.seg : over.dataset.path;
+      this.hoverOver(over.classList.contains('open') ? null : over.dataset.path);
+      return paths.every((p) => canMoveInto(p, dir)) ? { el: over, cls: 'drop-into', dir } : null;
+    }
+    this.hoverEnd();
+    const entry = entryOf(over);
+    if (isDir ? f <= 0.25 : f < 0.5) return canGo(dirname(entry)) ? this.slotAt(row, dirname(entry), basename(entry)) : null;
+    if (isDir && over.classList.contains('open')) {
+      const kids = this.childRows(over.dataset.path, row);
+      return canGo(over.dataset.path) ? this.slotAt(row, over.dataset.path, kids.length ? kids[0].name : null) : null;
+    }
+    const dir = dirname(entry);
+    if (!canGo(dir)) return null;
+    const kids = this.childRows(dir, row);
+    const i = kids.findIndex((k) => k.el === over);
+    return this.slotAt(row, dir, i >= 0 && kids[i + 1] ? kids[i + 1].name : null);
+  }
+
+  /** The rows of `dir`'s own entries, in order (not the dragged row, not deeper rows). */
+  childRows(dir, row) {
+    const head = dir ? this.rowFor(dir) : null;
+    if (dir && !head) return [];
+    const depth = head ? depthOf(head) + 1 : 0;
+    const out = [];
+    for (let n = head ? head.nextElementSibling : this.rowsEl.firstElementChild; n; n = n.nextElementSibling) {
+      if (n === row || !n.matches('.tree-row[data-path]') || n.classList.contains('drag-hidden')) continue;
+      const d = depthOf(n);
+      if (d < depth) break;
+      if (d === depth) out.push({ name: basename(entryOf(n)), dir: n.dataset.kind === 'directory', el: n });
+    }
+    return out;
+  }
+
+  /** A slot in `dir` before the entry named `before` (null = the end), kept on the dragged entry's side of folders / files. */
+  slotAt(row, dir, before) {
+    const kids = this.childRows(dir, row);
+    let i = before == null ? kids.length : kids.findIndex((k) => k.name === before);
+    if (i < 0) i = kids.length;
+    const firstFile = kids.some((k) => !k.dir) ? kids.findIndex((k) => !k.dir) : kids.length;
+    i = row.dataset.kind === 'directory' ? Math.min(i, firstFile) : Math.max(i, firstFile);
+    const next = kids[i];
+    const head = dir ? this.rowFor(dir) : null;
+    return {
+      dir, before: next ? next.name : null,
+      slot: { parent: this.rowsEl, before: next ? next.el : this.afterFolder(head, row), depth: head ? depthOf(head) + 1 : 0 },
+    };
+  }
+
+  /** The first row below everything shown inside folder row `head` (null: the end of the tree). */
+  afterFolder(head, row) {
+    if (!head) return null;
+    const depth = depthOf(head);
+    for (let n = head.nextElementSibling; n; n = n.nextElementSibling) {
+      if (n === row || n.classList.contains('drag-hidden')) continue;
+      if (!n.matches('.tree-row[data-path]') || depthOf(n) <= depth) return n;
+    }
+    return null;
+  }
+
+  /** A drag starts / ends: an open folder travels closed; the rest of a dragged selection fades. */
+  dragChange(on, row) {
+    this.dragging = on;
+    if (on) {
+      this.dropped = false;
+      if (row.dataset.kind === 'directory' && row.classList.contains('open')) {
+        const depth = depthOf(row);
+        for (let n = row.nextElementSibling; n && n.matches('.tree-row') && depthOf(n) > depth; n = n.nextElementSibling) n.classList.add('drag-hidden');
+      }
+      const moving = new Set(this.dragged(row));
+      for (const r of this.rows.values()) if (r !== row && moving.has(entryOf(r))) r.classList.add('drag-along');
+      return;
+    }
+    this.hoverEnd();
+    // After a drop the tree is redrawn anyway (showing the hidden rows first would flash them in the old place).
+    if (!this.dropped) for (const r of this.rowsEl.querySelectorAll('.drag-hidden, .drag-along')) r.classList.remove('drag-hidden', 'drag-along');
+    const waiting = this.afterDrag;
+    this.afterDrag = [];
+    for (const resolve of waiting) resolve();
+    if (this.dropped && !waiting.length) this.render(); // nothing redrew it yet (nothing changed, or not yet)
   }
 
   hoverOver(dir) {
@@ -453,6 +555,7 @@ export class FileTree {
       isDir && { label: 'New file here', icon: 'newFile', run: () => a.newFile(path) },
       isDir && { label: 'New folder here', icon: 'newFolder', run: () => a.newFolder(path) },
       isDir && { label: 'Upload files here', icon: 'upload', run: () => a.upload(path) },
+      isDir && this.deps.getOrder && this.deps.getOrder(path) && { label: 'Sort A–Z', hint: 'forget the order you dragged', run: () => a.sortAZ(path) },
       !isDir && { label: 'Open', icon: 'file', run: () => this.deps.onOpen(path, { keep: true }) },
       !isDir && { label: 'Open to the side', icon: 'split', run: () => a.openToSide(path) },
       '-',

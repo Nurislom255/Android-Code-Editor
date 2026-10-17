@@ -128,16 +128,28 @@ export const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
  * Drags one element onto another: press and move with a mouse; on a touch
  * screen hold until the menu opens, then move (ui/dragMove.js).
  * `at` is where on the target to let go, as fractions of its box.
+ * `during()` runs before letting go (the item is still lifted).
  */
-export async function dragItem(page, hasTouch, from, to, at = { x: 0.5, y: 0.5 }) {
-  const a = await from.boundingBox();
-  const b = await to.boundingBox();
+export async function dragItem(page, hasTouch, from, to, at = { x: 0.5, y: 0.5 }, { during } = {}) {
+  // Both shown and not moving (a drawer sliding in); measured again if the
+  // list was just redrawn (the element replaced between finding and measuring).
+  const box = async (l) => {
+    for (let i = 0; i < 20; i++) {
+      await l.click({ trial: true });
+      const r = await l.boundingBox();
+      if (r) return r;
+    }
+    throw new Error(`no box for ${l}`);
+  };
+  const a = await box(from);
+  const b = await box(to);
   const x0 = a.x + Math.min(30, a.width / 2), y0 = a.y + a.height / 2;
   const x1 = b.x + b.width * at.x, y1 = b.y + b.height * at.y;
   if (!hasTouch) {
     await page.mouse.move(x0, y0);
     await page.mouse.down();
     await page.mouse.move(x1, y1, { steps: 10 });
+    if (during) await during();
     await page.mouse.up();
     return;
   }
@@ -150,7 +162,8 @@ export async function dragItem(page, hasTouch, from, to, at = { x: 0.5, y: 0.5 }
     await page.waitForTimeout(20);
   }
   await expect(page.locator('.popup-menu')).toHaveCount(0);
-  await expect(page.locator('.drag-chip')).toBeVisible();
+  await expect(page.locator('.drag-lift')).toBeVisible();
+  if (during) await during();
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
 }
 

@@ -8,7 +8,7 @@ import { foldAll, unfoldAll } from '@codemirror/language';
 import { indentSelection } from '@codemirror/commands';
 import { Workspace, minimalChange, externalAnno } from './workspace.js';
 import { PreviewController } from './previewController.js';
-import { renderTabBar, renderCrumbs, renderConflict, renderStatus, renderWelcome, gestureCheatSheet } from './chrome.js';
+import { renderTabBar, renderCrumbs, renderConflict, renderStatus, renderWelcome, gestureCheatSheet, tabMenu } from './chrome.js';
 import { normalizeSettings, ignoreNames, GESTURE_ACTIONS, DEFAULTS, themeClasses, THEMES } from '../core/settings.js';
 import { comboFromEvent, effectiveKey, resolveCombo, parseCombo, normalizeBindings } from '../core/keybindings.js';
 import { IgnoreRules } from '../core/ignore.js';
@@ -17,7 +17,7 @@ import { RecoveryStore } from '../storage/recovery.js';
 import { LocalHistory } from '../storage/localHistory.js';
 import { kv } from '../storage/db.js';
 import { putInTrash, listTrash, restoreFromTrash, deleteFromTrash, purgeTrash } from '../storage/trash.js';
-import { topLevel, canMoveInto, freeName, daysLeft } from '../core/explorer.js';
+import { topLevel, canMoveInto, freeName, daysLeft, orderEntries, reorderNames, relocateOrder } from '../core/explorer.js';
 import { walkFiles, isFolderPickerSupported, isOpfsSupported } from '../storage/projectFs.js';
 import { getCapacitorFilesystem } from '../storage/capacitorFs.js';
 import {
@@ -62,6 +62,7 @@ export class App {
     this.gitBranch = null;
     this.gitBadges = new Map();
     this.recentFiles = [];
+    this.fileOrder = {}; // the project's dragged file order, per folder
     this.problemCounts = { errors: 0, warnings: 0 };
     hydrateIcons();
     installTooltips({ getSettings: () => this.settings });
@@ -392,6 +393,9 @@ export class App {
       close: (pane, id) => this.ws.closeTab(pane, id),
       getOpen: () => !!this.settings.openEditorsOpen,
       setOpen: (on) => this.updateSettings({ openEditorsOpen: on }),
+      menu: (pane, id, at) => tabMenu(this, pane, id, at),
+      place: (from, id, to, before) => this.ws.placeTab(from, id, to, before),
+      getSettings: () => this.settings,
     });
     const filter = h('input.input.tree-filter', {
       type: 'search', placeholder: 'Filter files', 'aria-label': 'Filter files', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off',
@@ -412,6 +416,7 @@ export class App {
       onFilterCleared: () => { this.treeFilter.value = ''; },
       onKeep: (p) => { const d = this.ws.allDocs().find((x) => x.path === p); if (d) this.ws.keepDoc(d.id); },
       onExpandChange: (list) => { if (this.project) kv.set(`expanded:${this.project.meta.id}`, list).catch(() => {}); },
+      getOrder: (dir) => (this.fileOrder && this.fileOrder[dir]) || null,
       getGitBadges: () => this.gitBadges,
       getSettings: () => this.settings,
       getOpenState: () => ({
@@ -581,6 +586,8 @@ export class App {
     try { this.recentFiles = (await kv.get(`recent:${meta.id}`)) || []; } catch { this.recentFiles = []; }
     let expanded = [];
     try { expanded = (await kv.get(`expanded:${meta.id}`)) || []; } catch { /* ignore */ }
+    // The order files were dragged into, per folder ({folder: [names]}).
+    try { this.fileOrder = (await kv.get(`order:${meta.id}`)) || {}; } catch { this.fileOrder = {}; }
     await this.tree.reset(expanded);
     purgeTrash(meta.id).catch(() => {}); // what has been in the trash for 7 days goes
     await this.ws.setProject(this.project);
@@ -886,6 +893,16 @@ export class App {
     const fsOf = () => (this.project ? this.project.fs : null);
     const need = () => { if (!this.project) { toast('Open or create a project first.', 'warn'); return null; } return this.project.fs; };
     const afterChange = (dir) => { this.fileCache = null; return this.tree.refresh(dir != null ? [dir] : null); };
+    const setOrder = (dir, names) => {
+      this.fileOrder = { ...this.fileOrder };
+      if (names) this.fileOrder[dir] = names; else delete this.fileOrder[dir];
+      if (this.project) this.orderSaved = kv.set(`order:${this.project.meta.id}`, this.fileOrder).catch(() => {});
+    };
+    // A renamed or moved entry: its place in the custom order follows it.
+    const orderFollows = (from, to) => {
+      this.fileOrder = relocateOrder(this.fileOrder, from, to);
+      if (this.project) this.orderSaved = kv.set(`order:${this.project.meta.id}`, this.fileOrder).catch(() => {});
+    };
     const validatePath = (v) => (v.split('/').some((seg) => validateName(seg)) ? 'Names can\'t be empty or contain \\ : * ? " < > |' : null);
     const taken = async (dir) => {
       let list = [];
@@ -900,6 +917,7 @@ export class App {
       for (const [from, to] of pairs) {
         try { await fs.rename(from, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); continue; }
         this.ws.onPathRenamed(from, to);
+        orderFollows(from, to);
         const moved = (p) => (p === from || p.startsWith(from + '/') ? to + p.slice(from.length) : p);
         this.tree.expanded = new Set([...this.tree.expanded].map(moved));
         done.push([from, to]);
@@ -966,6 +984,7 @@ export class App {
         const to = join(dirname(path), name);
         try { await fs.rename(path, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); return; }
         this.ws.onPathRenamed(path, to);
+        orderFollows(path, to);
         if (this.tree.expanded.has(path)) { this.tree.expanded.delete(path); this.tree.expanded.add(to); }
         this.tree.focus = to;
         await afterChange(dirname(path));
@@ -973,6 +992,32 @@ export class App {
       /** Drag and drop in the file tree: `path` goes into folder `toDir` ('' = project root). */
       move: async (path, kind, toDir) => { if (fsOf()) await moveInto([path], toDir); },
       moveMany: async (paths, toDir) => { if (fsOf()) await moveInto(paths, toDir); },
+      /**
+       * Dropped between two rows: `paths` go into folder `dir` (if they aren't
+       * there yet) and stay before the entry named `before` (null = the end).
+       */
+      place: async (paths, dir, before) => {
+        const fs = fsOf(); if (!fs) return;
+        const tops = topLevel(paths);
+        const done = await moveInto(tops.filter((p) => dirname(p) !== dir), dir);
+        const names = tops.map((p) => (dirname(p) === dir ? basename(p) : (done.find(([from]) => from === p) || [])[1]))
+          .filter(Boolean).map((p) => basename(p));
+        if (!names.length) return;
+        let entries = [];
+        try { entries = await fs.list(dir); } catch { return; }
+        const saved = this.fileOrder[dir] || null;
+        const next = reorderNames(entries, saved, names, before);
+        if (next.join('\n') === orderEntries(entries, saved).map((e) => e.name).join('\n')) return;
+        setOrder(dir, next);
+        await afterChange(dir);
+      },
+      /** Forget a folder's dragged order (null: every folder's). */
+      sortAZ: async (dir) => {
+        if (dir == null) { this.fileOrder = {}; setOrder('', null); } else setOrder(dir, null);
+        await afterChange(dir);
+      },
+      /** Has `dir` a dragged order? null: has any folder below the root one? */
+      hasOrder: (dir) => (dir == null ? Object.keys(this.fileOrder).some((d) => d !== '') : !!this.fileOrder[dir]),
       cut: (paths) => {
         this.fileClip = { mode: 'cut', paths: topLevel(paths), project: this.project && this.project.meta.id };
         this.tree.decorate();
@@ -1011,6 +1056,12 @@ export class App {
         const free = await taken(dirname(path));
         const to = join(dirname(path), freeName(dirname(path), basename(path), (x) => free.has(x)));
         try { await fs.copy(path, to); } catch (err) { toast(err.message, 'error'); return; }
+        // In a folder with its own order, the copy goes right after the original.
+        const order = this.fileOrder[dirname(path)];
+        if (order && order.includes(basename(path))) {
+          const i = order.indexOf(basename(path)) + 1;
+          setOrder(dirname(path), [...order.slice(0, i), basename(to), ...order.slice(i)]);
+        }
         await afterChange(dirname(path));
       },
       /** Delete = into the trash for 7 days (Undo right away, or Files ⋯ → Trash). */
@@ -1112,6 +1163,8 @@ export class App {
       this.actions.canPaste() && { label: `Paste into ${dir || 'the project root'}`, icon: 'download', run: () => this.actions.paste(dir) },
       { label: `Upload files${dir ? ` into ${dir}` : ''}…`, icon: 'upload', run: () => this.actions.upload(dir) },
       { label: 'Trash…', icon: 'trash', hint: 'deleted in the last 7 days', run: () => this.showTrash(), disabled: !this.project },
+      this.actions.hasOrder('') && { label: 'Sort A–Z', hint: 'the project root', run: () => this.actions.sortAZ('') },
+      this.actions.hasOrder(null) && { label: 'Sort every folder A–Z', hint: 'forget all dragged orders', run: () => this.actions.sortAZ(null) },
       { label: 'Export project as .zip', icon: 'download', run: () => this.exportZip(), disabled: !this.project },
       '-',
       { label: 'Switch project…', icon: 'folder', run: () => this.showProjectModal() },

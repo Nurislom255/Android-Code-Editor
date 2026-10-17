@@ -2,7 +2,7 @@
 // acceptance tests (written ahead as test.fixme); each title is a
 // requirement.
 import { test, expect } from '@playwright/test';
-import { boot, newProject, openFile, writeProjectFile, longPress } from './helpers.mjs';
+import { boot, newProject, openFile, writeProjectFile, longPress, dragItem } from './helpers.mjs';
 
 const row = (page, p) => page.locator(`.tree-row[data-path="${p}"]`);
 const tabNames = (page, pane = 0) => page.locator(`#pane-${pane} .tab .tab-name`).allTextContents();
@@ -194,7 +194,7 @@ test('explorer: folders open while dragging over them; "Moved …" can be undone
   }
   // held over the closed folder: it opens, under the finger, without ending the drag
   await expect(row(page, 'lib/inner.js')).toBeVisible({ timeout: 3000 });
-  await expect(page.locator('.drag-chip')).toBeVisible();
+  await expect(page.locator('.drag-lift')).toBeVisible();
   if (hasTouch) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await cdp.detach(); }
   else await page.mouse.up();
   await expect.poll(() => exists(page, 'lib/style.css')).toBe(true);
@@ -203,6 +203,77 @@ test('explorer: folders open while dragging over them; "Moved …" can be undone
   await toast.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(() => exists(page, 'style.css')).toBe(true);
   expect(await exists(page, 'lib/style.css')).toBe(false);
+});
+
+// ---- reordering: the item lifts, the others slide aside -----------------------------------
+
+/** Paths of the tree rows as they stand now (mid-drag: where the empty slot is). */
+const rowPaths = (page) => page.evaluate(() => [...document.querySelectorAll('.tree-rows > .tree-row:not(.drag-hidden)')].map((r) => r.dataset.path));
+
+test('explorer: a file dragged between two others stays there (after a reload too); folders stay on top; Sort A–Z', async ({ page, hasTouch }) => {
+  await project(page, { compactFolders: false });
+  await writeProjectFile(page, 'lib/inner.js', 'x');
+  await page.evaluate(() => window.__app.tree.refresh());
+  await files(page);
+  expect(await rowPaths(page)).toEqual(['lib', 'app.js', 'index.html', 'main.js', 'style.css']);
+  // onto the upper half of index.html: while it is held, its empty slot is already there
+  await dragItem(page, hasTouch, row(page, 'style.css'), row(page, 'index.html'), { x: 0.5, y: 0.3 }, {
+    during: async () => {
+      await expect.poll(() => rowPaths(page)).toEqual(['lib', 'app.js', 'style.css', 'index.html', 'main.js']);
+      await expect(row(page, 'style.css')).toHaveClass(/drag-origin/);
+    },
+  });
+  await expect.poll(() => page.evaluate(() => window.__app.tree.order())).toEqual(['lib', 'app.js', 'style.css', 'index.html', 'main.js']);
+  await expect(page.locator('.drag-lift')).toHaveCount(0);
+  expect(await exists(page, 'style.css')).toBe(true); // reordered, not moved
+
+  // the order is kept per project
+  await page.evaluate(() => window.__app.orderSaved);
+  await page.reload();
+  await page.waitForFunction(() => window.__app && window.__app.project);
+  await files(page);
+  await expect.poll(() => rowPaths(page)).toEqual(['lib', 'app.js', 'style.css', 'index.html', 'main.js']);
+
+  // a file let go above a folder lands at the top of the files: folders stay on top
+  await dragItem(page, hasTouch, row(page, 'main.js'), row(page, 'lib'), { x: 0.5, y: 0.1 }, {
+    during: () => expect.poll(() => rowPaths(page)).toEqual(['lib', 'main.js', 'app.js', 'style.css', 'index.html']),
+  });
+  await expect.poll(() => rowPaths(page)).toEqual(['lib', 'main.js', 'app.js', 'style.css', 'index.html']);
+
+  // the middle of a folder still means "into it"
+  await dragItem(page, hasTouch, row(page, 'app.js'), row(page, 'lib'));
+  await expect.poll(() => exists(page, 'lib/app.js')).toBe(true);
+
+  // Files ⋯ → Sort A–Z forgets the dragged order
+  await files(page);
+  await page.getByRole('button', { name: 'More file actions' }).click();
+  await page.getByRole('menuitem', { name: /^Sort A–Z/ }).click();
+  await expect.poll(() => rowPaths(page)).toEqual(['lib', 'lib/app.js', 'lib/inner.js', 'index.html', 'main.js', 'style.css']);
+});
+
+test('tabs and Open editors: a dragged tab lifts and the others slide aside to make room', async ({ page, hasTouch }) => {
+  await project(page, { openEditorsOpen: true });
+  for (const f of ['index.html', 'style.css', 'main.js']) await openFile(page, f);
+  const tab = (name) => page.locator('#pane-0 .tab', { hasText: name });
+  const domTabs = () => page.locator('#pane-0 .tab .tab-name').allTextContents();
+  // the tab bar
+  await dragItem(page, hasTouch, tab('index.html'), tab('main.js'), { x: 0.8, y: 0.5 }, {
+    during: async () => {
+      await expect.poll(domTabs).toEqual(['style.css', 'main.js', 'index.html']);
+      await expect(tab('index.html')).toHaveClass(/drag-origin/);
+    },
+  });
+  await expect.poll(() => tabNames(page)).toEqual(['style.css', 'main.js', 'index.html']);
+  // the Open editors list
+  await files(page);
+  const oe = (name) => page.locator('.oe-list .oe-row', { hasText: name });
+  const domRows = () => page.locator('.oe-list .oe-row .oe-name').allTextContents();
+  await expect.poll(domRows).toEqual(['style.css', 'main.js', 'index.html']);
+  await dragItem(page, hasTouch, oe('index.html'), oe('style.css'), { x: 0.5, y: 0.25 }, {
+    during: () => expect.poll(domRows).toEqual(['index.html', 'style.css', 'main.js']),
+  });
+  await expect.poll(() => tabNames(page)).toEqual(['index.html', 'style.css', 'main.js']);
+  await expect.poll(domRows).toEqual(['index.html', 'style.css', 'main.js']);
 });
 
 test('explorer: cut / copy / paste and multi-select', async ({ page, hasTouch }) => {
@@ -221,7 +292,7 @@ test('explorer: cut / copy / paste and multi-select', async ({ page, hasTouch })
   await rowMenu(page, hasTouch, 'lib');
   await page.getByRole('menuitem', { name: 'Paste into lib' }).click();
   await expect.poll(() => exists(page, 'lib/main.js')).toBe(true);
-  expect(await exists(page, 'lib/style copy.css')).toBe(true);
+  await expect.poll(() => exists(page, 'lib/style copy.css')).toBe(true); // pasted one after the other
   expect(await page.evaluate(async () => new TextDecoder().decode((await window.__app.project.fs.readBytes('lib/style.css')).bytes))).toBe('already here');
   expect(await exists(page, 'main.js')).toBe(true); // copied, not moved
   // cut + paste moves

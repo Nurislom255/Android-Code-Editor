@@ -70,3 +70,66 @@ export function expired(entries, now = Date.now(), days = TRASH_DAYS) {
 export function daysLeft(deletedAt, now = Date.now(), days = TRASH_DAYS) {
   return Math.max(0, Math.ceil((deletedAt + days * DAY - now) / DAY));
 }
+
+// ---- custom order (drag to reorder in the file tree) ------------------------------
+//
+// A folder's custom order is the list of its entry names as the owner
+// arranged them. Folders always stay above files; within each group the
+// saved order wins, and names it doesn't know yet (new files) follow, A–Z.
+
+const isDir = (e) => e.kind === 'directory';
+
+/** A folder's entries in the order shown. `entries` come A–Z, folders first (as storage lists them). */
+export function orderEntries(entries, saved) {
+  if (!saved || !saved.length) return entries;
+  const rank = new Map(saved.map((n, i) => [n, i]));
+  const at = new Map(entries.map((e, i) => [e, i]));
+  const r = (e) => (rank.has(e.name) ? rank.get(e.name) : Infinity);
+  return [...entries].sort((a, b) => (isDir(b) - isDir(a)) || (r(a) - r(b)) || (at.get(a) - at.get(b)));
+}
+
+/**
+ * The new saved order of a folder after putting `names` before `before`
+ * (a name in the folder, or null = the end). A folder can't go among the
+ * files, nor a file among the folders: they go to the end of their own
+ * group, or its start, whichever is nearer to where they were dropped.
+ */
+export function reorderNames(entries, saved, names, before) {
+  const shown = orderEntries(entries, saved);
+  const kind = new Map(entries.map((e) => [e.name, isDir(e)]));
+  const moving = names.filter((n) => kind.has(n));
+  const all = shown.map((e) => e.name);
+  // "Before itself": before the next entry that stays.
+  if (before != null && moving.includes(before)) before = all.slice(all.indexOf(before)).find((n) => !moving.includes(n)) ?? null;
+  const rest = all.filter((n) => !moving.includes(n));
+  const dirs = rest.filter((n) => kind.get(n));
+  const files = rest.filter((n) => !kind.get(n));
+  const insert = (group, isFolder) => {
+    const mine = moving.filter((n) => kind.get(n) === isFolder);
+    if (!mine.length) return group;
+    let i = before == null ? group.length : group.indexOf(before);
+    if (i < 0) i = before != null && kind.get(before) && !isFolder ? 0 : group.length; // dropped in the other group
+    return [...group.slice(0, i), ...mine, ...group.slice(i)];
+  };
+  return [...insert(dirs, true), ...insert(files, false)];
+}
+
+/**
+ * The saved orders after `from` was renamed or moved to `to`: a rename keeps
+ * its place; a moved entry leaves its old folder's list; the orders of the
+ * folders inside a moved folder move with it. `orders` maps folder → names.
+ */
+export function relocateOrder(orders, from, to) {
+  const out = {};
+  for (const [dir, names] of Object.entries(orders || {})) {
+    const key = dir === from || dir.startsWith(from + '/') ? to + dir.slice(from.length) : dir;
+    out[key] = names;
+  }
+  const parent = dirname(from);
+  if (out[parent]) {
+    out[parent] = dirname(to) === parent
+      ? out[parent].map((n) => (n === basename(from) ? basename(to) : n))
+      : out[parent].filter((n) => n !== basename(from));
+  }
+  return out;
+}
