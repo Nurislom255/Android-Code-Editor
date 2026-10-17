@@ -730,7 +730,7 @@ body.resizing iframe { pointer-events: none; }
 }
 :where(.can-hover) .tab.dirty .tab-close:hover svg { visibility: visible; }
 :where(.can-hover) .tab.dirty .tab-close:hover::after { display: none; }
-.tab.untitled .tab-name { font-style: italic; }
+.tab.preview .tab-name { font-style: italic; } /* a preview tab, as in VS Code: the next file replaces it */
 
 .crumbs {
   display: flex;
@@ -952,7 +952,7 @@ kbd {
 }
 
 /* ---- File tree ----------------------------------------------------------- */
-.tree { padding: 2px 0 40px; user-select: none; }
+.tree { padding: 0 0 40px; user-select: none; outline: none; }
 .tree-row {
   display: flex;
   align-items: center;
@@ -970,6 +970,49 @@ kbd {
 :where(.can-hover) .tree-row:hover { background: var(--bg-hover); color: var(--text); }
 .tree-row.active { background: var(--accent-dim); color: var(--text); }
 .tree-row.focused { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* Phase 4 explorer: selection, cut, compact folders, in-place editing, the selection bar */
+.tree-row.selected { background: var(--bg-hover); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.tree-row.active.selected { background: var(--accent-dim); }
+.tree.selecting .tree-row.selected { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+.tree.selecting .tree-row:not(.tree-edit) .twisty { visibility: visible; }
+.tree-row.cut { opacity: 0.5; }
+.tree-row .tseg { border-radius: 3px; }
+.tree-row .tsep { color: var(--text-faint); padding: 0 1px; }
+.tree-row .tdir { color: var(--text-faint); font-size: 11.5px; margin-left: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; flex-shrink: 1; }
+.tree-row.tree-edit { cursor: default; align-items: flex-start; padding-top: 3px; padding-bottom: 3px; }
+.tree-row.tree-edit .twisty, .tree-row.tree-edit .file-icon { margin-top: 4px; }
+.tree-edit-box { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tree-input { height: 28px; padding: 2px 6px; font-size: 13.5px; border-color: var(--accent); }
+.tree-row.invalid .tree-input { border-color: var(--error); }
+.tree-edit-error { color: var(--error); font-size: 12px; line-height: 1.3; }
+.tree-edit-error:empty { display: none; }
+.tree-selbar {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  padding: 6px 8px; background: var(--bg-panel-alt); border-bottom: 1px solid var(--border);
+}
+.tree-selbar .tree-selcount { flex: 1; font-size: 12.5px; color: var(--text); font-weight: 600; }
+.tree-selbar .btn { display: inline-flex; align-items: center; gap: 4px; }
+.tree-filter-box { padding: 4px 8px 6px; flex-shrink: 0; }
+.tree-filter { width: 100%; height: 30px; font-size: 13px; }
+.open-editors { flex-shrink: 0; border-bottom: 1px solid var(--border); max-height: 40%; display: flex; flex-direction: column; }
+.oe-head { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 30px; padding: 0 8px; border: none; background: none; color: var(--text-dim); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
+.oe-head .twisty { display: flex; transition: transform 0.12s; }
+.open-editors.open .oe-head .twisty { transform: rotate(90deg); }
+.oe-head .oe-count { margin-left: auto; font-weight: 600; color: var(--text-faint); }
+.oe-head.dirty .oe-count::before { content: '● '; color: var(--accent); }
+.oe-list { overflow-y: auto; min-height: 0; padding-bottom: 4px; }
+.oe-group { padding: 6px 10px 2px; font-size: 11px; color: var(--text-faint); }
+.oe-group:empty { display: none; }
+.oe-row { display: flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 4px 0 14px; font-size: 13px; color: var(--text-dim); cursor: pointer; }
+.oe-row.active { background: var(--accent-dim); color: var(--text); }
+.oe-row.preview .oe-name { font-style: italic; }
+.oe-row .oe-name { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oe-row .oe-dir { flex: 1; min-width: 0; color: var(--text-faint); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oe-row.dirty .oe-name::after { content: ' ●'; color: var(--accent); }
+.oe-close { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; border: none; border-radius: 6px; background: none; color: var(--text-faint); }
+.oe-row:active, .oe-head:active { background-color: var(--bg-pressed); }
+@media (pointer: coarse) { .oe-row { min-height: 38px; } .oe-close { width: 38px; height: 34px; } }
+.trash-row .pr-main { gap: 2px; }
 .tree-row .twisty { width: 16px; color: var(--text-faint); display: flex; align-items: center; justify-content: center; transition: transform 0.12s; }
 .tree-row.open .twisty { transform: rotate(90deg); }
 .tree-row .tname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1410,6 +1453,16 @@ kbd {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 .tab.dragging, .tree-row.dragging { opacity: 0.4; }
+/* Dragging a tab over the right (phone: lower) half of the code: drop to split there. */
+#editor-area { position: relative; }
+.split-drop {
+  position: absolute; z-index: 20; pointer-events: none; display: none; align-items: center; justify-content: center;
+  top: 0; bottom: 0; right: 0; width: 50%;
+  background: var(--accent-dim); border: 2px dashed var(--accent); border-radius: 6px; color: var(--text); font-weight: 600;
+}
+.split-drop.bottom { top: auto; left: 0; width: auto; height: 50%; }
+.split-drop.show { display: flex; }
+.pane.drop-pane { box-shadow: inset 0 0 0 2px var(--accent); }
 .tab.drop-before { box-shadow: inset 3px 0 0 var(--accent); }
 .tab.drop-after, .tab-bar.drop-end { box-shadow: inset -3px 0 0 var(--accent); }
 .tree-row.drop-into { background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); color: var(--text); }

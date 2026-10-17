@@ -16,6 +16,8 @@ import { dirname, basename, join, validateName, normalize } from '../core/paths.
 import { RecoveryStore } from '../storage/recovery.js';
 import { LocalHistory } from '../storage/localHistory.js';
 import { kv } from '../storage/db.js';
+import { putInTrash, listTrash, restoreFromTrash, deleteFromTrash, purgeTrash } from '../storage/trash.js';
+import { topLevel, canMoveInto, freeName, daysLeft } from '../core/explorer.js';
 import { walkFiles, isFolderPickerSupported, isOpfsSupported } from '../storage/projectFs.js';
 import { getCapacitorFilesystem } from '../storage/capacitorFs.js';
 import {
@@ -35,6 +37,7 @@ import { choose, confirm, prompt, toast, popupMenu, showModal, isModalOpen, clos
 import { Layout } from '../ui/layout.js';
 import { Palette } from '../ui/palette.js';
 import { FileTree } from '../ui/fileTree.js';
+import { OpenEditors } from '../ui/openEditors.js';
 import { SearchPanel, OutlinePanel, HistoryPanel, showDiff } from '../ui/panels.js';
 import { GitPanel, loadGit } from '../ui/gitPanel.js';
 import { BottomPanel } from '../ui/bottomPanel.js';
@@ -184,7 +187,8 @@ export class App {
     }
     if (prev.sidebarWidth !== next.sidebarWidth || prev.panelHeight !== next.panelHeight) this.layout.applySizes(next);
     if (prev.historyDays !== next.historyDays || prev.historyMaxPerFile !== next.historyMaxPerFile) this.history.configure({ days: next.historyDays, maxPerFile: next.historyMaxPerFile });
-    if (prev.ignoreList !== next.ignoreList) { this.fileCache = null; this.tree.refresh(); }
+    if (prev.ignoreList !== next.ignoreList || prev.compactFolders !== next.compactFolders) { this.fileCache = null; this.tree.refresh(); }
+    if (prev.openEditorsOpen !== next.openEditorsOpen) this.openEditors.render();
     if (JSON.stringify(prev.keysLayouts) !== JSON.stringify(next.keysLayouts) || JSON.stringify(prev.keysBar) !== JSON.stringify(next.keysBar)
       || prev.keysBarMode !== next.keysBarMode || JSON.stringify(prev.keyBindings) !== JSON.stringify(next.keyBindings)) this.keysBar.refresh();
     if (prev.previewPlacement !== next.previewPlacement && this.preview.target) this.preview.mount();
@@ -276,6 +280,21 @@ export class App {
     }
   }
 
+  /**
+   * A tab dropped on the right (or lower) half of the code: split, with that
+   * file in the new pane. Moved there — or, when it was the pane's only tab,
+   * shown in both.
+   */
+  async splitWithTab(fromPane, docId) {
+    const doc = this.ws.docs.get(docId);
+    if (!doc) return;
+    this.ws.keepDoc(docId);
+    const only = this.ws.panes[fromPane].tabs.length === 1;
+    const to = fromPane === 0 ? 1 : 0;
+    this.openInPane(doc, to, !only);
+    this.hint(only ? 'Split: the same file in both panes' : 'Moved into a split pane');
+  }
+
   split({ copyActive = true } = {}) {
     const first = !this.ws.panes[1];
     this.ws.split($('#pane-1 .editor-host'), { copyActive });
@@ -303,6 +322,7 @@ export class App {
     }
     renderStatus(this);
     this.tree && this.tree.decorate();
+    this.openEditors && this.openEditors.render();
     $('#project-name').textContent = this.project ? this.project.meta.name : 'No project';
     document.title = this.ws.activeDoc ? `${this.ws.activeDoc.dirty ? '● ' : ''}${this.ws.activeDoc.name} — CodeEditor` : 'CodeEditor';
     $('#btn-save').classList.toggle('active', !!(this.ws.activeDoc && this.ws.activeDoc.dirty));
@@ -321,6 +341,8 @@ export class App {
       if (this.activePanel === 'outline') this.outline.render();
       if (this.activePanel === 'history') this.historyPanel.render();
       if (doc && doc.path) this.rememberRecent(doc.path);
+      // The tree follows the open file (Settings → Files).
+      if (doc && doc.path && doc.kind === 'project' && this.settings.autoReveal && this.tree && !this.tree.editing) this.tree.reveal(doc.path, { flash: false });
       this.problemsLater();
     });
     ws.on('selection', ({ state, docChanged }) => {
@@ -356,19 +378,39 @@ export class App {
     const panelEl = (id) => $(`.side-panel[data-panel="${id}"]`);
     // Files
     const files = panelEl('files');
+    // New file / folder go into the folder selected in the tree (or the
+    // selected file's folder) — not always the project root.
     files.append(h('div.panel-header',
       h('span.title', { id: 'files-title' }, 'Files'),
-      h('button.icon-btn.small', { type: 'button', title: 'New file', 'aria-label': 'New file', icon: 'newFile', onclick: () => this.actions.newFile('') }),
-      h('button.icon-btn.small', { type: 'button', title: 'New folder', 'aria-label': 'New folder', icon: 'newFolder', onclick: () => this.actions.newFolder('') }),
+      h('button.icon-btn.small', { type: 'button', title: 'New file (in the selected folder)', 'aria-label': 'New file', icon: 'newFile', onclick: () => this.actions.newFile() }),
+      h('button.icon-btn.small', { type: 'button', title: 'New folder (in the selected folder)', 'aria-label': 'New folder', icon: 'newFolder', onclick: () => this.actions.newFolder() }),
       h('button.icon-btn.small', { type: 'button', title: 'Refresh', 'aria-label': 'Refresh file tree', icon: 'refresh', onclick: () => { this.fileCache = null; this.tree.refresh(); } }),
       h('button.icon-btn.small', { type: 'button', title: 'More', 'aria-label': 'More file actions', icon: 'more', onclick: (e) => this.filesMenu(e) })));
+    this.openEditors = new OpenEditors(h('div'), {
+      ws: this.ws,
+      show: (pane, id) => { this.ws.showDoc(pane, id); this.layout.closeDrawer(); },
+      close: (pane, id) => this.ws.closeTab(pane, id),
+      getOpen: () => !!this.settings.openEditorsOpen,
+      setOpen: (on) => this.updateSettings({ openEditorsOpen: on }),
+    });
+    const filter = h('input.input.tree-filter', {
+      type: 'search', placeholder: 'Filter files', 'aria-label': 'Filter files', spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off',
+      oninput: debounce(() => this.tree.setFilter(filter.value), 150),
+    });
+    this.treeFilter = filter;
     const treeEl = h('div.panel-scroll');
-    files.append(treeEl);
+    files.append(this.openEditors.el, h('div.tree-filter-box', filter), treeEl);
     this.actions = this.fileActions();
     this.tree = new FileTree(treeEl, {
       getFs: () => (this.project ? this.project.fs : null),
       isHidden: (name) => ignoreNames(this.settings).includes(name),
-      onOpen: (p) => { this.ws.openPath(p); this.layout.closeDrawer(); },
+      onOpen: (p, { keep = false } = {}) => {
+        this.ws.openPath(p, { preview: this.settings.previewTabs && !keep });
+        this.layout.closeDrawer();
+      },
+      listAll: () => this.projectFiles(),
+      onFilterCleared: () => { this.treeFilter.value = ''; },
+      onKeep: (p) => { const d = this.ws.allDocs().find((x) => x.path === p); if (d) this.ws.keepDoc(d.id); },
       onExpandChange: (list) => { if (this.project) kv.set(`expanded:${this.project.meta.id}`, list).catch(() => {}); },
       getGitBadges: () => this.gitBadges,
       getSettings: () => this.settings,
@@ -383,7 +425,7 @@ export class App {
       listFiles: () => this.projectFiles(),
       readText: (p) => this.readTextForSearch(p),
       open: async (path, line, col, len) => {
-        const doc = await this.ws.openPath(path, { line, col });
+        const doc = await this.ws.openPath(path, { line, col, preview: this.settings.previewTabs });
         if (doc) {
           const st = this.ws.stateOf(doc.id);
           const ln = st.doc.line(line);
@@ -540,6 +582,7 @@ export class App {
     let expanded = [];
     try { expanded = (await kv.get(`expanded:${meta.id}`)) || []; } catch { /* ignore */ }
     await this.tree.reset(expanded);
+    purgeTrash(meta.id).catch(() => {}); // what has been in the trash for 7 days goes
     await this.ws.setProject(this.project);
     $('#files-title').textContent = meta.name;
     renderWelcome(this, 0);
@@ -844,79 +887,163 @@ export class App {
     const need = () => { if (!this.project) { toast('Open or create a project first.', 'warn'); return null; } return this.project.fs; };
     const afterChange = (dir) => { this.fileCache = null; return this.tree.refresh(dir != null ? [dir] : null); };
     const validatePath = (v) => (v.split('/').some((seg) => validateName(seg)) ? 'Names can\'t be empty or contain \\ : * ? " < > |' : null);
-    return {
-      newFile: async (dir) => {
-        const fs = need(); if (!fs) return;
-        const name = await prompt({ title: dir ? `New file in ${dir}/` : 'New file', label: 'File name (folders allowed: css/site.css)', placeholder: 'app.js', validate: validatePath });
-        if (!name) return;
-        const path = join(dir, name);
-        try {
+    const taken = async (dir) => {
+      let list = [];
+      try { list = (await this.project.fs.list(dir)).map((e) => e.path); } catch { /* new folder */ }
+      const set = new Set(list);
+      return { has: (p) => set.has(p), add: (p) => set.add(p) };
+    };
+    // Moves (drag and drop, cut + paste): [from, to] pairs, undone in reverse.
+    const relocate = async (pairs) => {
+      const fs = this.project.fs;
+      const done = [];
+      for (const [from, to] of pairs) {
+        try { await fs.rename(from, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); continue; }
+        this.ws.onPathRenamed(from, to);
+        const moved = (p) => (p === from || p.startsWith(from + '/') ? to + p.slice(from.length) : p);
+        this.tree.expanded = new Set([...this.tree.expanded].map(moved));
+        done.push([from, to]);
+      }
+      if (this.project) kv.set(`expanded:${this.project.meta.id}`, [...this.tree.expanded]).catch(() => {});
+      await afterChange();
+      if (this.activePanel === 'git') this.gitLater();
+      return done;
+    };
+    const undoMoves = (done) => async () => {
+      await relocate(done.map(([from, to]) => [to, from]).reverse());
+      toast('Moved back.', 'success', 1500);
+    };
+    const moveInto = async (paths, toDir) => {
+      const free = await taken(toDir);
+      const pairs = [];
+      for (const p of topLevel(paths)) {
+        if (!canMoveInto(p, toDir)) continue;
+        const name = freeName(toDir, basename(p), (x) => free.has(x));
+        free.add(join(toDir, name));
+        pairs.push([p, join(toDir, name)]);
+      }
+      if (!pairs.length) return [];
+      const done = await relocate(pairs);
+      if (done.length) {
+        await this.tree.reveal(done[done.length - 1][1]);
+        const what = done.length === 1 ? basename(done[0][0]) : `${done.length} items`;
+        toast(`Moved ${what} to ${toDir ? `${toDir}/` : 'the project root'}`, 'success', 6000, { label: 'Undo', run: undoMoves(done) });
+      }
+      return done;
+    };
+    const create = async (dir, kind) => {
+      const fs = need(); if (!fs) return;
+      this.showPanel('files');
+      const name = await this.tree.edit({ dir, kind, validate: validatePath });
+      if (!name) return;
+      const path = join(dir, name);
+      try {
+        if (kind === 'directory') await fs.createDir(path, { recursive: true });
+        else {
           if (dirname(path)) await fs.createDir(dirname(path), { recursive: true });
           await fs.createFile(path);
-        } catch (err) { toast(err.code === 'EEXIST' ? `${path} already exists.` : err.message, 'error'); return; }
-        await afterChange();
-        await this.tree.reveal(path);
+        }
+      } catch (err) { toast(err.code === 'EEXIST' ? `${path} already exists.` : err.message, 'error'); return; }
+      if (kind === 'directory') this.tree.expanded.add(path);
+      await afterChange();
+      this.tree.focus = path;
+      await this.tree.reveal(path, { flash: false });
+      if (kind !== 'directory') {
         await this.ws.openPath(path);
         this.layout.closeDrawer();
-      },
-      newFolder: async (dir) => {
-        const fs = need(); if (!fs) return;
-        const name = await prompt({ title: 'New folder', label: 'Folder name', validate: validatePath, selectBase: false });
-        if (!name) return;
-        const path = join(dir, name);
-        try { await fs.createDir(path, { recursive: true }); } catch (err) { toast(err.message, 'error'); return; }
-        this.tree.expanded.add(path);
-        await afterChange();
-      },
+      }
+    };
+    return {
+      /** New file / folder, named in the tree itself, in `dir` (default: the selected folder). */
+      newFile: (dir = this.tree.targetDir()) => create(dir, 'file'),
+      newFolder: (dir = this.tree.targetDir()) => create(dir, 'directory'),
       rename: async (path, kind) => {
         const fs = fsOf(); if (!fs) return;
-        const name = await prompt({ title: `Rename ${kind === 'directory' ? 'folder' : 'file'}`, label: 'New name', value: basename(path), validate: validateName });
+        this.showPanel('files');
+        await this.tree.reveal(path, { flash: false });
+        const name = await this.tree.edit({ path, kind, validate: validateName });
         if (!name || name === basename(path)) return;
         const to = join(dirname(path), name);
         try { await fs.rename(path, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); return; }
         this.ws.onPathRenamed(path, to);
         if (this.tree.expanded.has(path)) { this.tree.expanded.delete(path); this.tree.expanded.add(to); }
+        this.tree.focus = to;
         await afterChange(dirname(path));
       },
       /** Drag and drop in the file tree: `path` goes into folder `toDir` ('' = project root). */
-      move: async (path, kind, toDir) => {
-        const fs = fsOf(); if (!fs) return;
-        const to = join(toDir, basename(path));
-        if (to === path) return;
-        if (kind === 'directory' && (toDir === path || toDir.startsWith(path + '/'))) return;
-        try { await fs.rename(path, to); } catch (err) { toast(err.code === 'EEXIST' ? `${to} already exists.` : err.message, 'error'); return; }
-        this.ws.onPathRenamed(path, to);
-        const moved = (p) => (p === path || p.startsWith(path + '/') ? to + p.slice(path.length) : p);
-        this.tree.expanded = new Set([...this.tree.expanded].map(moved));
-        if (toDir) this.tree.expanded.add(toDir);
-        if (this.project) kv.set(`expanded:${this.project.meta.id}`, [...this.tree.expanded]).catch(() => {});
+      move: async (path, kind, toDir) => { if (fsOf()) await moveInto([path], toDir); },
+      moveMany: async (paths, toDir) => { if (fsOf()) await moveInto(paths, toDir); },
+      cut: (paths) => {
+        this.fileClip = { mode: 'cut', paths: topLevel(paths), project: this.project && this.project.meta.id };
+        this.tree.decorate();
+        toast(`Cut ${paths.length === 1 ? basename(paths[0]) : `${paths.length} items`}: open a folder's menu (or Ctrl+V) to paste.`, 'info', 2500);
+      },
+      copy: (paths) => {
+        this.fileClip = { mode: 'copy', paths: topLevel(paths), project: this.project && this.project.meta.id };
+        this.tree.decorate();
+        toast(`Copied ${paths.length === 1 ? basename(paths[0]) : `${paths.length} items`}: paste into a folder from its menu (or Ctrl+V).`, 'info', 2500);
+      },
+      canPaste: () => !!(this.fileClip && this.project && this.fileClip.project === this.project.meta.id && this.fileClip.paths.length),
+      isCut: (path) => !!(this.fileClip && this.fileClip.mode === 'cut' && this.fileClip.paths.includes(path)),
+      /** Paste the cut / copied entries into `dir`; never overwrites ("name copy.js"). */
+      paste: async (dir = this.tree.targetDir()) => {
+        const fs = need(); if (!fs || !this.actions.canPaste()) return;
+        const clip = this.fileClip;
+        if (clip.mode === 'cut') {
+          this.fileClip = null;
+          await moveInto(clip.paths, dir);
+          return;
+        }
+        const free = await taken(dir);
+        let n = 0;
+        for (const p of clip.paths) {
+          if (dir === p || dir.startsWith(p + '/')) { toast(`Can't copy ${basename(p)} into itself.`, 'warn'); continue; }
+          const name = freeName(dir, basename(p), (x) => free.has(x));
+          free.add(join(dir, name));
+          try { await fs.copy(p, join(dir, name)); n++; } catch (err) { toast(err.message, 'error'); }
+        }
+        if (dir) this.tree.expanded.add(dir);
         await afterChange();
-        await this.tree.reveal(to);
-        toast(`Moved ${basename(path)} to ${toDir ? `${toDir}/` : 'the project root'}`, 'success');
-        if (this.activePanel === 'git') this.gitLater();
+        if (n) toast(`Pasted ${n === 1 ? '1 item' : `${n} items`} into ${dir || 'the project root'}.`, 'success', 1800);
       },
       duplicate: async (path) => {
         const fs = fsOf(); if (!fs) return;
-        const base = basename(path);
-        const dot = base.lastIndexOf('.');
-        let i = 1, to;
-        do {
-          const suffix = i === 1 ? ' copy' : ` copy ${i}`;
-          to = join(dirname(path), dot > 0 ? `${base.slice(0, dot)}${suffix}${base.slice(dot)}` : `${base}${suffix}`);
-          i++;
-        } while (await fs.exists(to));
+        const free = await taken(dirname(path));
+        const to = join(dirname(path), freeName(dirname(path), basename(path), (x) => free.has(x)));
         try { await fs.copy(path, to); } catch (err) { toast(err.message, 'error'); return; }
         await afterChange(dirname(path));
       },
-      remove: async (path, kind) => {
+      /** Delete = into the trash for 7 days (Undo right away, or Files ⋯ → Trash). */
+      remove: async (path) => this.actions.removeMany([path]),
+      removeMany: async (paths) => {
         const fs = fsOf(); if (!fs) return;
-        const ok = await confirm(`Delete ${basename(path)}?`, kind === 'directory' ? 'The folder and everything inside it will be deleted.' : 'The file will be deleted. Local history keeps earlier saved versions for a while.', 'Delete', 'danger');
-        if (!ok) return;
-        try { await fs.delete(path, { recursive: true }); } catch (err) { toast(err.message, 'error'); return; }
-        await this.ws.onPathDeleted(path);
-        await afterChange(dirname(path));
+        const ids = [];
+        const names = [];
+        for (const p of topLevel(paths)) {
+          const st = await fs.stat(p);
+          if (!st) continue;
+          let id = null;
+          try { id = await putInTrash(fs, this.project.meta.id, p, st.kind); } catch { id = null; }
+          if (id == null && !(await confirm(`Delete ${basename(p)} for good?`, 'It is too big for the trash (over 50 MB), so it could not be restored.', 'Delete', 'danger'))) continue;
+          try { await fs.delete(p, { recursive: true }); } catch (err) { toast(err.message, 'error'); if (id != null) deleteFromTrash(id).catch(() => {}); continue; }
+          await this.ws.onPathDeleted(p);
+          if (id != null) ids.push(id);
+          names.push(basename(p));
+        }
+        if (!names.length) return;
+        if (this.fileClip) this.fileClip.paths = this.fileClip.paths.filter((p) => !paths.some((q) => p === q || p.startsWith(q + '/')));
+        await afterChange();
         if (this.activePanel === 'git') this.gitLater();
+        const what = names.length === 1 ? names[0] : `${names.length} items`;
+        if (ids.length) {
+          toast(`Deleted ${what} (in the trash for 7 days)`, 'info', 6000, { label: 'Undo', run: async () => {
+            for (const id of ids.reverse()) { try { await restoreFromTrash(fs, id); } catch (err) { toast(err.message, 'error'); } }
+            await afterChange();
+            toast('Restored.', 'success', 1500);
+          } });
+        } else toast(`Deleted ${what}.`, 'info');
       },
+      showTrash: () => this.showTrash(),
       copyPath: (path) => this.copyText(path),
       download: async (path) => {
         const fs = fsOf(); if (!fs) return;
@@ -924,7 +1051,7 @@ export class App {
         const bytes = doc && doc.dirty ? new TextEncoder().encode(this.ws.textOf(doc.id)) : (await fs.readBytes(path)).bytes;
         this.downloadBytes(bytes, basename(path));
       },
-      upload: (dir) => {
+      upload: (dir = this.tree.targetDir()) => {
         const fs = need(); if (!fs) return;
         const input = $('#file-input');
         input.onchange = async () => {
@@ -944,16 +1071,52 @@ export class App {
     };
   }
 
+  /** Files ⋯ → Trash: what was deleted in the last 7 days, to restore or drop for good. */
+  async showTrash() {
+    if (!this.project) { toast('Open a project first.', 'warn'); return; }
+    const fs = this.project.fs;
+    const list = h('div.project-list.trash-list');
+    const fill = async () => {
+      let entries = [];
+      try { entries = await listTrash(this.project.meta.id); } catch (err) { list.textContent = err.message; return; }
+      list.textContent = '';
+      if (!entries.length) { list.append(h('div.panel-note', 'The trash is empty. Deleted files and folders stay here for 7 days.')); return; }
+      for (const e of entries) {
+        const left = daysLeft(e.deletedAt);
+        list.append(h('div.project-row.trash-row', { dataset: { path: e.path } },
+          h('span.pr-icon', { html: icon(e.kind === 'directory' ? 'folder' : 'file', 18) }),
+          h('div.pr-main', h('span.pr-name', e.path), h('span.pr-meta', `${formatTime(e.deletedAt)} · ${e.kind === 'directory' ? `${e.count} files · ` : ''}${left} day${left === 1 ? '' : 's'} left`)),
+          h('button.btn.btn-small', { type: 'button', onclick: async () => {
+            try { const to = await restoreFromTrash(fs, e.id); toast(`Restored ${to}.`, 'success'); } catch (err) { toast(err.message, 'error'); }
+            this.fileCache = null;
+            await this.tree.refresh();
+            fill();
+          } }, 'Restore'),
+          h('button.icon-btn.small', { type: 'button', 'aria-label': `Delete ${e.path} for good`, title: 'Delete for good', icon: 'trash', onclick: async () => {
+            if (!(await confirm(`Delete ${e.name} for good?`, 'It can\'t be restored after this.', 'Delete', 'danger'))) return;
+            await deleteFromTrash(e.id);
+            fill();
+          } })));
+      }
+    };
+    showModal('Trash', h('div', h('p.modal-message', 'Deleted files and folders are kept for 7 days.'), list), { className: 'wide' });
+    await fill();
+  }
+
   filesMenu(e) {
     const r = e.currentTarget.getBoundingClientRect();
+    const dir = this.tree.targetDir();
     popupMenu([
       { label: 'Collapse all folders', run: () => this.tree.collapseAll() },
-      { label: 'Upload files…', icon: 'upload', run: () => this.actions.upload('') },
+      { label: 'Select files…', icon: 'check', run: () => this.tree.startSelecting(null), disabled: !this.project },
+      this.actions.canPaste() && { label: `Paste into ${dir || 'the project root'}`, icon: 'download', run: () => this.actions.paste(dir) },
+      { label: `Upload files${dir ? ` into ${dir}` : ''}…`, icon: 'upload', run: () => this.actions.upload(dir) },
+      { label: 'Trash…', icon: 'trash', hint: 'deleted in the last 7 days', run: () => this.showTrash(), disabled: !this.project },
       { label: 'Export project as .zip', icon: 'download', run: () => this.exportZip(), disabled: !this.project },
       '-',
       { label: 'Switch project…', icon: 'folder', run: () => this.showProjectModal() },
       { label: 'New project…', icon: 'plus', run: () => this.newBrowserProject() },
-    ], { x: r.left, y: r.bottom });
+    ].filter(Boolean), { x: r.left, y: r.bottom });
   }
 
   async projectFiles() {

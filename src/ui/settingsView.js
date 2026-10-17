@@ -20,7 +20,7 @@ export const PAGES = [
   { id: 'keysbar', title: 'Keys bar', icon: 'keyboardHide', desc: 'Which keys, where; symbols per language' },
   { id: 'shortcuts', title: 'Keyboard shortcuts', icon: 'command', desc: 'For a Bluetooth or USB keyboard' },
   { id: 'gestures', title: 'Gestures', icon: 'gesture', desc: 'Swipes on the code, sensitivity, vibration' },
-  { id: 'files', title: 'Files & saving', icon: 'save', desc: 'Autosave, hidden files, local history' },
+  { id: 'files', title: 'Files & saving', icon: 'save', desc: 'Autosave, file tree, tabs, hidden files, history' },
   { id: 'run', title: 'Run', icon: 'play', desc: 'Time limit, preview' },
   { id: 'git', title: 'Git', icon: 'git', desc: 'Author, CORS proxy' },
   { id: 'snippets', title: 'Snippets', icon: 'copy', desc: 'Your own autocomplete snippets' },
@@ -254,6 +254,9 @@ export class SettingsView {
         select('autosave', { off: 'Off', delay: 'After a pause in typing', blur: 'When leaving the app' }, 'Autosave', 'Unsaved work is always mirrored for crash recovery, whatever you choose here.', 'save'),
         num('autosaveDelay', 'Autosave delay (ms)', null, 300, 60000, 100),
         text('ignoreList', 'Hidden & ignored names', 'Hidden in the file tree and skipped by search / quick open (along with .gitignore).', DEFAULTS.ignoreList),
+        toggle('previewTabs', 'Preview tabs', 'A tap on a file opens it in a temporary tab (name in italics) that the next file you tap replaces. Typing in it, saving or double-tapping its tab keeps it.', 'tabs italic temporary'),
+        toggle('autoReveal', 'File tree follows the open file', 'Switching tabs shows that file in the tree (its folders open).', 'reveal explorer'),
+        toggle('compactFolders', 'Compact folders', 'A folder that holds only one folder shows as one row, like src/main/java.', 'explorer tree'),
         num('historyDays', 'Keep local history (days)', null, 1, 90, 1, 'snapshots'),
         num('historyMaxPerFile', 'Snapshots per file', null, 5, 500, 1, 'local history'),
       ];

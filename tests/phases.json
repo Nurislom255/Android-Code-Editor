@@ -1,5 +1,5 @@
 {
-  "_comment": "Which test files prove each ROADMAP phase. Used by scripts/test-phase.mjs (npm run test:phase -- N) and listed in TESTS.md. Phases 4-7 hold acceptance tests written ahead (test.fixme): they show as skipped until the phase is built.",
+  "_comment": "Which test files prove each ROADMAP phase. Used by scripts/test-phase.mjs (npm run test:phase -- N) and listed in TESTS.md. Phases 5-7 hold acceptance tests written ahead (test.fixme): they show as skipped until the phase is built.",
   "base": {
     "title": "v2 foundation: files, workspace, run, git, offline",
     "unit": ["capacitorFs", "editorCore", "editorconfig", "git", "indent", "lineDiff", "misc", "textFormat"],
@@ -23,7 +23,7 @@
   "4": {
     "title": "Tabs and file explorer",
     "unit": [],
-    "e2e": ["phase4"]
+    "e2e": ["explorer"]
   },
   "5": {
     "title": "Built-in runtimes: Python, C, C++, Rust",

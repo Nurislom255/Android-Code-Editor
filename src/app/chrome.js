@@ -19,7 +19,7 @@ export function renderTabBar(app, paneIndex) {
   // change replaced the ✕ under the finger between touch-down and touch-up,
   // so the first tap on a tab in the other pane did nothing.
   const sig = JSON.stringify([pane.tabs, pane.activeId, paneIndex === 1 && ws.isSplit(),
-    pane.tabs.map((id) => { const d = ws.docs.get(id); return d ? [d.name, d.path, d.dirty, d.locked, d.kind] : null; })]);
+    pane.tabs.map((id) => { const d = ws.docs.get(id); return d ? [d.name, d.path, d.dirty, d.locked, d.kind, !!d.preview] : null; })]);
   if (bar._sig === sig && bar.childElementCount) return;
   bar._sig = sig;
   bar.textContent = '';
@@ -33,9 +33,18 @@ export function renderTabBar(app, paneIndex) {
     const showDir = names.get(doc.name) > 1 && doc.path;
     const tab = h('div.tab', {
       role: 'tab', tabindex: '0', 'aria-selected': String(active),
-      class: `${active ? 'active' : ''} ${doc.dirty ? 'dirty' : ''} ${doc.kind === 'untitled' ? 'untitled' : ''}`,
-      title: doc.path || doc.name, dataset: { docId: id },
-      onclick: (e) => { if (!e.target.closest('.tab-close')) ws.showDoc(paneIndex, id); },
+      class: `${active ? 'active' : ''} ${doc.dirty ? 'dirty' : ''} ${doc.kind === 'untitled' ? 'untitled' : ''} ${doc.preview ? 'preview' : ''}`,
+      title: doc.preview ? `${doc.path || doc.name} — preview: the next file you open replaces it; double-tap to keep it` : doc.path || doc.name,
+      dataset: { docId: id },
+      onclick: (e) => {
+        if (e.target.closest('.tab-close')) return;
+        // Double-tap keeps a preview tab. (Remembered on the bar: the first
+        // tap may re-render the tabs.)
+        const now = Date.now();
+        if (bar._lastTap && bar._lastTap.id === id && now - bar._lastTap.t < 450) ws.keepDoc(id);
+        bar._lastTap = { id, t: now };
+        ws.showDoc(paneIndex, id);
+      },
       onauxclick: (e) => { if (e.button === 1) { e.preventDefault(); ws.closeTab(paneIndex, id); } },
       onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ws.showDoc(paneIndex, id); } },
     },
@@ -63,17 +72,23 @@ export function renderTabBar(app, paneIndex) {
       getSettings: () => app.settings,
       menu: (tab, at) => tabMenu(app, paneIndex, Number(tab.dataset.docId), at),
       label: (tab) => tab.querySelector('.tab-name').textContent,
-      find: tabDropTarget,
-      drop: (tab, t) => app.ws.placeTab(paneIndex, Number(tab.dataset.docId), t.pane, t.before),
+      find: (tab, el, x, y) => tabDropTarget(app, tab, el, x, y),
+      drop: (tab, t) => (t.split
+        ? app.splitWithTab(paneIndex, Number(tab.dataset.docId))
+        : app.ws.placeTab(paneIndex, Number(tab.dataset.docId), t.pane, t.before)),
       onDragChange: (on) => { bar._dragging = on; if (!on) renderTabBar(app, paneIndex); },
     });
   }
 }
 
-/** Where a dragged tab would land: next to the tab under the pointer, or at the end of a tab bar. */
-function tabDropTarget(tab, el, x) {
+/**
+ * Where a dragged tab would land: next to the tab under the pointer, at the
+ * end of a tab bar, on the other pane (its end), or — over the right half of
+ * the code (the lower half on a phone) with no split yet — a new split.
+ */
+function tabDropTarget(app, tab, el, x, y) {
   const bar = el && el.closest('.pane .tab-bar');
-  if (!bar) return null;
+  if (!bar) return editorDropTarget(app, tab, el, x, y);
   const pane = Number(bar.closest('.pane').dataset.pane);
   const over = el.closest('.tab');
   if (!over) return { el: bar, cls: 'drop-end', pane, before: null };
@@ -82,6 +97,26 @@ function tabDropTarget(tab, el, x) {
   if (x < r.left + r.width / 2) return { el: over, cls: 'drop-before', pane, before: Number(over.dataset.docId) };
   const next = over.nextElementSibling;
   return { el: over, cls: 'drop-after', pane, before: next && next.matches('.tab') ? Number(next.dataset.docId) : null };
+}
+
+function editorDropTarget(app, tab, el, x, y) {
+  const area = el && el.closest('#editor-area');
+  if (!area) return null;
+  const from = Number(tab.closest('.pane').dataset.pane);
+  if (app.ws.isSplit()) {
+    // over the other pane: the tab goes there
+    const pane = el.closest('.pane');
+    const to = pane ? Number(pane.dataset.pane) : null;
+    return to != null && to !== from ? { el: pane, cls: 'drop-pane', pane: to, before: null } : null;
+  }
+  const r = area.getBoundingClientRect();
+  const vertical = app.layout.compact;
+  const inZone = vertical ? y > r.top + r.height * 0.5 : x > r.left + r.width * 0.5;
+  if (!inZone) return null;
+  let zone = area.querySelector('.split-drop');
+  if (!zone) { zone = h('div.split-drop', { 'aria-hidden': 'true' }, h('span', 'Split')); area.append(zone); }
+  zone.classList.toggle('bottom', vertical);
+  return { el: zone, cls: 'show', split: true };
 }
 
 function tabMenu(app, paneIndex, docId, at) {

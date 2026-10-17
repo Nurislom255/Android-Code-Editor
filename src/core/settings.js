@@ -80,6 +80,10 @@ export const DEFAULTS = Object.freeze({
   autoCloseBrackets: true,
   stickyScroll: true,
   fastScroll: true,
+  previewTabs: true,          // a tap in the file tree opens a temporary (italic) tab
+  autoReveal: true,           // the file tree follows the active tab
+  compactFolders: true,       // a folder holding only one folder shows as a/b
+  openEditorsOpen: false,     // the "Open editors" list above the file tree is unfolded
   wordHighlight: true,        // the other uses of the name under the cursor
   bracketPairColors: true,    // ( [ { coloured by nesting depth
   indentGuides: true,         // vertical lines at each indentation level
@@ -156,6 +160,10 @@ export function normalizeSettings(raw) {
     autoCloseBrackets: bool(r.autoCloseBrackets, d.autoCloseBrackets),
     stickyScroll: bool(r.stickyScroll, d.stickyScroll),
     fastScroll: bool(r.fastScroll, d.fastScroll),
+    previewTabs: bool(r.previewTabs, d.previewTabs),
+    autoReveal: bool(r.autoReveal, d.autoReveal),
+    compactFolders: bool(r.compactFolders, d.compactFolders),
+    openEditorsOpen: bool(r.openEditorsOpen, d.openEditorsOpen),
     wordHighlight: bool(r.wordHighlight, d.wordHighlight),
     bracketPairColors: bool(r.bracketPairColors, d.bracketPairColors),
     indentGuides: bool(r.indentGuides, d.indentGuides),
