@@ -18,6 +18,7 @@ import { LocalHistory } from '../storage/localHistory.js';
 import { kv } from '../storage/db.js';
 import { putInTrash, listTrash, restoreFromTrash, deleteFromTrash, purgeTrash } from '../storage/trash.js';
 import { topLevel, canMoveInto, freeName, daysLeft, orderEntries, reorderNames, relocateOrder } from '../core/explorer.js';
+import { scriptsOf, pagesNear, PAGE_ONLY } from '../core/pages.js';
 import { walkFiles, isFolderPickerSupported, isOpfsSupported } from '../storage/projectFs.js';
 import { getCapacitorFilesystem } from '../storage/capacitorFs.js';
 import {
@@ -234,9 +235,12 @@ export class App {
     const side = !$('#preview-side').classList.contains('hidden');
     $('#app').classList.toggle('split', split);
     $('#pane-1').classList.toggle('hidden', !split);
-    $('#pane-divider').classList.toggle('hidden', !(split || side));
+    $('#pane-divider').classList.toggle('hidden', !split);
+    $('#preview-divider').classList.toggle('hidden', !side);
     $('#btn-split').classList.toggle('active', split);
-    if (!split && !side) { $('#pane-0').style.flex = ''; }
+    // A column shown or hidden: the columns start equal again.
+    const cols = `${split}/${side}/${this.layout ? this.layout.compact : ''}`;
+    if (cols !== this._cols) { this._cols = cols; for (const id of ['#pane-0', '#pane-1', '#preview-side']) $(id).style.flex = ''; }
     if (this.ws) for (const p of this.ws.panes) if (p) p.view.requestMeasure();
     if (this.preview && this.preview.target && this.preview.mountedIn && this.preview.placement() !== this.preview.mountedIn) this.preview.mount();
   }
@@ -279,6 +283,16 @@ export class App {
       this.ws._addToPane(this.ws.panes[paneIndex], doc, { selection: { anchor: st.selection.main.anchor, head: st.selection.main.head } });
       this.ws.showDoc(paneIndex, doc.id);
     }
+  }
+
+  /** Ctrl+1 / Ctrl+2 (as in VS Code): the cursor goes to that pane; Ctrl+2 splits first if needed. */
+  focusPane(i) {
+    if (i === 1 && !this.ws.isSplit()) this.toggleSplit();
+    const p = this.ws.panes[i];
+    if (!p || p.visible === false) return null;
+    this.ws.setActivePane(i);
+    p.view.focus();
+    return i === 0 ? 'First pane' : 'Second pane';
   }
 
   /**
@@ -1245,7 +1259,12 @@ export class App {
     const doc = this.ws.activeDoc;
     if (!doc) { toast('Open a file to run it.', 'warn'); return; }
     const id = doc.lang.id;
-    if (id === 'javascript') return this.runJs(doc);
+    if (id === 'javascript') {
+      // A page's script runs in that page (the console has no `document`).
+      const page = await this.pageForScript(doc);
+      if (page) { this.hint(`${doc.name} runs in ${page}`); return this.preview.open(page); }
+      return this.runJs(doc);
+    }
     if (id === 'html' || id === 'markdown') {
       if (doc.kind !== 'project' && this.project == null) { this.preview.open(doc.name); return; }
       return this.preview.open(doc.path || doc.name);
@@ -1265,8 +1284,22 @@ export class App {
     toast(`No runner for ${doc.lang.name}. Run works for .js, and previews .html / .md.`, 'warn');
   }
 
+  /** The project's HTML page that loads this script (<script src>), or null. */
+  async pageForScript(doc) {
+    if (!doc.path || !this.project) return null;
+    const target = this.preview.target && this.preview.target.path;
+    const pages = pagesNear(doc.path, await this.projectFiles());
+    if (target && pages.includes(target)) pages.unshift(target); // the page already shown first
+    for (const p of pages.slice(0, 40)) {
+      const r = await this.readForPreview(p);
+      if (r && r.text != null && scriptsOf(p, r.text).includes(doc.path)) return p;
+    }
+    return null;
+  }
+
   runJs(doc) {
     const code = this.ws.textOf(doc.id);
+    let explained = false;
     const filename = doc.path || doc.name;
     this.bottom.show('console');
     this.bottom.clear();
@@ -1280,7 +1313,14 @@ export class App {
       code, filename,
       stdin: this.bottom.stdin,
       timeLimit: this.settings.runTimeLimit,
-      onOutput: (e) => this.bottom.log(e),
+      onOutput: (e) => {
+        this.bottom.log(e);
+        // "document is not defined": say why, once
+        if (!explained && e.level === 'error' && PAGE_ONLY.test(e.text || '')) {
+          explained = true;
+          this.bottom.log({ level: 'info', text: `This code needs a web page: the console has no page (no document, window, alert…). Load it from an HTML file — <script src="${doc.name}"></script> — and Run shows that page.` });
+        }
+      },
       onClear: () => this.bottom.clear(),
       onInput: (q) => this.bottom.requestInput(q),
       onSyntaxError: () => {
@@ -1538,6 +1578,8 @@ export class App {
       toggleConsole: { label: 'Toggle console', key: 'Ctrl+J', run: () => this.bottom.toggle('console') },
       showProblems: { label: 'Show problems', run: () => this.bottom.show('problems') },
       split: { label: 'Split editor', key: 'Ctrl+\\', run: () => this.toggleSplit() },
+      focusPane1: { label: 'Focus the first code pane', key: 'Ctrl+1', run: () => this.focusPane(0) },
+      focusPane2: { label: 'Focus the second code pane (splits if needed)', key: 'Ctrl+2', run: () => this.focusPane(1) },
       focusOtherPane: { label: 'Focus other pane', run: () => { const o = ws.activePane === 0 ? 1 : 0; if (ws.panes[o] && ws.panes[o].visible !== false) { ws.setActivePane(o); ws.panes[o].view.focus(); } } },
       zoomIn: { label: 'Zoom in (font)', key: 'Ctrl+=', run: zoom(1) },
       zoomOut: { label: 'Zoom out (font)', key: 'Ctrl+-', run: zoom(-1) },
@@ -1624,7 +1666,7 @@ export class App {
     const map = [
       ['Mod-s', 'save'], ['Mod-Shift-s', 'saveAll'], ['Mod-p', 'quickOpen'], ['Mod-Shift-p', 'commandPalette'], ['F1', 'commandPalette'],
       ['Mod-g', 'goToLine'], ['Mod-Shift-o', 'goToSymbol'], ['F5', 'run'], ['Mod-Shift-f', 'searchProject'],
-      ['Mod-b', 'toggleSidebar'], ['Mod-\\', 'split'], ['Alt-Shift-ArrowRight', 'expandSelection'], ['Alt-Shift-ArrowLeft', 'shrinkSelection'],
+      ['Mod-b', 'toggleSidebar'], ['Mod-\\', 'split'], ['Mod-1', 'focusPane1'], ['Mod-2', 'focusPane2'], ['Alt-Shift-ArrowRight', 'expandSelection'], ['Alt-Shift-ArrowLeft', 'shrinkSelection'],
       ['Alt-Shift-f', 'format'], ['Mod-=', 'zoomIn'], ['Mod-+', 'zoomIn'], ['Mod--', 'zoomOut'], ['Mod-0', 'zoomReset'],
       ['Ctrl-Tab', 'nextTab'], ['Ctrl-Shift-Tab', 'prevTab'], ['Alt-PageDown', 'nextTab'], ['Alt-PageUp', 'prevTab'],
       ['Alt-w', 'closeTab'], ['Ctrl-Alt--', 'navigateBack'], ['Ctrl-Shift--', 'navigateForward'], ['Mod-j', 'toggleConsole'],
@@ -1951,6 +1993,9 @@ function keyMatches(e, s) {
   if (s.key === '+') return e.key === '+' || e.code === 'Equal';
   if (e.shiftKey !== s.shift) return false;
   if (CODE_KEYS[s.key]) return e.code === CODE_KEYS[s.key] || e.key === s.key;
+  // Not a Latin letter (another alphabet, or "Unidentified" from a keyboard
+  // still composing a word): the physical key decides.
+  if (!/^[a-z]$/i.test(e.key) && ((/^[a-z]$/i.test(s.key) && e.code === `Key${s.key.toUpperCase()}`) || (/^\d$/.test(s.key) && e.code === `Digit${s.key}`))) return true;
   return e.key.toLowerCase() === s.key.toLowerCase();
 }
 

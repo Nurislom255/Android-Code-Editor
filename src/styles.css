@@ -558,6 +558,7 @@ input, textarea, select, [contenteditable], .cm-editor, .console-lines,
   overflow: hidden;
 }
 #app.sidebar-hidden #sidebar, #app.sidebar-hidden #sidebar-resizer { display: none; }
+#app.sidebar-collapsing #sidebar { opacity: 0.4; transition: opacity 0.12s; } /* let go now and it hides */
 .sidebar-tabs { display: none; }
 .side-panel { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: hidden; }
 .side-panel.active { display: flex; }

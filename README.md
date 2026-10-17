@@ -173,6 +173,11 @@ working (also inside the editor).
     following the open file, and `src/main/java` shown as one row (Settings
     → Files & saving).
 - With a keyboard: F2 rename, Delete, Ctrl+C / X / V in the tree.
+- **Panes and the sidebar** (as in VS Code): **Ctrl+1** / **Ctrl+2** put the
+  cursor in the first / second code pane (Ctrl+2 splits first); **Ctrl+B**
+  hides and shows the sidebar — or drag its edge all the way to the left and
+  let go; it comes back at its old width. With a preview beside the code,
+  the preview has its own divider.
 
 ---
 
@@ -287,6 +292,9 @@ working (also inside the editor).
 - Run JavaScript in a Web Worker: streamed console output, Stop button and time
   limit (a `while(true){}` can always be stopped), `readline()` from a stdin
   box and interactive `await input()`, clickable `file:line` in errors.
+  A script a page loads (`<script src="app.js">` in `index.html`) runs in
+  that page instead: Run shows the page, its console output still in the
+  console (the console has no `document`).
 - Live HTML/CSS/JS preview that resolves real paths: `<link>`, `<script src>`,
   ES-module imports, images, `url()` in CSS and `fetch('data.json')` — using
   unsaved editor content; console output from the page goes to the console.

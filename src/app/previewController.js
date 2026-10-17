@@ -56,7 +56,7 @@ export class PreviewController {
     if (where === 'side') {
       if (this.box.parentNode !== side) side.append(this.box);
       side.classList.remove('hidden');
-      document.getElementById('pane-divider').classList.remove('hidden');
+      document.getElementById('preview-divider').classList.remove('hidden');
     } else {
       if (this.box.parentNode !== this.deps.bottom.previewHost) this.deps.bottom.previewHost.append(this.box);
       side.classList.add('hidden');

@@ -157,6 +157,21 @@ test('a shortcut changed in Settings works, the old one stops; a pressed one is 
   expect(await editorText(page)).toBe('one');
 });
 
+test('wide screens (a tablet): Settings has a ← that closes it, back to where you were', async ({ page }) => {
+  test.skip(narrow(page), 'wide screens');
+  await boot(page);
+  await newProject(page, 'tb', 'js');
+  await page.locator('#activitybar .activity[data-panel="settings"]').click();
+  await expect(view(page)).toBeVisible();
+  const back = view(page).locator('.sv-back');
+  await expect(back).toBeVisible();
+  await nav(page, 'Editor').click();
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(view(page)).toBeHidden();
+  await expect(page.locator('#sidebar')).toBeVisible();
+});
+
 test('phone: Settings opened from the drawer — ← and Android Back return to the drawer, on its panel; ✕ goes to the code', async ({ page }) => {
   test.skip(!narrow(page), 'narrow screens');
   await boot(page);

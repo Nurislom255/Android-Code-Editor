@@ -64,9 +64,17 @@ export function parseCombo(text) {
  * The shortcut a keydown is, canonical — or null (a soft keyboard's composed
  * text, a lone modifier, a key with no name). On a Mac, ⌘ counts as Ctrl
  * (the defaults' "Ctrl" is ⌘ there).
+ *
+ * While a keyboard is composing a word (Gboard does, even with a hardware
+ * keyboard), plain keys are typing; but a key held with Ctrl / Alt / ⌘, or
+ * an F-key, is still a shortcut — named by its physical key if the browser
+ * reports it as "Unidentified".
  */
 export function comboFromEvent(e, { mac = false } = {}) {
-  if (!e || e.isComposing || e.keyCode === 229 || !e.key || e.key === 'Unidentified' || e.key === 'Dead' || MODIFIER_KEYS.has(e.key)) return null;
+  if (!e || !e.key || e.key === 'Dead' || MODIFIER_KEYS.has(e.key)) return null;
+  const chord = e.ctrlKey || e.metaKey || e.altKey || /^F\d+$/.test(e.key);
+  if (!chord && (e.isComposing || e.keyCode === 229)) return null;
+  if (e.key === 'Unidentified' && !(chord && /^(Key[A-Z]|Digit\d)$/.test(e.code || ''))) return null;
   let key = null;
   const code = e.code || '';
   if (/^[a-z]$/i.test(e.key)) key = e.key.toUpperCase();

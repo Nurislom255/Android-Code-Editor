@@ -30,6 +30,12 @@ test('a keydown → its shortcut (punctuation by the key pressed, not what Shift
   assert.equal(comboFromEvent(ev({ key: 'л', code: 'KeyK', ctrlKey: true })), 'Ctrl+K', 'another alphabet: the key under the finger');
   assert.equal(comboFromEvent(ev({ key: 's', code: 'KeyS', metaKey: true }), { mac: true }), 'Ctrl+S', '⌘ is Ctrl on a Mac');
   assert.equal(comboFromEvent(ev({ key: 'Unidentified', keyCode: 229 })), null, 'a soft keyboard composing');
+  assert.equal(comboFromEvent(ev({ key: 'b', code: 'KeyB', isComposing: true })), null, 'a letter while composing is typing');
+  // Gboard composing a word, a hardware Ctrl+B / F5: still shortcuts
+  assert.equal(comboFromEvent(ev({ key: 'b', code: 'KeyB', ctrlKey: true, isComposing: true })), 'Ctrl+B');
+  assert.equal(comboFromEvent(ev({ key: 'Unidentified', code: 'KeyB', keyCode: 229, ctrlKey: true, isComposing: true })), 'Ctrl+B', 'named by the physical key');
+  assert.equal(comboFromEvent(ev({ key: 'F5', code: 'F5', keyCode: 229, isComposing: true })), 'F5');
+  assert.equal(comboFromEvent(ev({ key: 'Unidentified', code: '', keyCode: 229, ctrlKey: true })), null, 'no name at all');
   assert.equal(comboFromEvent(ev({ key: 'Shift', code: 'ShiftLeft', shiftKey: true })), null, 'a lone modifier');
 });
 
