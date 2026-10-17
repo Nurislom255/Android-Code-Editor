@@ -1,71 +1,90 @@
 /* ==========================================================================
    CodeEditor v2 — styles
-   Design tokens first; dark is the default, light overrides it. Amber accent
-   (a nod to phosphor terminals) marks only actions and "active" states.
+   Design tokens first. Four themes (ROADMAP Phase 3), after VS Code's:
+   Dark Modern (the default), Light Modern, High Contrast and Monokai. The
+   accent is VS Code blue: --accent for text, icons and borders, --accent-bg
+   for filled buttons and armed keys (white text stays readable on it).
    UI chrome uses the system font; only code is monospace.
    ========================================================================== */
 :root, .theme-dark {
-  --bg: #14161a;
-  --bg-panel: #1a1d23;
-  --bg-panel-alt: #20242c;
-  --bg-hover: #282d37;
-  --bg-input: #101216;
-  --border: #2b303b;
-  --text: #e4e6eb;
-  --text-dim: #a0a8b6;
-  --text-faint: #6b7381;
-  --accent: #e3a548;
-  --accent-strong: #f0b65d;
-  --accent-dim: rgba(227, 165, 72, 0.16);
-  --accent-glow: rgba(227, 165, 72, 0.45);
-  --on-accent: #1a1400;
-  --error: #ef6a62;
-  --error-dim: rgba(239, 106, 98, 0.16);
-  --warn: #e0b341;
-  --warn-dim: rgba(224, 179, 65, 0.16);
-  --success: #63b96a;
-  --success-dim: rgba(99, 185, 106, 0.16);
-  --info: #6aa7ef;
-  --git-added: #4f9d58;
-  --git-modified: #4f87c9;
-  --git-deleted: #d4574e;
+  --bg: #1f1f1f;
+  --bg-panel: #181818;
+  --bg-panel-alt: #2b2b2b;
+  --bg-hover: #2a2d2e;
+  --bg-input: #313131;
+  --border: #2b2b2b;
+  --border-strong: #3c3c3c;
+  --text: #cccccc;
+  --text-dim: #9d9d9d;
+  --text-faint: #6e7681;
+  --accent: #4daafc;
+  --accent-strong: #6cb8ff;
+  --accent-bg: #0078d4;
+  --accent-dim: rgba(0, 120, 212, 0.24);
+  --accent-glow: rgba(0, 120, 212, 0.55);
+  --on-accent: #ffffff;
+  --error: #f85149;
+  --error-dim: rgba(248, 81, 73, 0.16);
+  --warn: #cca700;
+  --warn-dim: rgba(204, 167, 0, 0.16);
+  --success: #2ea043;
+  --success-dim: rgba(46, 160, 67, 0.16);
+  --info: #3794ff;
+  --git-added: #81b88b;
+  --git-modified: #e2c08d;
+  --git-deleted: #c74e39;
+  --git-untracked: #73c991;
+  /* status bar: blue, purple with no project, orange while code runs */
+  --status-bg: #0078d4;
+  --status-bg-none: #68217a;
+  --status-bg-run: #cc6633;
+  --status-fg: #ffffff;
+  --status-border: transparent;
+  --status-warn-bg: #7a6400;
+  --status-err-bg: #c72e0f;
 
-  --ed-bg: #16181d;
-  --ed-fg: #d7dae0;
-  --ed-caret: #f0b65d;
-  --ed-selection: rgba(103, 145, 220, 0.32);
-  --ed-active-line: rgba(255, 255, 255, 0.035);
-  --ed-gutter-bg: #16181d;
-  --ed-gutter-fg: #555c69;
-  --ed-match: rgba(170, 200, 110, 0.14);
-  --ed-word: rgba(150, 170, 210, 0.17);
-  --ed-search: rgba(114, 161, 255, 0.3);
-  --ed-search-outline: #457dff;
-  --ed-search-selected: rgba(227, 165, 72, 0.4);
-  --ed-bracket: rgba(186, 208, 248, 0.18);
-  --ed-bracket-outline: rgba(186, 208, 248, 0.45);
+  --ed-bg: #1f1f1f;
+  --ed-fg: #cccccc;
+  --ed-caret: #aeafad;
+  --ed-selection: #264f78;
+  --ed-active-line: rgba(255, 255, 255, 0.04);
+  --ed-gutter-bg: #1f1f1f;
+  --ed-gutter-fg: #6e7681;
+  --ed-match: rgba(173, 214, 255, 0.15);
+  --ed-word: rgba(87, 87, 87, 0.6);
+  --ed-search: rgba(234, 92, 0, 0.33);
+  --ed-search-outline: rgba(234, 92, 0, 0.7);
+  --ed-search-selected: #9e6a03;
+  --ed-bracket: rgba(0, 100, 0, 0.3);
+  --ed-bracket-outline: #888888;
+  --ed-indent-guide: rgba(255, 255, 255, 0.09);
+  --bracket-1: #ffd700;
+  --bracket-2: #da70d6;
+  --bracket-3: #179fff;
+  --bracket-bad: #f85149;
 
-  --tok-comment: #6f7889;
-  --tok-keyword: #c792ea;
-  --tok-string: #a5d17f;
-  --tok-regexp: #e9a15f;
-  --tok-number: #f3a96a;
-  --tok-atom: #f78c6c;
-  --tok-function: #7cb7ff;
-  --tok-definition: #e8c47c;
-  --tok-type: #ffcb6b;
-  --tok-tag: #f07178;
-  --tok-attribute: #e8c47c;
-  --tok-property: #89ddff;
-  --tok-variable: #d7dae0;
-  --tok-operator: #89ddff;
-  --tok-punctuation: #a6acb8;
-  --tok-meta: #b8a0e8;
-  --tok-heading: #f0b65d;
-  --tok-link: #7cb7ff;
+  --tok-comment: #6a9955;
+  --tok-keyword: #569cd6;
+  --tok-control: #c586c0;
+  --tok-string: #ce9178;
+  --tok-regexp: #d16969;
+  --tok-number: #b5cea8;
+  --tok-atom: #569cd6;
+  --tok-function: #dcdcaa;
+  --tok-definition: #9cdcfe;
+  --tok-type: #4ec9b0;
+  --tok-tag: #569cd6;
+  --tok-attribute: #9cdcfe;
+  --tok-property: #9cdcfe;
+  --tok-variable: #9cdcfe;
+  --tok-operator: #d4d4d4;
+  --tok-punctuation: #cccccc;
+  --tok-meta: #c586c0;
+  --tok-heading: #569cd6;
+  --tok-link: #4daafc;
 
-  --squiggle-error: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23ef6a62' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
-  --squiggle-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23e0b341' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
+  --squiggle-error: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23f85149' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
+  --squiggle-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23cca700' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
 
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "Cascadia Code", "Fira Code", "SF Mono", Menlo, Consolas, "Roboto Mono", "Droid Sans Mono", monospace;
@@ -80,65 +99,235 @@
 }
 
 .theme-light {
-  --bg: #f4f5f7;
-  --bg-panel: #ffffff;
-  --bg-panel-alt: #f0f1f4;
-  --bg-hover: #e6e8ec;
+  --bg: #ffffff;
+  --bg-panel: #f8f8f8;
+  --bg-panel-alt: #ececec;
+  --bg-hover: #e8e8e8;
   --bg-input: #ffffff;
-  --border: #d9dce2;
-  --text: #1d2026;
-  --text-dim: #545b67;
-  --text-faint: #8a919c;
-  --accent: #b86e00;
-  --accent-strong: #a35f00;
-  --accent-dim: rgba(184, 110, 0, 0.12);
-  --accent-glow: rgba(184, 110, 0, 0.35);
+  --border: #e5e5e5;
+  --border-strong: #cecece;
+  --text: #3b3b3b;
+  --text-dim: #616161;
+  --text-faint: #868686;
+  --accent: #005fb8;
+  --accent-strong: #0258a8;
+  --accent-bg: #005fb8;
+  --accent-dim: rgba(0, 95, 184, 0.12);
+  --accent-glow: rgba(0, 95, 184, 0.35);
   --on-accent: #ffffff;
-  --error: #c9372c;
-  --error-dim: rgba(201, 55, 44, 0.1);
-  --warn: #a67400;
-  --warn-dim: rgba(166, 116, 0, 0.12);
-  --success: #2e7d32;
-  --success-dim: rgba(46, 125, 50, 0.12);
-  --info: #1f66c2;
-  --git-added: #3c9a46;
-  --git-modified: #2d6fc0;
-  --git-deleted: #c9372c;
+  --error: #c72e0f;
+  --error-dim: rgba(199, 46, 15, 0.1);
+  --warn: #bf8803;
+  --warn-dim: rgba(191, 136, 3, 0.12);
+  --success: #388a34;
+  --success-dim: rgba(56, 138, 52, 0.12);
+  --info: #1a85ff;
+  --git-added: #587c0c;
+  --git-modified: #895503;
+  --git-deleted: #ad0707;
+  --git-untracked: #007100;
+  --status-bg: #0078d4;
+  --status-bg-none: #68217a;
+  --status-bg-run: #cc6633;
+  --status-fg: #ffffff;
 
   --ed-bg: #ffffff;
-  --ed-fg: #24292f;
-  --ed-caret: #b86e00;
-  --ed-selection: rgba(64, 120, 220, 0.22);
+  --ed-fg: #3b3b3b;
+  --ed-caret: #000000;
+  --ed-selection: #add6ff;
   --ed-active-line: rgba(0, 0, 0, 0.035);
   --ed-gutter-bg: #ffffff;
-  --ed-gutter-fg: #a3a9b3;
-  --ed-match: rgba(120, 170, 40, 0.18);
-  --ed-word: rgba(60, 90, 150, 0.13);
-  --ed-search: rgba(64, 120, 220, 0.22);
-  --ed-search-outline: #2d6fc0;
-  --ed-search-selected: rgba(184, 110, 0, 0.3);
-  --ed-bracket: rgba(64, 120, 220, 0.12);
-  --ed-bracket-outline: rgba(64, 120, 220, 0.4);
+  --ed-gutter-fg: #6e7681;
+  --ed-match: rgba(173, 214, 255, 0.5);
+  --ed-word: rgba(87, 87, 87, 0.22);
+  --ed-search: rgba(234, 92, 0, 0.33);
+  --ed-search-outline: rgba(234, 92, 0, 0.7);
+  --ed-search-selected: #a8ac94;
+  --ed-bracket: rgba(0, 100, 0, 0.1);
+  --ed-bracket-outline: #b9b9b9;
+  --ed-indent-guide: rgba(0, 0, 0, 0.1);
+  --bracket-1: #0431fa;
+  --bracket-2: #319331;
+  --bracket-3: #7b3814;
+  --bracket-bad: #c72e0f;
 
-  --tok-comment: #6e7781;
-  --tok-keyword: #8f2fbf;
-  --tok-string: #116329;
-  --tok-regexp: #a2500b;
-  --tok-number: #b1520b;
-  --tok-atom: #b3261e;
-  --tok-function: #0b5cad;
-  --tok-definition: #7a4c00;
-  --tok-type: #8a5a00;
-  --tok-tag: #b3261e;
-  --tok-attribute: #7a4c00;
-  --tok-property: #0a6c80;
-  --tok-variable: #24292f;
-  --tok-operator: #0a6c80;
-  --tok-punctuation: #57606a;
-  --tok-meta: #6639ba;
-  --tok-heading: #a35f00;
-  --tok-link: #0b5cad;
+  --tok-comment: #008000;
+  --tok-keyword: #0000ff;
+  --tok-control: #af00db;
+  --tok-string: #a31515;
+  --tok-regexp: #811f3f;
+  --tok-number: #098658;
+  --tok-atom: #0000ff;
+  --tok-function: #795e26;
+  --tok-definition: #001080;
+  --tok-type: #267f99;
+  --tok-tag: #800000;
+  --tok-attribute: #e50000;
+  --tok-property: #001080;
+  --tok-variable: #001080;
+  --tok-operator: #000000;
+  --tok-punctuation: #3b3b3b;
+  --tok-meta: #af00db;
+  --tok-heading: #800000;
+  --tok-link: #005fb8;
+  --squiggle-error: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23c72e0f' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
+  --squiggle-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='3'%3E%3Cpath d='m0 3 l2 -2 l1 0 l2 2 l1 0' stroke='%23bf8803' fill='none' stroke-width='1.1'/%3E%3C/svg%3E");
   color-scheme: light;
+}
+
+/* High Contrast (dark): black, white text, cyan borders, orange focus. */
+.theme-hc {
+  --bg: #000000;
+  --bg-panel: #000000;
+  --bg-panel-alt: #0b0b0b;
+  --bg-hover: #1e1e1e;
+  --bg-input: #000000;
+  --border: #6fc3df;
+  --border-strong: #6fc3df;
+  --text: #ffffff;
+  --text-dim: #ffffff;
+  --text-faint: #c8c8c8;
+  --accent: #f38518;
+  --accent-strong: #ffa34d;
+  --accent-bg: #f38518;
+  --accent-dim: rgba(243, 133, 24, 0.25);
+  --accent-glow: rgba(243, 133, 24, 0.6);
+  --on-accent: #000000;
+  --error: #f48771;
+  --error-dim: rgba(244, 135, 113, 0.2);
+  --warn: #ffd700;
+  --warn-dim: rgba(255, 215, 0, 0.2);
+  --success: #89d185;
+  --success-dim: rgba(137, 209, 133, 0.2);
+  --info: #3794ff;
+  --git-added: #a1e3ad;
+  --git-modified: #e2c08d;
+  --git-deleted: #ff8c7a;
+  --git-untracked: #a1e3ad;
+  --status-bg: #000000;
+  --status-bg-none: #000000;
+  --status-bg-run: #000000;
+  --status-fg: #ffffff;
+  --status-border: #6fc3df;
+  --status-border-none: #b180d7;
+  --status-border-run: #f38518;
+
+  --ed-bg: #000000;
+  --ed-fg: #ffffff;
+  --ed-caret: #ffffff;
+  --ed-selection: rgba(255, 255, 255, 0.3);
+  --ed-active-line: rgba(255, 255, 255, 0.1);
+  --ed-gutter-bg: #000000;
+  --ed-gutter-fg: #ffffff;
+  --ed-match: rgba(255, 255, 255, 0.18);
+  --ed-word: rgba(255, 255, 255, 0.22);
+  --ed-search: rgba(243, 133, 24, 0.35);
+  --ed-search-outline: #f38518;
+  --ed-search-selected: rgba(243, 133, 24, 0.6);
+  --ed-bracket: rgba(255, 255, 255, 0.15);
+  --ed-bracket-outline: #ffffff;
+  --ed-indent-guide: rgba(255, 255, 255, 0.35);
+  --bracket-1: #ffd700;
+  --bracket-2: #da70d6;
+  --bracket-3: #87cefa;
+  --bracket-bad: #ff5555;
+
+  --tok-comment: #7ca668;
+  --tok-keyword: #569cd6;
+  --tok-control: #c586c0;
+  --tok-string: #ce9178;
+  --tok-regexp: #d16969;
+  --tok-number: #b5cea8;
+  --tok-atom: #569cd6;
+  --tok-function: #dcdcaa;
+  --tok-definition: #9cdcfe;
+  --tok-type: #4ec9b0;
+  --tok-tag: #569cd6;
+  --tok-attribute: #9cdcfe;
+  --tok-property: #9cdcfe;
+  --tok-variable: #9cdcfe;
+  --tok-operator: #d4d4d4;
+  --tok-punctuation: #ffffff;
+  --tok-meta: #c586c0;
+  --tok-heading: #6296d6;
+  --tok-link: #21a6ff;
+  color-scheme: dark;
+}
+
+/* Monokai */
+.theme-monokai {
+  --bg: #272822;
+  --bg-panel: #1e1f1c;
+  --bg-panel-alt: #3e3d32;
+  --bg-hover: #414339;
+  --bg-input: #414339;
+  --border: #3b3c35;
+  --border-strong: #75715e;
+  --text: #f8f8f2;
+  --text-dim: #ccccc7;
+  --text-faint: #90908a;
+  --accent: #66d9ef;
+  --accent-strong: #8fe5f5;
+  --accent-bg: #66d9ef;
+  --accent-dim: rgba(102, 217, 239, 0.18);
+  --accent-glow: rgba(102, 217, 239, 0.45);
+  --on-accent: #272822;
+  --error: #f92672;
+  --error-dim: rgba(249, 38, 114, 0.16);
+  --warn: #e6db74;
+  --warn-dim: rgba(230, 219, 116, 0.16);
+  --success: #a6e22e;
+  --success-dim: rgba(166, 226, 46, 0.16);
+  --info: #66d9ef;
+  --git-added: #a6e22e;
+  --git-modified: #e6db74;
+  --git-deleted: #f92672;
+  --git-untracked: #a6e22e;
+  --status-bg: #414339;
+  --status-bg-none: #5b4370;
+  --status-bg-run: #ac6218;
+  --status-fg: #f8f8f2;
+
+  --ed-bg: #272822;
+  --ed-fg: #f8f8f2;
+  --ed-caret: #f8f8f0;
+  --ed-selection: #49483e;
+  --ed-active-line: rgba(62, 61, 50, 0.7);
+  --ed-gutter-bg: #272822;
+  --ed-gutter-fg: #90908a;
+  --ed-match: rgba(117, 113, 94, 0.45);
+  --ed-word: rgba(117, 113, 94, 0.5);
+  --ed-search: rgba(255, 224, 0, 0.25);
+  --ed-search-outline: rgba(255, 224, 0, 0.6);
+  --ed-search-selected: rgba(255, 224, 0, 0.45);
+  --ed-bracket: rgba(117, 113, 94, 0.5);
+  --ed-bracket-outline: #75715e;
+  --ed-indent-guide: rgba(248, 248, 242, 0.1);
+  --bracket-1: #e6db74;
+  --bracket-2: #ae81ff;
+  --bracket-3: #66d9ef;
+  --bracket-bad: #f92672;
+
+  --tok-comment: #75715e;
+  --tok-keyword: #f92672;
+  --tok-control: #f92672;
+  --tok-string: #e6db74;
+  --tok-regexp: #e6db74;
+  --tok-number: #ae81ff;
+  --tok-atom: #ae81ff;
+  --tok-function: #a6e22e;
+  --tok-definition: #f8f8f2;
+  --tok-type: #66d9ef;
+  --tok-tag: #f92672;
+  --tok-attribute: #a6e22e;
+  --tok-property: #f8f8f2;
+  --tok-variable: #f8f8f2;
+  --tok-operator: #f92672;
+  --tok-punctuation: #f8f8f2;
+  --tok-meta: #fd971f;
+  --tok-heading: #a6e22e;
+  --tok-link: #66d9ef;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -164,6 +353,41 @@ input, select, textarea { font: inherit; color: inherit; }
 .spacer { flex: 1; }
 svg { display: block; flex-shrink: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The interface is not text to select: a long press on a button, tab or
+   label must never start a selection (it fights the app's own long-press).
+   What IS text — code, inputs, console output, messages — stays selectable. */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, select, [contenteditable], .cm-editor, .console-lines,
+.diff, .modal-message, .toast-text, .selectable { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+
+/* ---- Interaction states: one look for each, everywhere ----------------------
+   pressed   finger (or mouse) down: a darker fill, at once — touch has no hover
+   armed     waits for your next tap (Ctrl armed, pin mode): accent fill
+   active    the panel / mode that is on: accent tint, accent icon
+   disabled  can't be used now: faded, ignores taps
+   busy      working (running, cloning, syncing): a slow pulse; still tappable to stop
+   Vibration strengths (when on): ui/dom.js BUZZ — tap, armed, hold. */
+:root { --bg-pressed: color-mix(in srgb, var(--text) 16%, transparent); }
+.icon-btn:active:not(:disabled), .btn:active:not(:disabled), .menu-item:active:not(:disabled),
+.action-card:active:not(:disabled), .project-btn:active, .activity:active, .tab:active,
+.tree-row:active, .sv-nav-item:active, .sv-result-page:active, .problem-row:active { background-color: var(--bg-pressed); }
+.btn-primary:active:not(:disabled) { background-color: var(--accent-bg); filter: brightness(0.85); }
+.armed, .project-btn.armed, .icon-btn.armed { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); }
+[aria-disabled="true"] { opacity: 0.45; pointer-events: none; }
+[aria-busy="true"] { animation: busy-pulse 1.2s ease-in-out infinite; }
+@keyframes busy-pulse { 50% { opacity: 0.55; } }
+
+/* Long-press tooltip (ui/tooltips.js) */
+.tip {
+  position: fixed; z-index: 120; max-width: min(280px, calc(100vw - 16px)); padding: 6px 10px;
+  border-radius: 6px; background: var(--bg-panel-alt); color: var(--text); border: 1px solid var(--border-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35); font-size: 13px; line-height: 1.35; pointer-events: none;
+  animation: tip-in 120ms ease-out;
+}
+@keyframes tip-in { from { opacity: 0; transform: translateY(4px); } }
+.tip.below { animation-name: tip-in-below; }
+@keyframes tip-in-below { from { opacity: 0; transform: translateY(-4px); } }
 
 /* ---- App frame ---------------------------------------------------------- */
 #app {
@@ -234,7 +458,7 @@ svg { display: block; flex-shrink: 0; }
   color: var(--accent);
   font-weight: 600;
 }
-:where(.can-hover) .run-btn:hover { background: var(--accent); color: var(--on-accent); }
+:where(.can-hover) .run-btn:hover { background: var(--accent-bg); color: var(--on-accent); }
 .run-btn.running { background: var(--error-dim); border-color: var(--error); color: var(--error); }
 
 .btn {
@@ -251,7 +475,7 @@ svg { display: block; flex-shrink: 0; }
   font-size: 14px;
 }
 :where(.can-hover) .btn:hover:not(:disabled) { background: var(--bg-hover); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn-primary { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); font-weight: 600; }
 :where(.can-hover) .btn-primary:hover:not(:disabled) { background: var(--accent-strong); }
 .btn-danger { border-color: var(--error); color: var(--error); background: var(--error-dim); }
 .btn-ghost { background: transparent; border-color: transparent; }
@@ -315,11 +539,11 @@ svg { display: block; flex-shrink: 0; }
   left: -2px; top: 10px; bottom: 10px;
   width: 3px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--accent-bg);
 }
 .activity .dot {
   position: absolute; top: 8px; right: 8px;
-  min-width: 8px; height: 8px; border-radius: 4px; background: var(--accent);
+  min-width: 8px; height: 8px; border-radius: 4px; background: var(--accent-bg);
 }
 
 #sidebar {
@@ -367,6 +591,8 @@ svg { display: block; flex-shrink: 0; }
 
 /* Phones: the sidebar becomes a drawer over the editor. */
 #app.layout-compact #activitybar { display: none; }
+/* Touch screens: 24 px icons in a 56 px bar (ROADMAP Phase 3) */
+@media (pointer: coarse) { #activitybar { width: 56px; } #activitybar .activity { width: 52px; height: 52px; } #activitybar .activity svg { width: 24px; height: 24px; } }
 #app.layout-compact #sidebar-resizer { display: none; }
 #app.layout-compact #sidebar {
   position: absolute;
@@ -478,7 +704,7 @@ svg { display: block; flex-shrink: 0; }
   position: absolute;
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-bg);
 }
 :where(.can-hover) .tab.dirty .tab-close:hover svg { visibility: visible; }
 :where(.can-hover) .tab.dirty .tab-close:hover::after { display: none; }
@@ -553,6 +779,18 @@ svg { display: block; flex-shrink: 0; }
 .cm-git-gutter { width: 4px; }
 .cm-git-gutter .cm-gutterElement { padding: 0 !important; }
 .cm-git-added, .cm-git-modified { width: 3px; height: 100%; margin-left: 1px; }
+/* Bracket pairs: the mark wraps the token's own span, so colour that too (and outrank .tok-punctuation). */
+.cm-bp.cm-bp0, .cm-bp.cm-bp0 > * { color: var(--bracket-1); }
+.cm-bp.cm-bp1, .cm-bp.cm-bp1 > * { color: var(--bracket-2); }
+.cm-bp.cm-bp2, .cm-bp.cm-bp2 > * { color: var(--bracket-3); }
+.cm-bp.cm-bp-bad, .cm-bp.cm-bp-bad > * { color: var(--bracket-bad); }
+/* Indent guides: one 1px line per level, at columns 0, step, 2·step… (6px = the line's own left padding) */
+.cm-line.cm-ig {
+  background-image: repeating-linear-gradient(to right, var(--ed-indent-guide) 0 1px, transparent 1px var(--ig-step));
+  background-size: calc(var(--ig-n) * var(--ig-step)) 100%;
+  background-repeat: no-repeat;
+  background-position: 6px 0;
+}
 .cm-git-added { background: var(--git-added); }
 .cm-git-modified { background: var(--git-modified); }
 .cm-git-deleted { width: 0; height: 0; margin-top: calc(100% - 4px); border-left: 5px solid var(--git-deleted); border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
@@ -599,12 +837,13 @@ svg { display: block; flex-shrink: 0; }
 .cm-fastscroll::before { top: 17px; }
 .cm-fastscroll::after { top: 23px; }
 .cm-fastscroll.visible, .cm-fastscroll.dragging { opacity: 1; pointer-events: auto; }
-.cm-fastscroll.dragging { background: var(--accent); }
+.cm-fastscroll.dragging { background: var(--accent-bg); }
 @media (pointer: fine) { .cm-fastscroll { display: none; } }
 
 /* Syntax colours (classes come from editor/theme.js) */
 .tok-comment { color: var(--tok-comment); font-style: italic; }
 .tok-keyword { color: var(--tok-keyword); }
+.tok-control { color: var(--tok-control, var(--tok-keyword)); }
 .tok-string { color: var(--tok-string); }
 .tok-regexp { color: var(--tok-regexp); }
 .tok-number { color: var(--tok-number); }
@@ -633,6 +872,17 @@ svg { display: block; flex-shrink: 0; }
 
 /* ---- Welcome / project picker -------------------------------------------- */
 .welcome { max-width: 640px; margin: 0 auto; padding: 24px 18px 40px; }
+.welcome-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.welcome-hero .sub { margin: 0; }
+.welcome-logo { flex-shrink: 0; width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--accent); }
+.welcome-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.welcome-links .btn { display: inline-flex; align-items: center; gap: 6px; }
+.project-row .pr-icon { color: var(--accent); display: flex; }
+/* The welcome screen settles in: each block rises a little, one after another. */
+.welcome > * { animation: rise-in 240ms ease-out both; }
+.welcome > :nth-child(2) { animation-delay: 30ms; } .welcome > :nth-child(3) { animation-delay: 60ms; }
+.welcome > :nth-child(4) { animation-delay: 90ms; } .welcome > :nth-child(n+5) { animation-delay: 120ms; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(8px); } }
 .welcome h1 { font-size: 22px; margin: 4px 0 2px; }
 .welcome .sub { color: var(--text-dim); margin: 0 0 18px; line-height: 1.5; }
 .welcome h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); margin: 22px 0 8px; }
@@ -702,11 +952,13 @@ kbd {
 .tree-row.open .twisty { transform: rotate(90deg); }
 .tree-row .tname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-row .tbadge { font-size: 11px; font-weight: 700; padding: 0 4px; }
-.tree-row .tbadge.M { color: var(--git-modified); }
-.tree-row .tbadge.A, .tree-row .tbadge.U { color: var(--git-added); }
-.tree-row .tbadge.D { color: var(--git-deleted); }
+.tree-row .tbadge.M, .tree-row[data-git="M"] .tname, .tree-row[data-git="dir"] .tname { color: var(--git-modified); }
+.tree-row .tbadge.A, .tree-row[data-git="A"] .tname { color: var(--git-added); }
+.tree-row .tbadge.U, .tree-row[data-git="U"] .tname { color: var(--git-untracked); }
+.tree-row .tbadge.D, .tree-row[data-git="D"] .tname { color: var(--git-deleted); text-decoration: line-through; }
 .tree-row.dirty .tname::after { content: ' ●'; color: var(--accent); }
-.file-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800; border-radius: 4px; flex-shrink: 0; font-family: var(--font-mono); }
+.file-icon { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.file-icon.fi-pending { color: var(--text-faint); }
 @media (pointer: coarse) { .tree-row { min-height: 38px; } }
 
 /* ---- Search / outline / history / git panels ------------------------------------ */
@@ -769,7 +1021,7 @@ kbd {
 .git-file .gname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .git-file .gdir { color: var(--text-faint); font-size: 11px; margin-left: 6px; }
 .git-status { width: 18px; text-align: center; font-weight: 700; font-family: var(--font-mono); font-size: 12px; }
-.git-status.M { color: var(--git-modified); } .git-status.A, .git-status.U { color: var(--git-added); } .git-status.D { color: var(--git-deleted); }
+.git-status.M { color: var(--git-modified); } .git-status.A { color: var(--git-added); } .git-status.U { color: var(--git-untracked); } .git-status.D { color: var(--git-deleted); }
 .commit-row { padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
 .commit-row .cmsg { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .commit-row .cmeta { color: var(--text-faint); font-size: 11.5px; font-family: var(--font-mono); }
@@ -869,6 +1121,7 @@ kbd {
 .setting .s-text { flex: 1; min-width: 0; }
 .setting .s-label { font-size: 13.5px; }
 .setting .s-desc { font-size: 12px; color: var(--text-faint); margin-top: 2px; line-height: 1.4; }
+.s-desc.credits a { color: var(--accent); }
 .setting select, .setting input[type=number] { width: auto; min-width: 96px; max-width: 55%; }
 .setting input[type=number] { width: 84px; min-width: 0; }
 .switch { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
@@ -876,7 +1129,7 @@ kbd {
 .switch span { position: absolute; inset: 0; border-radius: 12px; background: var(--bg-hover); border: 1px solid var(--border); transition: background 0.15s; }
 .switch span::after { content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; border-radius: 50%; background: var(--text-dim); transition: transform 0.15s, background 0.15s; }
 .switch input:checked + span { background: var(--accent-dim); border-color: var(--accent); }
-.switch input:checked + span::after { transform: translateX(18px); background: var(--accent); }
+.switch input:checked + span::after { transform: translateX(18px); background: var(--accent-bg); }
 .gesture-pad {
   margin: 6px 14px 10px; min-height: 120px; border: 1px dashed var(--border-strong, var(--border)); border-radius: 10px;
   background: var(--bg-panel-alt); display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -911,7 +1164,7 @@ kbd {
 .panel-head::before { /* grip */
   content: ''; position: absolute; top: 3px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--border);
 }
-#bottom-panel.resizing .panel-head::before { background: var(--accent); }
+#bottom-panel.resizing .panel-head::before { background: var(--accent-bg); }
 .panel-head .spacer { flex: 1 1 0; min-width: 4px; }
 .panel-tabs { display: flex; height: 100%; min-width: 0; flex: 0 1 auto; overflow-x: auto; scrollbar-width: none; }
 .panel-tabs::-webkit-scrollbar { display: none; }
@@ -978,10 +1231,10 @@ kbd {
   align-items: center;
   height: var(--statusbar-h);
   padding: 0 4px;
-  background: var(--bg-panel);
-  border-top: 1px solid var(--border);
+  background: var(--status-bg);
+  border-top: 1px solid var(--status-border);
   font-size: 12px;
-  color: var(--text-dim);
+  color: var(--status-fg);
   flex-shrink: 0;
   overflow-x: auto;
   white-space: nowrap;
@@ -1004,11 +1257,17 @@ kbd {
   font-size: 12px;
   border-radius: 4px;
 }
-:where(.can-hover) button.sb-item:hover { background: var(--bg-hover); color: var(--text); }
-.sb-item.warn { color: var(--warn); }
-.sb-item.err { color: var(--error); }
-.sb-item.on { color: var(--accent); }
+#statusbar.sb-none { background: var(--status-bg-none); border-top-color: var(--status-border-none, var(--status-border)); }
+#statusbar.sb-running { background: var(--status-bg-run); border-top-color: var(--status-border-run, var(--status-border)); }
+/* On a coloured bar text stays white; state shows as a tinted chip instead. */
+:where(.can-hover) button.sb-item:hover { background: rgba(255, 255, 255, 0.12); }
+.sb-item:active { background: rgba(255, 255, 255, 0.2); }
+.sb-item.warn { background: var(--status-warn-bg); }
+.sb-item.err { background: var(--status-err-bg); }
+.sb-item.on { background: rgba(255, 255, 255, 0.16); }
 .sb-item svg { width: 14px; height: 14px; }
+.sb-item > span { display: inline-flex; }
+.sb-item .sb-gap { margin-left: 6px; }
 
 /* ---- Coding keys bar (ui/keysBar.js) --------------------------------------
    Rows of equal keys (≥ 44 px on a 360 px phone), no sideways scrolling;
@@ -1073,21 +1332,21 @@ kbd {
 .key.action { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .key.ctx-text { font-size: 13.5px; }
 .key.empty { visibility: hidden; }
-.key.mod.armed, .key.mod-key.armed, .key.mod-key.has-mods { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 0 10px var(--accent-glow); }
+.key.mod.armed, .key.mod-key.armed, .key.mod-key.has-mods { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); box-shadow: 0 0 10px var(--accent-glow); }
 .key.mod.locked { outline: 2px solid var(--on-accent); outline-offset: -5px; }
 /* a held / swiped key: the same "armed" look everywhere */
-.key.swiped, .key.holding { background: var(--accent); border-color: var(--accent); color: var(--on-accent); transform: scale(1.06); }
+.key.swiped, .key.holding { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); transform: scale(1.06); }
 .key.swiped .alt, .key.holding .alt, .key.holding .key-sub { color: var(--on-accent); }
 .key.joystick .joy-arrows { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-faint); opacity: 0.6; pointer-events: none; }
 .key.joystick .knob { position: relative; width: 14px; height: 14px; border-radius: 50%; background: var(--text-dim); box-shadow: 0 0 0 3px var(--bg-panel-alt); transition: transform 70ms; pointer-events: none; }
-.key.joystick.active .knob { background: var(--accent); transition: none; }
+.key.joystick.active .knob { background: var(--accent-bg); transition: none; }
 .key.joystick.at-edge .knob { background: var(--warn); }
 .key.joystick.selecting { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .key-preview {
   position: fixed; z-index: 95; transform: translate(-50%, -100%); pointer-events: none;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   min-width: calc(54px * var(--ui-zoom, 1)); padding: calc(6px * var(--ui-zoom, 1)) calc(10px * var(--ui-zoom, 1));
-  border-radius: 12px; background: var(--accent); color: var(--on-accent);
+  border-radius: 12px; background: var(--accent-bg); color: var(--on-accent);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); animation: key-pop 90ms ease-out;
 }
 .key-preview-char { font-family: var(--font-mono); font-size: calc(26px * var(--ui-zoom, 1)); line-height: 1.1; font-weight: 600; }
@@ -1105,7 +1364,7 @@ kbd {
   display: flex; align-items: center; justify-content: center; border-radius: 8px;
   font-family: var(--font-mono); font-size: calc(16px * var(--ui-zoom, 1)); color: var(--text); background: var(--bg-panel-alt); white-space: nowrap;
 }
-.key-choice.on { background: var(--accent); color: var(--on-accent); transform: scale(1.08); }
+.key-choice.on { background: var(--accent-bg); color: var(--on-accent); transform: scale(1.08); }
 @keyframes key-fan { from { transform: translateY(10px) scale(0.9); opacity: 0.3; } }
 /* the "More" sheet: every key, grouped */
 .keys-sheet { max-height: calc(45vh / var(--ui-zoom, 1)); overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid var(--border); padding: 0 2px 6px; }
@@ -1114,7 +1373,7 @@ kbd {
 .keys-sheet-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .keys-sheet-head .key { flex: 0 0 auto; min-width: 44px; padding: 0 8px; }
 .keys-sheet.pinning .keys-sheet-name { color: var(--accent); }
-.key.pin-key.armed { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.key.pin-key.armed { background: var(--accent-bg); border-color: var(--accent-bg); color: var(--on-accent); }
 .keys-sheet-title { font-family: var(--font-ui); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 8px 2px 4px; }
 .keys-sheet-keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; }
 .keys-sheet .key { touch-action: pan-y; }
@@ -1216,7 +1475,7 @@ html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto t
 
 #toasts { position: fixed; left: 50%; bottom: calc(var(--statusbar-h) + 16px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; z-index: 90; width: min(480px, calc(100vw - 24px)); pointer-events: none; }
 .toast { pointer-events: auto; padding: 10px 14px; border-radius: 10px; background: var(--bg-panel-alt); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); font-size: 13.5px; line-height: 1.4; animation: toast-in 0.18s ease; }
-.toast-action { margin-left: 12px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 13px; }
+.toast-action { margin-left: 12px; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent-bg); color: var(--on-accent); font-weight: 600; font-size: 13px; }
 .toast-error { border-color: var(--error); }
 .toast-warn { border-color: var(--warn); }
 .toast-success { border-color: var(--success); }
@@ -1230,7 +1489,7 @@ html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto t
   transform: translateX(-50%) scale(0.9);
   padding: 6px 14px;
   border-radius: 16px;
-  background: var(--accent);
+  background: var(--accent-bg);
   color: var(--on-accent);
   font-weight: 700;
   font-size: 13px;
@@ -1255,4 +1514,33 @@ html.drag-moving .toast { pointer-events: none; } /* drop through a toast onto t
 @media (max-width: 380px) {
   #titlebar { padding: 0 2px; }
   .icon-btn { min-width: 36px; padding: 0 6px; }
+}
+
+/* ---- View modes ----------------------------------------------------------------
+   Zen: only the code and the keys bar (exit: Esc Esc, or the corner button).
+   title-hidden: the phone's title bar slides up while the code scrolls down. */
+#app.zen #titlebar, #app.zen #activitybar, #app.zen #sidebar, #app.zen #sidebar-resizer, #app.zen #scrim,
+#app.zen .tab-bar, #app.zen .crumbs, #app.zen #statusbar, #app.zen #bottom-panel { display: none !important; }
+#zen-exit { display: none; }
+#app.zen #zen-exit {
+  display: inline-flex; position: fixed; z-index: 30; top: calc(6px + env(safe-area-inset-top)); right: 6px;
+  background: var(--bg-panel-alt); border: 1px solid var(--border-strong); opacity: 0.75;
+}
+#titlebar { transition: margin-top 180ms ease; }
+#app.layout-compact.title-hidden #titlebar { margin-top: calc(-1 * var(--titlebar-h)); }
+
+/* ---- Motion ------------------------------------------------------------------
+   Small entrances only (menus, dialogs, toasts, tooltips: 90–160 ms). With the
+   system's "reduce motion" / "remove animations" on, nothing moves. */
+.popup-menu { animation: menu-in 110ms ease-out; } /* opacity only: the menu is measured to fit the screen */
+@keyframes menu-in { from { opacity: 0; } }
+.modal { animation: modal-in 160ms ease-out; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
 }

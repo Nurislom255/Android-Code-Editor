@@ -9,7 +9,7 @@ import { indentSelection } from '@codemirror/commands';
 import { Workspace, minimalChange, externalAnno } from './workspace.js';
 import { PreviewController } from './previewController.js';
 import { renderTabBar, renderCrumbs, renderConflict, renderStatus, renderWelcome, gestureCheatSheet } from './chrome.js';
-import { normalizeSettings, ignoreNames, GESTURE_ACTIONS, DEFAULTS } from '../core/settings.js';
+import { normalizeSettings, ignoreNames, GESTURE_ACTIONS, DEFAULTS, themeClasses, THEMES } from '../core/settings.js';
 import { comboFromEvent, effectiveKey, resolveCombo, parseCombo, normalizeBindings } from '../core/keybindings.js';
 import { IgnoreRules } from '../core/ignore.js';
 import { dirname, basename, join, validateName, normalize } from '../core/paths.js';
@@ -20,7 +20,7 @@ import { walkFiles, isFolderPickerSupported, isOpfsSupported } from '../storage/
 import { getCapacitorFilesystem } from '../storage/capacitorFs.js';
 import {
   listProjects, createBrowserProject, deleteBrowserProject, pickFolderProject, deviceProject, fsForProject,
-  touchProject, forgetProject, permissionState, requestFolderPermission, requestPersistentStorage,
+  touchProject, forgetProject, renameProject, permissionState, requestFolderPermission, requestPersistentStorage,
 } from '../storage/projects.js';
 import { LANGUAGES, PLAIN } from '../editor/languages.js';
 import * as E from '../editor/editActions.js';
@@ -30,7 +30,7 @@ import { attachGestures, attachStripSwipe } from '../editor/gestureLayer.js';
 import { symbolsFor } from '../editor/viewPlugins.js';
 import { flattenSymbols } from '../editor/outline.js';
 import { syntaxDiagnostics } from '../editor/syntaxLint.js';
-import { h, icon, $, $$, hydrateIcons, debounce, haptic, formatTime, trackHoverInput } from '../ui/dom.js';
+import { h, icon, $, $$, hydrateIcons, debounce, haptic, formatTime, trackHoverInput, onLongPress } from '../ui/dom.js';
 import { choose, confirm, prompt, toast, popupMenu, showModal, isModalOpen, closeMenus } from '../ui/overlays.js';
 import { Layout } from '../ui/layout.js';
 import { Palette } from '../ui/palette.js';
@@ -39,6 +39,7 @@ import { SearchPanel, OutlinePanel, HistoryPanel, showDiff } from '../ui/panels.
 import { GitPanel, loadGit } from '../ui/gitPanel.js';
 import { BottomPanel } from '../ui/bottomPanel.js';
 import { KeysBar } from '../ui/keysBar.js';
+import { installTooltips } from '../ui/tooltips.js';
 import { JsRunner } from '../run/jsRunner.js';
 import { formatText, canFormat } from '../run/format.js';
 import { BOILERPLATE_FILES, CONSOLE_STARTER } from '../core/boilerplate.js';
@@ -60,6 +61,7 @@ export class App {
     this.recentFiles = [];
     this.problemCounts = { errors: 0, warnings: 0 };
     hydrateIcons();
+    installTooltips({ getSettings: () => this.settings });
     trackHoverInput();
     this.applyTheme();
     this.applyFont();
@@ -192,13 +194,12 @@ export class App {
   }
 
   applyTheme() {
-    const t = this.settings.theme === 'system'
-      ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
-      : this.settings.theme;
-    document.documentElement.classList.toggle('theme-dark', t === 'dark');
-    document.documentElement.classList.toggle('theme-light', t === 'light');
+    const html = document.documentElement;
+    const want = themeClasses(this.settings.theme, matchMedia('(prefers-color-scheme: light)').matches);
+    for (const c of [...html.classList]) if (c.startsWith('theme-') && !want.includes(c)) html.classList.remove(c);
+    html.classList.add(...want);
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = t === 'dark' ? '#14161a' : '#ffffff';
+    if (meta) meta.content = getComputedStyle(html).getPropertyValue('--bg-panel').trim() || '#181818';
     if (!this._themeWatch) {
       this._themeWatch = true;
       matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if (this.settings.theme === 'system') this.applyTheme(); });
@@ -679,7 +680,7 @@ export class App {
       this.closeProjectModal();
     } catch (err) {
       toast(`Clone failed: ${err.message}. Private repos need a token (use Pull after setting the remote), and browsers need the CORS proxy from Settings → Git.`, 'error');
-      await deleteBrowserProject(name).catch(() => {});
+      await deleteBrowserProject(meta).catch(() => {});
     }
   }
 
@@ -687,8 +688,9 @@ export class App {
     const card = (iconName, title, desc, run, enabled = true) => h('button.action-card', { type: 'button', disabled: !enabled, onclick: run }, h('span', { html: icon(iconName, 22) }), h('span.ac-text', h('span.ac-title', title), h('span.ac-desc', desc)));
     const list = h('div.project-list');
     const view = h('div.welcome',
-      h('h1', 'CodeEditor'),
-      h('p.sub', 'An offline code editor for phones and tablets. Swipe right on the code to autocomplete; long-press anything for more.'),
+      h('div.welcome-hero',
+        h('img.welcome-logo', { src: 'icons/icon.svg', alt: '', width: 48, height: 48 }),
+        h('div', h('h1', 'CodeEditor'), h('p.sub', 'An offline code editor for phones and tablets. Swipe right on the code to autocomplete; long-press anything for more.'))),
       this.pendingReconnect ? h('div.project-row', h('div.pr-main', h('span.pr-name', `Reopen “${this.pendingReconnect.name}”`), h('span.pr-meta', 'The browser needs your permission again for this folder.')),
         h('button.btn.btn-primary', { type: 'button', onclick: () => this.reconnect(this.pendingReconnect) }, 'Reconnect')) : null,
       h('h3', 'Start'),
@@ -702,6 +704,11 @@ export class App {
         card('file', 'Open files', 'Edit single files without a project', () => this.openLooseFiles()),
         card('newFile', 'Scratch file', 'An unsaved buffer to try things', () => { this.ws.newUntitled({ name: 'scratch.js', langId: 'javascript' }); this.closeProjectModal(); })),
       h('h3', 'Recent projects'), list,
+      h('h3', 'Make it yours'),
+      h('div.welcome-links',
+        h('button.btn.btn-small', { type: 'button', onclick: () => { this.closeProjectModal(); this.pickTheme(); } }, h('span', { html: icon('eye', 14) }), `Theme: ${THEMES[this.settings.theme] || 'Follow the phone'}`),
+        h('button.btn.btn-small', { type: 'button', onclick: () => { this.closeProjectModal(); this.openSettings('keysbar'); } }, 'Keys bar'),
+        h('button.btn.btn-small', { type: 'button', onclick: () => { this.closeProjectModal(); this.openSettings(); } }, h('span', { html: icon('settings', 14) }), 'Settings')),
     );
     listProjects().then((projects) => {
       this.knownProjects = projects;
@@ -710,13 +717,14 @@ export class App {
       for (const p of projects) {
         const kind = { browser: 'In-app storage', folder: 'Folder on this device', device: `Device: ${p.rootPath}` }[p.kind];
         list.append(h('div.project-row',
+          h('span.pr-icon', { html: icon(p.kind === 'browser' ? 'folder' : p.kind === 'device' ? 'device' : 'folderOpen', 18) }),
           h('button.pr-main', { type: 'button', onclick: async () => { if (p.kind === 'folder' && (await permissionState(p)) !== 'granted') await this.reconnect(p); else await this.openProject(p); this.closeProjectModal(); } },
             h('span.pr-name', p.name), h('span.pr-meta', `${kind}${p.lastOpened ? ` · ${formatTime(p.lastOpened)}` : ''}`)),
           h('button.icon-btn.small', { type: 'button', 'aria-label': `Remove ${p.name}`, title: p.kind === 'browser' ? 'Delete project' : 'Forget', icon: 'trash', onclick: async () => {
             if (p.kind === 'browser') {
               if (!(await confirm(`Delete “${p.name}”?`, 'This permanently deletes the project and all its files from this device. Export it as .zip first if you need a copy.', 'Delete', 'danger'))) return;
               if (this.project && this.project.meta.id === p.id) { await this.ws.closeAll({ force: true }); this.project = null; await this.ws.setProject(null); this.tree.reset(); }
-              await deleteBrowserProject(p.name);
+              await deleteBrowserProject(p);
             } else {
               await forgetProject(p.id);
             }
@@ -726,6 +734,68 @@ export class App {
       }
     });
     return view;
+  }
+
+  /** Long-press / right-click on the project name. */
+  projectMenu() {
+    const btn = $('#btn-project');
+    const r = btn.getBoundingClientRect();
+    const p = this.project;
+    btn.classList.add('armed');
+    popupMenu([
+      { label: 'Rename project…', icon: 'rename', run: () => this.renameCurrentProject(), disabled: !p },
+      { label: 'Switch project…', icon: 'folder', run: () => this.showProjectModal() },
+      { label: 'New project…', icon: 'plus', run: () => this.newBrowserProject(), disabled: !isOpfsSupported() },
+      { label: 'Import .zip as project…', icon: 'zip', run: () => $('#zip-input').click(), disabled: !isOpfsSupported() },
+      { label: 'Import folder as project…', icon: 'upload', run: () => $('#folder-input').click(), disabled: !isOpfsSupported() },
+      { label: 'Export project as .zip', icon: 'download', run: () => this.exportZip(), disabled: !p },
+      '-',
+      { label: 'Close project', icon: 'close', run: () => this.closeProject(), disabled: !p },
+      p && p.meta.kind === 'browser' ? { label: 'Delete project…', icon: 'trash', danger: true, run: () => this.deleteCurrentProject() } : null,
+    ].filter(Boolean), { x: r.left, y: r.bottom, onClose: () => btn.classList.remove('armed') });
+  }
+
+  async renameCurrentProject() {
+    const p = this.project;
+    if (!p) return;
+    const name = await prompt({
+      title: 'Rename project', label: 'Project name', value: p.meta.name, okLabel: 'Rename', validate: validateName,
+      message: p.meta.kind === 'browser' ? null : 'Only the name shown in this app changes; the folder keeps its name.',
+    });
+    if (!name || name === p.meta.name) return;
+    try {
+      p.meta = await renameProject(p.meta, name);
+    } catch (err) { toast(err.message, 'error'); return; }
+    if (p.fs) p.fs.name = p.meta.name;
+    $('#files-title').textContent = p.meta.name;
+    renderWelcome(this, 0);
+    this.renderAll();
+    toast(`Renamed to “${p.meta.name}”.`, 'success', 1500);
+  }
+
+  async closeProject() {
+    if (!this.project) return;
+    this.project = null;
+    await this.ws.setProject(null);
+    await this.tree.reset();
+    this.gitBadges = new Map();
+    this.gitBranch = null;
+    this.fileCache = null;
+    try { await kv.set('lastProject', null); } catch { /* ignore */ }
+    $('#files-title').textContent = 'Files';
+    renderWelcome(this, 0);
+    this.renderAll();
+    this.git.refresh().catch(() => {});
+  }
+
+  async deleteCurrentProject() {
+    const p = this.project;
+    if (!p || p.meta.kind !== 'browser') return;
+    if (!(await confirm(`Delete “${p.meta.name}”?`, 'This permanently deletes the project and all its files from this device. Export it as .zip first if you need a copy.', 'Delete', 'danger'))) return;
+    await this.ws.closeAll({ force: true });
+    await this.closeProject();
+    await deleteBrowserProject(p.meta).catch((err) => toast(err.message, 'error'));
+    renderWelcome(this, 0);
   }
 
   showProjectModal() {
@@ -980,6 +1050,8 @@ export class App {
     this.bottom.system(`▶ ${filename}  (time limit ${this.settings.runTimeLimit}s)`);
     $('#btn-run').classList.add('running');
     this.bottom.setRunning(true);
+    this.codeRunning = true;
+    renderStatus(this);
     this.lastRun = doc.id;
     this.runner.run({
       code, filename,
@@ -999,6 +1071,8 @@ export class App {
       onExit: (status, ms) => {
         $('#btn-run').classList.remove('running');
         this.bottom.setRunning(false);
+        this.codeRunning = false;
+        renderStatus(this);
         const msg = { done: `✓ Finished in ${ms} ms`, stopped: `■ Stopped after ${ms} ms`, timeout: `⏱ Stopped: time limit of ${this.settings.runTimeLimit}s reached (infinite loop?)`, error: '✖ Could not run' }[status];
         this.bottom.log({ level: status === 'done' ? 'system' : 'warn', text: msg });
       },
@@ -1217,6 +1291,9 @@ export class App {
       openFolder: { label: 'Open folder…', run: () => (isFolderPickerSupported() ? this.openFolder() : toast('This browser cannot open device folders; use a project or Import.', 'warn')) },
       importZip: { label: 'Import .zip as project…', run: () => $('#zip-input').click() },
       exportZip: { label: 'Export project as .zip', run: () => this.exportZip() },
+      renameProject: { label: 'Rename project…', run: () => (this.project ? this.renameCurrentProject() : toast('No project is open.', 'warn')) },
+      closeProject: { label: 'Close project', run: () => this.closeProject() },
+      projectActions: { label: 'Project actions…', run: () => this.projectMenu() },
       cloneRepo: { label: 'Git: clone repository…', run: () => this.cloneRepo() },
       // navigation & view
       commandPalette: { label: 'Command palette', key: 'Ctrl+Shift+P', run: () => { this.palette.open('>'); return 'Command palette'; } },
@@ -1227,6 +1304,8 @@ export class App {
       nextTab: { label: 'Next tab', key: 'Ctrl+Tab', run: tabStep(1) },
       prevTab: { label: 'Previous tab', key: 'Ctrl+Shift+Tab', run: tabStep(-1) },
       toggleSidebar: { label: 'Toggle sidebar', key: 'Ctrl+B', run: () => this.layout.toggleSidebar() },
+      toggleZen: { label: 'View: Zen mode (only code + keys bar)', key: 'Ctrl+Alt+Z', run: () => this.toggleZen() },
+      toggleFullscreen: { label: 'View: Toggle fullscreen', key: 'F11', run: () => this.toggleFullscreen() },
       showFiles: { label: 'Show files', run: () => this.showPanel('files') },
       searchProject: { label: 'Search in project', key: 'Ctrl+Shift+F', run: () => this.showPanel('search', { focus: true }) },
       showOutline: { label: 'Show outline', run: () => this.showPanel('outline') },
@@ -1241,6 +1320,7 @@ export class App {
       zoomOut: { label: 'Zoom out (font)', key: 'Ctrl+-', run: zoom(-1) },
       zoomReset: { label: 'Reset font size', key: 'Ctrl+0', run: zoom(0) },
       toggleTheme: { label: 'Toggle dark / light theme', run: () => this.updateSettings({ theme: document.documentElement.classList.contains('theme-dark') ? 'light' : 'dark' }) },
+      pickTheme: { label: 'Color theme…', run: () => this.pickTheme() },
       shortcuts: { label: 'Keyboard shortcuts', run: () => this.showShortcuts() },
       gestureGuide: { label: 'Touch gestures guide', run: () => this.showGestureGuide() },
       // run
@@ -1282,6 +1362,14 @@ export class App {
     return flattenSymbols(symbolsFor(this.ws.view.state)).map((s) => ({ label: s.name, detail: `${s.kind} · line ${s.line}`, run: () => this.ws.revealPos(d.id, s.from) }));
   }
 
+  async pickTheme() {
+    const items = [['system', 'Follow the phone (Dark / Light Modern)'], ...Object.entries(THEMES)].map(([id, label]) => ({ id, label, detail: id === this.settings.theme ? 'current' : '' }));
+    const before = this.settings.theme;
+    const pick = await this.palette.pick(items, { placeholder: 'Select color theme' });
+    this.updateSettings({ theme: pick ? pick.id : before });
+    if (!this.project) renderWelcome(this, 0); // its "Theme: …" button
+  }
+
   async pickLanguage() {
     const d = this.ws.activeDoc;
     if (!d) return;
@@ -1317,13 +1405,18 @@ export class App {
       ['Alt-Shift-f', 'format'], ['Mod-=', 'zoomIn'], ['Mod-+', 'zoomIn'], ['Mod--', 'zoomOut'], ['Mod-0', 'zoomReset'],
       ['Ctrl-Tab', 'nextTab'], ['Ctrl-Shift-Tab', 'prevTab'], ['Alt-PageDown', 'nextTab'], ['Alt-PageUp', 'prevTab'],
       ['Alt-w', 'closeTab'], ['Ctrl-Alt--', 'navigateBack'], ['Ctrl-Shift--', 'navigateForward'], ['Mod-j', 'toggleConsole'],
-      ['Mod-Shift-e', 'showFiles'], ['Mod-Shift-g', 'showGit'],
+      ['Mod-Shift-e', 'showFiles'], ['Mod-Shift-g', 'showGit'], ['Mod-Alt-z', 'toggleZen'], ['F11', 'toggleFullscreen'],
       // Editor-only, but listed here because on Android the editor sees
       // Enter without its modifiers (CodeMirror re-dispatches it).
       ['Mod-Enter', 'newlineBelow'], ['Mod-Shift-Enter', 'completeStatement'], ['Mod-Alt-Enter', 'newlineAbove'],
     ].map(([k, cmd]) => [parseKey(k), cmd]);
     this.shortcutTable = map;
     document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.zen) {
+        const now = Date.now();
+        if (now - (this._zenEsc || 0) < 600) { this._zenEsc = 0; this.toggleZen(false); return; }
+        this._zenEsc = now;
+      }
       if (e.key === 'Escape') {
         closeMenus();
         if (this.palette.isOpen) { this.palette.close(); return; }
@@ -1394,6 +1487,7 @@ export class App {
   bindTitlebar() {
     $('#btn-sidebar').addEventListener('click', () => this.layout.toggleSidebar());
     $('#btn-project').addEventListener('click', () => this.showProjectModal());
+    onLongPress($('#btn-project'), () => this.projectMenu(), { getSettings: () => this.settings });
     $('#btn-back').addEventListener('click', () => this.run('navigateBack'));
     $('#btn-forward').addEventListener('click', () => this.run('navigateForward'));
     // pointerdown + preventDefault keeps focus (and the soft keyboard) in the editor.
@@ -1404,9 +1498,81 @@ export class App {
     }
     $('#btn-split').addEventListener('click', () => this.run('split'));
     $('#btn-palette').addEventListener('click', () => this.palette.open('>'));
+    $('#btn-fullscreen').addEventListener('click', () => this.toggleFullscreen());
+    document.addEventListener('fullscreenchange', () => {
+      const on = !!document.fullscreenElement;
+      const b = $('#btn-fullscreen');
+      b.innerHTML = icon(on ? 'minimize' : 'maximize');
+      b.title = on ? 'Leave fullscreen (F11)' : 'Fullscreen (F11)';
+      b.classList.toggle('active', on);
+    });
+    this.bindTitleAutoHide();
     $('#btn-run').addEventListener('click', () => this.run('run'));
     $('#zip-input').addEventListener('change', (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) this.importZip(f); });
     $('#folder-input').addEventListener('change', (e) => { const files = [...e.target.files]; e.target.value = ''; this.importFolderFiles(files); });
+  }
+
+  // ---- view modes: Zen, fullscreen, the title bar sliding away ---------------------
+
+  /** Zen: only the code and the keys bar. Leave with Esc Esc or the corner button. */
+  toggleZen(on = !this.zen) {
+    this.zen = on;
+    const app = $('#app');
+    app.classList.toggle('zen', on);
+    if (on) {
+      this.layout.closeDrawer();
+      if (!$('#zen-exit')) {
+        app.append(h('button#zen-exit.icon-btn', { type: 'button', 'aria-label': 'Leave Zen mode', title: 'Leave Zen mode (Esc Esc)', html: icon('minimize'), onclick: () => this.toggleZen(false) }));
+      }
+    }
+    this.showTitle();
+    this.layout.syncHeight && this.layout.syncHeight();
+    return on ? 'Zen mode — Esc Esc to leave' : 'Zen mode off';
+  }
+
+  async toggleFullscreen() {
+    if (!document.fullscreenEnabled) {
+      toast('Fullscreen is not available here. In the Android app it needs a native plugin (see README); Zen mode works everywhere.', 'warn', 6000);
+      return null;
+    }
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    } catch (err) {
+      toast(`Fullscreen failed: ${err.message}`, 'error');
+    }
+    return 'Fullscreen';
+  }
+
+  showTitle() { $('#app').classList.remove('title-hidden'); }
+
+  /**
+   * Phone: scrolling the code down slides the title bar away, scrolling up
+   * brings it back, like a browser's address bar. Only the owner's own
+   * scrolling counts (finger or wheel), not the editor following the cursor.
+   */
+  bindTitleAutoHide() {
+    const app = $('#app');
+    const area = $('#editor-area');
+    let userAt = 0;
+    let fingerDown = false;
+    const tops = new WeakMap();
+    area.addEventListener('touchstart', () => { fingerDown = true; userAt = Date.now(); }, { passive: true });
+    area.addEventListener('touchmove', () => { userAt = Date.now(); }, { passive: true });
+    area.addEventListener('touchend', () => { fingerDown = false; userAt = Date.now(); }, { passive: true });
+    area.addEventListener('wheel', () => { userAt = Date.now(); }, { passive: true });
+    area.addEventListener('scroll', (e) => {
+      const el = e.target;
+      if (!el.classList || !el.classList.contains('cm-scroller')) return;
+      const prev = tops.has(el) ? tops.get(el) : el.scrollTop;
+      const dy = el.scrollTop - prev;
+      tops.set(el, el.scrollTop);
+      if (!this.settings.autoHideTitle || !this.layout.compact || this.zen) return;
+      if (el.scrollTop < 8) { this.showTitle(); return; }
+      if (!fingerDown && Date.now() - userAt > 1200) return; // the editor scrolled itself
+      if (dy > 6) app.classList.add('title-hidden');
+      else if (dy < -6) this.showTitle();
+    }, { capture: true, passive: true });
   }
 
   bindLifecycle() {

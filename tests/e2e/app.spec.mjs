@@ -28,35 +28,7 @@ test('scratch file works without any project', async ({ page }) => {
   await expect(page.locator('#console-view .console-line', { hasText: '42', hasNotText: 'Finished' })).toHaveCount(1); // not "✓ Finished in 42 ms"
 });
 
-test('a 5,000-line file stays responsive while typing (spec §8 benchmark)', async ({ page }) => {
-  await boot(page);
-  await newProject(page, 'big', 'empty');
-  const lines = [];
-  for (let i = 0; i < 5000; i++) lines.push(i % 10 === 0 ? `function f${i}(a, b) {` : i % 10 === 9 ? '}' : `  const v${i} = a * ${i} + b; // line ${i}`);
-  await writeProjectFile(page, 'big.js', lines.join('\n') + '\n');
-  await openFile(page, 'big.js');
-  await page.evaluate(() => { const v = window.__app.ws.view; v.dispatch({ selection: { anchor: Math.floor(v.state.doc.length / 2) }, scrollIntoView: true }); v.focus(); });
-  // Time from keystroke to the next painted frame: the median of 40 keys.
-  const measure = () => page.evaluate(async () => {
-    const v = window.__app.ws.view;
-    const times = [];
-    for (let i = 0; i < 40; i++) {
-      const t = performance.now();
-      v.dispatch(v.state.replaceSelection('x'), { userEvent: 'input.type' });
-      await new Promise((r) => requestAnimationFrame(() => r()));
-      times.push(performance.now() - t);
-    }
-    times.sort((a, b) => a - b);
-    return times[Math.floor(times.length / 2)];
-  });
-  // Best of up to 3 tries: the other tests running in parallel can load the
-  // CPU for a moment (≈20 ms alone, up to 54 ms in a busy full run). A real
-  // slowdown shows in every try.
-  let ms = Infinity;
-  for (let i = 0; i < 3 && ms >= 50; i++) ms = Math.min(ms, await measure());
-  console.log(`median keystroke→frame: ${ms.toFixed(1)} ms`);
-  expect(ms).toBeLessThan(50); // a frame is 16 ms; generous bound for slow CI machines
-});
+// The 5,000-line typing benchmark is in perf.spec.mjs: it runs alone, after every other test.
 
 test('a minified one-line file opens with highlighting off instead of freezing', async ({ page }) => {
   await boot(page);

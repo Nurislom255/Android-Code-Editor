@@ -8,7 +8,7 @@
 
 import { h, icon } from './dom.js';
 import { confirm, prompt, toast, isModalOpen, showJson } from './overlays.js';
-import { GESTURES, GESTURE_ACTIONS, DEFAULT_GESTURE_MAP, DEFAULTS, normalizeSettings } from '../core/settings.js';
+import { GESTURES, GESTURE_ACTIONS, DEFAULT_GESTURE_MAP, DEFAULTS, normalizeSettings, THEMES } from '../core/settings.js';
 import { GestureRecognizer, presetOptions, describeDecision, gestureKey } from '../core/gestures.js';
 import { BarEditor, SymbolSetsEditor, keysBarTransfer } from './keysBarEditor.js';
 import { ShortcutsEditor } from './shortcutsEditor.js';
@@ -186,10 +186,11 @@ export class SettingsView {
 
     switch (id) {
       case 'appearance': return [
-        select('theme', { system: 'Follow system', dark: 'Dark', light: 'Light' }, 'Theme', null, 'dark light colour color'),
+        select('theme', { system: 'Follow the phone (Dark / Light Modern)', ...THEMES }, 'Color theme', 'Like VS Code. Also in the command palette: "Color theme".', 'dark light colour color high contrast monokai'),
         num('fontSize', 'Code font size', 'Pinch the code with two fingers to change it quickly.', 8, 40, 1, 'zoom text'),
         select('uiZoom', Object.fromEntries([70, 80, 90, 100, 110, 120, 130, 140, 150, 160].map((v) => [v, `${v}%`])), 'Interface size',
           'Menus, tabs, side bar, panels and the keys bar. The code keeps its own font size.', 'zoom scale'),
+        toggle('autoHideTitle', 'Hide the title bar while scrolling (phone)', 'Scrolling the code down slides it away for more room; scrolling up brings it back. Zen mode (command palette) hides everything but the code and the keys bar.', 'title bar autohide fullscreen zen immersive'),
       ];
       case 'editor': return [
         num('tabWidth', 'Indent size', 'Used when neither .editorconfig nor the file itself says otherwise.', 1, 8, 1, 'tab width spaces'),
@@ -200,6 +201,8 @@ export class SettingsView {
         toggle('stickyScroll', 'Sticky scroll', 'Keep the enclosing function/class header visible at the top.'),
         toggle('fastScroll', 'Fast-scroll thumb', 'A draggable handle on long files (touch screens).', 'scrollbar'),
         toggle('wordHighlight', 'Highlight the name under the cursor', 'With the cursor on a variable (or function, property…), its other uses are lightly highlighted. Strings and comments are skipped.', 'occurrences variable'),
+        toggle('bracketPairColors', 'Colour bracket pairs', '( [ { and their partners get one colour per nesting level, as in VS Code. A closer with nothing to close is red.', 'brackets parentheses rainbow'),
+        toggle('indentGuides', 'Indent guides', 'Thin vertical lines at each indentation level.', 'indentation lines'),
         toggle('formatOnSave', 'Format on save', 'Runs Prettier for JS/TS/CSS/HTML/JSON/Markdown/YAML.', 'prettier'),
       ];
       case 'typing': return [
@@ -277,6 +280,13 @@ export class SettingsView {
         h('div.s-text', h('div.s-label', 'All settings as JSON'), h('div.s-desc', 'To move them to another phone or browser.')),
         h('button.btn.btn-small', { type: 'button', onclick: () => showJson('Settings', this.deps.get()) }, 'Export'),
         h('button.btn.btn-small', { type: 'button', onclick: () => this.importAll() }, 'Import')),
+      h('div.setting', { dataset: { search: 'credits licence license icons codicons material open source' } }, h('div.s-text',
+        h('div.s-label', 'Credits'),
+        h('div.s-desc.credits',
+          'Interface icons: ', h('a', { href: 'https://github.com/microsoft/vscode-codicons', target: '_blank', rel: 'noopener' }, 'Codicons'),
+          ' by Microsoft, licensed under ', h('a', { href: 'https://creativecommons.org/licenses/by/4.0/', target: '_blank', rel: 'noopener' }, 'CC BY 4.0'),
+          ' (numbers rounded, a subset). File icons: ', h('a', { href: 'https://github.com/material-extensions/vscode-material-icon-theme', target: '_blank', rel: 'noopener' }, 'Material Icon Theme'),
+          ' (MIT). Editor: CodeMirror (MIT).'))),
       h('div.setting', { dataset: { search: 'reset all settings defaults' } },
         h('button.btn.btn-small.btn-danger', { type: 'button', onclick: async () => {
           if (await confirm('Reset all settings?', 'Your files are not affected.', 'Reset', 'danger')) { set({ ...DEFAULTS, __reset: true }); this.render(); }

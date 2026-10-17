@@ -1,0 +1,43 @@
+{
+  "_comment": "Which test files prove each ROADMAP phase. Used by scripts/test-phase.mjs (npm run test:phase -- N) and listed in TESTS.md. Phases 4-7 hold acceptance tests written ahead (test.fixme): they show as skipped until the phase is built.",
+  "base": {
+    "title": "v2 foundation: files, workspace, run, git, offline",
+    "unit": ["capacitorFs", "editorCore", "editorconfig", "git", "indent", "lineDiff", "misc", "textFormat"],
+    "e2e": ["app", "core", "fileSafety", "workspace", "run", "git", "gitRemote", "offline", "perf"]
+  },
+  "1": {
+    "title": "Typing correctness: gestures, autocomplete, Emmet, semicolons",
+    "unit": ["gestures", "emmet", "semicolons"],
+    "e2e": ["gestures", "typing"]
+  },
+  "2": {
+    "title": "Keys bar, cursor & selection, Settings pages, shortcuts",
+    "unit": ["contextKeys", "keysBarLayout", "keybindings", "multiCursor", "wordHighlight"],
+    "e2e": ["keysbar", "settings"]
+  },
+  "3": {
+    "title": "Look & feel: themes, colours, icons, tooltips, full screen, project actions",
+    "unit": ["bracketColors", "icons"],
+    "e2e": ["lookfeel"]
+  },
+  "4": {
+    "title": "Tabs and file explorer",
+    "unit": [],
+    "e2e": ["phase4"]
+  },
+  "5": {
+    "title": "Built-in runtimes: Python, C, C++, Rust",
+    "unit": [],
+    "e2e": ["phase5"]
+  },
+  "6": {
+    "title": "VS Code extras",
+    "unit": [],
+    "e2e": ["phase6"]
+  },
+  "7": {
+    "title": "Git, more advanced",
+    "unit": [],
+    "e2e": ["phase7"]
+  }
+}

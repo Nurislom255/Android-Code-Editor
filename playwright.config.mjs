@@ -22,8 +22,11 @@ export default defineConfig({
     reuseExistingServer: true,
   },
   projects: [
-    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } } },
-    { name: 'phone', use: { ...devices['Pixel 7'] } },
-    { name: 'tablet', use: { ...devices['Galaxy Tab S4 landscape'] } },
+    { name: 'desktop', use: { viewport: { width: 1280, height: 800 } }, testIgnore: /perf\.spec/ },
+    { name: 'phone', use: { ...devices['Pixel 7'] }, testIgnore: /perf\.spec/ },
+    { name: 'tablet', use: { ...devices['Galaxy Tab S4 landscape'] }, testIgnore: /perf\.spec/ },
+    // Timing tests run last and alone: next to the others the CPU is shared
+    // and they would measure the machine's load, not the editor.
+    { name: 'perf', testMatch: /perf\.spec/, dependencies: ['desktop', 'phone', 'tablet'] },
   ],
 });

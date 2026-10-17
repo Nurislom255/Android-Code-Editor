@@ -243,7 +243,7 @@ test('syntax errors are underlined and counted in Problems', async ({ page }) =>
   await openFile(page, 'main.js');
   await setText(page, 'let x = ;\n');
   await expect(page.locator('.cm-lintRange-error').first()).toBeVisible();
-  await expect(page.locator('#statusbar')).toContainText('✖ 1');
+  await expect(page.locator('#statusbar [data-key="problems"]')).toHaveAttribute('aria-label', /Problems: 1 error,/);
   await runCommand(page, 'showProblems');
   await expect(page.locator('.problem-row')).toContainText('Syntax error');
 });

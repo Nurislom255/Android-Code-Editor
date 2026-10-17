@@ -6,7 +6,7 @@
        Android Chrome shrinks the layout (not just the visual viewport), so the
        coding-keys bar sits right above the keyboard instead of behind it. -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta name="theme-color" content="#14161a" />
+  <meta name="theme-color" content="#181818" />
   <meta name="color-scheme" content="dark light" />
   <meta name="description" content="Offline-first code editor for Android phones and tablets." />
   <title>CodeEditor</title>
@@ -22,7 +22,8 @@
         var s = JSON.parse(localStorage.getItem('codeeditor:settings') || '{}');
         var t = s.theme || 'system';
         if (t === 'system') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        document.documentElement.className = 'theme-' + t;
+        // (same as themeClasses() in core/settings.js)
+        document.documentElement.className = t === 'light' || t === 'dark' ? 'theme-' + t : 'theme-dark theme-' + t;
       } catch (e) {}
     })();
   </script>
@@ -31,7 +32,7 @@
   <div id="app" class="layout-compact">
     <header id="titlebar" role="banner">
       <button id="btn-sidebar" class="icon-btn" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" data-icon="menu"></button>
-      <button id="btn-project" class="project-btn" title="Switch project">
+      <button id="btn-project" class="project-btn" title="Switch project (hold or right-click: rename, export, close…)">
         <span id="project-name">No project</span><span class="caret" data-icon="chevronDown"></span>
       </button>
       <div class="spacer"></div>
@@ -42,6 +43,7 @@
         <button id="btn-redo" class="icon-btn" aria-label="Redo" title="Redo (Ctrl+Y)" data-icon="redo"></button>
         <button id="btn-save" class="icon-btn" aria-label="Save" title="Save (Ctrl+S)" data-icon="save"></button>
         <button id="btn-split" class="icon-btn wide-only" aria-label="Split editor" title="Split editor (Ctrl+\)" data-icon="split"></button>
+        <button id="btn-fullscreen" class="icon-btn wide-only" aria-label="Fullscreen" title="Fullscreen (F11)" data-icon="maximize"></button>
         <button id="btn-palette" class="icon-btn" aria-label="Command palette" title="Command palette (Ctrl+Shift+P)" data-icon="command"></button>
         <button id="btn-run" class="run-btn" aria-label="Run" title="Run JS / preview HTML or Markdown (F5)">
           <span data-icon="play"></span><span class="run-label">Run</span>

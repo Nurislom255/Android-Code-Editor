@@ -29,6 +29,8 @@ export const GESTURE_ACTIONS = Object.freeze({
   navigateForward: 'Go forward',
   save: 'Save file',
   run: 'Run / preview',
+  toggleZen: 'Zen mode on / off',
+  toggleFullscreen: 'Fullscreen on / off',
 });
 
 export const GESTURES = Object.freeze({
@@ -53,11 +55,24 @@ export const DEFAULT_GESTURE_MAP = Object.freeze({
   'tap-3x': 'deleteLine',
 });
 
+/** The themes (styles.css), after VS Code's. "system" follows the phone: Dark or Light Modern. */
+export const THEMES = Object.freeze({ dark: 'Dark Modern', light: 'Light Modern', hc: 'High Contrast', monokai: 'Monokai' });
+
+/**
+ * The classes <html> gets for a theme setting. Dark themes also get
+ * "theme-dark" (their base), so code asking "is it dark?" keeps working.
+ */
+export function themeClasses(setting, prefersLight = false) {
+  const t = setting === 'system' || !THEMES[setting] ? (prefersLight ? 'light' : 'dark') : setting;
+  return t === 'light' ? ['theme-light'] : t === 'dark' ? ['theme-dark'] : ['theme-dark', `theme-${t}`];
+}
+
 export const DEFAULTS = Object.freeze({
   version: SETTINGS_VERSION,
-  theme: 'system',            // 'system' | 'dark' | 'light'
+  theme: 'system',            // 'system' | a key of THEMES
   fontSize: 14,               // the code (pinch on the code changes it)
   uiZoom: 100,                // % — menus, tabs, panels, keys bar (not the code)
+  autoHideTitle: true,        // phone: the title bar slides away while scrolling the code down
   tabWidth: 2,
   insertSpaces: true,
   wrapDefault: 'auto',        // 'auto' (on for narrow screens) | 'on' | 'off'
@@ -66,6 +81,8 @@ export const DEFAULTS = Object.freeze({
   stickyScroll: true,
   fastScroll: true,
   wordHighlight: true,        // the other uses of the name under the cursor
+  bracketPairColors: true,    // ( [ { coloured by nesting depth
+  indentGuides: true,         // vertical lines at each indentation level
   autosave: 'off',            // 'off' | 'delay' | 'blur'
   autosaveDelay: 1500,
   keysBarMode: 'auto',        // 'auto' | 'always' | 'never'
@@ -128,9 +145,10 @@ export function normalizeSettings(raw) {
   return {
     version: SETTINGS_VERSION,
     // v1 only had 'dark' | 'light'; both are still valid.
-    theme: oneOf(r.theme, ['system', 'dark', 'light'], d.theme),
+    theme: oneOf(r.theme, ['system', ...Object.keys(THEMES)], d.theme),
     fontSize: clamp(r.fontSize, 8, 40, d.fontSize),
     uiZoom: clamp(r.uiZoom, 70, 160, d.uiZoom),
+    autoHideTitle: bool(r.autoHideTitle, d.autoHideTitle),
     tabWidth: clamp(r.tabWidth, 1, 8, d.tabWidth),
     insertSpaces: bool(r.insertSpaces, d.insertSpaces),
     wrapDefault: oneOf(r.wrapDefault, ['auto', 'on', 'off'], d.wrapDefault),
@@ -139,6 +157,8 @@ export function normalizeSettings(raw) {
     stickyScroll: bool(r.stickyScroll, d.stickyScroll),
     fastScroll: bool(r.fastScroll, d.fastScroll),
     wordHighlight: bool(r.wordHighlight, d.wordHighlight),
+    bracketPairColors: bool(r.bracketPairColors, d.bracketPairColors),
+    indentGuides: bool(r.indentGuides, d.indentGuides),
     autosave: oneOf(r.autosave, ['off', 'delay', 'blur'], d.autosave),
     autosaveDelay: clamp(r.autosaveDelay, 300, 60000, d.autosaveDelay),
     keysBarMode: oneOf(r.keysBarMode, ['auto', 'always', 'never'], d.keysBarMode),

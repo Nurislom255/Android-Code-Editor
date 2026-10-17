@@ -25,6 +25,7 @@ import { linkedTags } from './linkedTags.js';
 import { semicolonExtension, completeStatement } from './semicolons.js';
 import { cursorsOnLines } from './editActions.js';
 import { wordHighlight } from './wordHighlight.js';
+import { bracketColors, indentGuides } from './bracketColors.js';
 import { mirrorTyping, quietSelectionBar } from './multiCursor.js';
 
 export const comp = {
@@ -39,6 +40,8 @@ export const comp = {
   sticky: new Compartment(),
   fastScroll: new Compartment(),
   wordHighlight: new Compartment(),
+  bracketColors: new Compartment(),
+  indentGuides: new Compartment(),
 };
 
 /** Languages whose own completion already offers identifiers from the file. */
@@ -83,6 +86,8 @@ export function lintExtension(on) { return on ? syntaxLinter() : []; }
 export function stickyExtension(on) { return on ? stickyScroll : []; }
 export function fastScrollExtension(on) { return on ? fastScroll : []; }
 export function wordHighlightExtension(on) { return on ? wordHighlight : []; }
+export function bracketColorsExtension(on) { return on ? bracketColors : []; }
+export function indentGuidesExtension(on) { return on ? indentGuides : []; }
 
 /**
  * @param {object} o
@@ -115,6 +120,8 @@ export function buildExtensions({ doc, settings, userSnippets, extra = [] }) {
     highlightActiveLine(),
     highlightSelectionMatches(),
     comp.wordHighlight.of(wordHighlightExtension(settings.wordHighlight)),
+    comp.bracketColors.of(bracketColorsExtension(settings.bracketPairColors)),
+    comp.indentGuides.of(indentGuidesExtension(settings.indentGuides)),
     search({ top: true }),
     expandStack,
     wrapIndent,
