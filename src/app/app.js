@@ -10,6 +10,7 @@ import { Workspace, minimalChange, externalAnno } from './workspace.js';
 import { PreviewController } from './previewController.js';
 import { renderTabBar, renderCrumbs, renderConflict, renderStatus, renderWelcome, gestureCheatSheet } from './chrome.js';
 import { normalizeSettings, ignoreNames, GESTURE_ACTIONS, DEFAULTS } from '../core/settings.js';
+import { comboFromEvent, effectiveKey, resolveCombo, parseCombo, normalizeBindings } from '../core/keybindings.js';
 import { IgnoreRules } from '../core/ignore.js';
 import { dirname, basename, join, validateName, normalize } from '../core/paths.js';
 import { RecoveryStore } from '../storage/recovery.js';
@@ -36,7 +37,6 @@ import { Palette } from '../ui/palette.js';
 import { FileTree } from '../ui/fileTree.js';
 import { SearchPanel, OutlinePanel, HistoryPanel, showDiff } from '../ui/panels.js';
 import { GitPanel, loadGit } from '../ui/gitPanel.js';
-import { SettingsPanel } from '../ui/settingsPanel.js';
 import { BottomPanel } from '../ui/bottomPanel.js';
 import { KeysBar } from '../ui/keysBar.js';
 import { JsRunner } from '../run/jsRunner.js';
@@ -141,9 +141,11 @@ export class App {
       arrow: (dir, mods) => E.arrow(this.ws.activeDoc ? this.ws.view : null, dir, mods),
       type: (text) => E.typeText(this.editableView(), text),
       // label + shortcut, for the keys' tooltips
-      describe: (name) => { const c = this.commands()[name]; return c ? { label: c.label, key: c.key } : null; },
+      describe: (name) => { const c = this.commands()[name]; return c ? { label: c.label, key: this.keyFor(name) } : null; },
       isEscapable: () => $('#bottom-panel').classList.contains('maximized'),
       onLayoutChange: () => this.layoutChanged(),
+      openSettings: (page) => this.openSettings(page),
+      saveBar: (profile, rows) => this.updateSettings({ keysBar: { ...this.settings.keysBar, [profile]: rows } }),
     });
 
     this.attachPaneUi(0);
@@ -181,7 +183,8 @@ export class App {
     if (prev.sidebarWidth !== next.sidebarWidth || prev.panelHeight !== next.panelHeight) this.layout.applySizes(next);
     if (prev.historyDays !== next.historyDays || prev.historyMaxPerFile !== next.historyMaxPerFile) this.history.configure({ days: next.historyDays, maxPerFile: next.historyMaxPerFile });
     if (prev.ignoreList !== next.ignoreList) { this.fileCache = null; this.tree.refresh(); }
-    if (JSON.stringify(prev.keysLayouts) !== JSON.stringify(next.keysLayouts) || prev.keysBarMode !== next.keysBarMode) this.keysBar.refresh();
+    if (JSON.stringify(prev.keysLayouts) !== JSON.stringify(next.keysLayouts) || JSON.stringify(prev.keysBar) !== JSON.stringify(next.keysBar)
+      || prev.keysBarMode !== next.keysBarMode || JSON.stringify(prev.keyBindings) !== JSON.stringify(next.keyBindings)) this.keysBar.refresh();
     if (prev.previewPlacement !== next.previewPlacement && this.preview.target) this.preview.mount();
     this.ws.applySettings(prev, next);
     if (patch.__reset) this.layout.applySizes(next);
@@ -420,20 +423,6 @@ export class App {
         toast('Snapshot restored into the editor — save to keep it (undo works too).', 'success');
       },
     });
-    this.settingsPanel = new SettingsPanel(panelEl('settings'), {
-      get: () => this.settings,
-      set: (patch) => this.updateSettings(patch),
-      extras: {
-        version: VERSION,
-        built: BUILT,
-        // The Android app updates with a new APK, not from the website.
-        checkUpdate: window.Capacitor ? null : () => this.checkForUpdate(),
-        showShortcuts: () => this.showShortcuts(),
-        showGestures: () => this.showGestureGuide(),
-        storageInfo: () => this.storageInfo(),
-      },
-    });
-
     // Activity bar + phone sidebar tabs
     const tabs = $('.sidebar-tabs');
     for (const btn of $$('#activitybar .activity')) {
@@ -445,6 +434,7 @@ export class App {
   }
 
   showPanel(id, { reveal = true, focus = false } = {}) {
+    if (id === 'settings') { this.openSettings(); return; }
     this.activePanel = id;
     for (const p of $$('.side-panel')) p.classList.toggle('active', p.dataset.panel === id);
     for (const b of $$('.activity')) b.classList.toggle('active', b.dataset.panel === id);
@@ -452,11 +442,38 @@ export class App {
     if (id === 'outline') this.outline.render();
     if (id === 'git') this.git.refresh();
     if (id === 'history') this.historyPanel.render();
-    if (id === 'settings') this.settingsPanel.render();
     if (id === 'search' && focus) this.search.focus(this.selectedText());
   }
 
+  /**
+   * Settings, over the workspace (ui/settingsView.js, loaded the first time).
+   * @param {string|null} page  e.g. 'keysbar', 'shortcuts'
+   */
+  async openSettings(page = null) {
+    if (!this.settingsView) {
+      const { SettingsView } = await import('../ui/settingsView.js');
+      this.settingsView = new SettingsView({
+        get: () => this.settings,
+        set: (patch) => this.updateSettings(patch),
+        extras: {
+          version: VERSION,
+          built: BUILT,
+          // The Android app updates with a new APK, not from the website.
+          checkUpdate: window.Capacitor ? null : () => this.checkForUpdate(),
+          showShortcuts: () => this.showShortcuts(),
+          showGestures: () => this.showGestureGuide(),
+          storageInfo: () => this.storageInfo(),
+          commands: () => this.commandList().map((c) => ({ id: c.id, label: c.label, key: this.defaultBindings()[c.id] || '' })),
+          profile: () => this.keysBar.profile,
+        },
+      });
+    }
+    if (this.layout.compact) this.layout.closeDrawer();
+    this.settingsView.open(page);
+  }
+
   togglePanel(id) {
+    if (id === 'settings') { this.openSettings(); return; }
     if (this.activePanel === id && this.layout.isSidebarVisible() && !this.layout.compact) this.layout.showSidebar(false);
     else this.showPanel(id);
   }
@@ -1224,7 +1241,7 @@ export class App {
       zoomOut: { label: 'Zoom out (font)', key: 'Ctrl+-', run: zoom(-1) },
       zoomReset: { label: 'Reset font size', key: 'Ctrl+0', run: zoom(0) },
       toggleTheme: { label: 'Toggle dark / light theme', run: () => this.updateSettings({ theme: document.documentElement.classList.contains('theme-dark') ? 'light' : 'dark' }) },
-      shortcuts: { label: 'Keyboard shortcuts', key: 'F1', run: () => this.showShortcuts() },
+      shortcuts: { label: 'Keyboard shortcuts', run: () => this.showShortcuts() },
       gestureGuide: { label: 'Touch gestures guide', run: () => this.showGestureGuide() },
       // run
       run: { label: 'Run file / preview', key: 'F5', run: () => (this.runner.running ? this.runner.stop('stopped') : this.runActive()) },
@@ -1238,7 +1255,25 @@ export class App {
 
   commandList() {
     const hidden = new Set(['tab', 'backspace', 'dismissOrDeleteWord', 'navigatePrevProblem']);
-    return Object.entries(this.commands()).filter(([id]) => !hidden.has(id)).map(([id, c]) => ({ id, label: c.label, key: c.key, run: () => this.run(id) }));
+    return Object.entries(this.commands()).filter(([id]) => !hidden.has(id)).map(([id, c]) => ({ id, label: c.label, key: this.keyFor(id), run: () => this.run(id) }));
+  }
+
+  /** Every command's default shortcut, canonical ("" = none). */
+  defaultBindings() {
+    if (!this._defaultBindings) {
+      this._defaultBindings = Object.fromEntries(Object.entries(this.commands()).map(([id, c]) => [id, parseCombo(c.key) || '']));
+    }
+    return this._defaultBindings;
+  }
+
+  /** The owner's shortcut changes, without stale ones (unknown commands, same as default). */
+  userBindings() {
+    return normalizeBindings(this.settings.keyBindings, this.defaultBindings());
+  }
+
+  /** A command's shortcut now ("" = none). */
+  keyFor(id) {
+    return effectiveKey(id, this.defaultBindings(), this.userBindings());
   }
 
   symbolItems() {
@@ -1259,16 +1294,16 @@ export class App {
     const v = this.ws.view;
     const hasSel = !v.state.selection.main.empty;
     popupMenu([
-      { label: 'Cut', hint: 'Ctrl+X', disabled: !hasSel || v.state.readOnly, run: async () => { const r = v.state.selection.main; await navigator.clipboard.writeText(v.state.sliceDoc(r.from, r.to)).catch(() => {}); v.dispatch(v.state.replaceSelection(''), { userEvent: 'delete.cut' }); } },
-      { label: 'Copy', hint: 'Ctrl+C', disabled: !hasSel, run: () => { const r = v.state.selection.main; navigator.clipboard.writeText(v.state.sliceDoc(r.from, r.to)).catch(() => {}); } },
-      { label: 'Paste', hint: 'Ctrl+V', disabled: v.state.readOnly, run: async () => { try { const t = await navigator.clipboard.readText(); v.dispatch(v.state.replaceSelection(t), { userEvent: 'input.paste' }); } catch { toast('Paste with Ctrl+V (clipboard access was blocked).', 'warn'); } } },
+      { label: 'Cut', hint: this.keyFor('cut'), disabled: !hasSel || v.state.readOnly, run: async () => { const r = v.state.selection.main; await navigator.clipboard.writeText(v.state.sliceDoc(r.from, r.to)).catch(() => {}); v.dispatch(v.state.replaceSelection(''), { userEvent: 'delete.cut' }); } },
+      { label: 'Copy', hint: this.keyFor('copy'), disabled: !hasSel, run: () => { const r = v.state.selection.main; navigator.clipboard.writeText(v.state.sliceDoc(r.from, r.to)).catch(() => {}); } },
+      { label: 'Paste', hint: this.keyFor('paste'), disabled: v.state.readOnly, run: async () => { try { const t = await navigator.clipboard.readText(); v.dispatch(v.state.replaceSelection(t), { userEvent: 'input.paste' }); } catch { toast('Paste with Ctrl+V (clipboard access was blocked).', 'warn'); } } },
       '-',
-      { label: 'Expand selection', hint: 'Alt+Shift+→', run: () => this.run('expandSelection') },
-      { label: 'Toggle comment', hint: 'Ctrl+/', run: () => this.run('toggleComment') },
-      { label: 'Format document', hint: 'Shift+Alt+F', run: () => this.run('format') },
-      { label: 'Go to symbol…', hint: 'Ctrl+Shift+O', run: () => this.run('goToSymbol') },
+      { label: 'Expand selection', hint: this.keyFor('expandSelection'), run: () => this.run('expandSelection') },
+      { label: 'Toggle comment', hint: this.keyFor('toggleComment'), run: () => this.run('toggleComment') },
+      { label: 'Format document', hint: this.keyFor('format'), run: () => this.run('format') },
+      { label: 'Go to symbol…', hint: this.keyFor('goToSymbol'), run: () => this.run('goToSymbol') },
       '-',
-      { label: 'Command palette', hint: 'Ctrl+Shift+P', run: () => this.run('commandPalette') },
+      { label: 'Command palette', hint: this.keyFor('commandPalette'), run: () => this.run('commandPalette') },
     ], at);
   }
 
@@ -1300,7 +1335,22 @@ export class App {
       // shortcuts apply; e.g. Ctrl+Enter there means "commit", not "run".
       const t = e.target;
       const inField = t && t.closest && t.closest('input, textarea, select') && !t.closest('.cm-editor');
+      // The owner's shortcuts first (Settings → Keyboard shortcuts). A moved
+      // or cleared default does nothing — also where the editor itself
+      // handles it (Ctrl+D…). A text field keeps its own keys.
+      const user = this.userBindings();
+      const hit = resolveCombo(comboFromEvent(e, { mac: isMac }), this.defaultBindings(), user);
+      if (hit && !(inField && (hit.swallow || !FIELD_SAFE.has(hit.run)))) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (hit.run) {
+          if (this.palette.isOpen && hit.run !== 'commandPalette' && hit.run !== 'quickOpen') this.palette.close();
+          this.run(hit.run);
+        }
+        return;
+      }
       for (const [spec, cmd] of map) {
+        if (Object.prototype.hasOwnProperty.call(user, cmd)) continue; // the owner moved it
         if (keyMatches(e, spec)) {
           if (inField && !FIELD_SAFE.has(cmd)) return;
           if (EDITOR_ONLY.has(cmd) && !(t && t.closest && t.closest('.cm-editor'))) return;
@@ -1315,15 +1365,18 @@ export class App {
   }
 
   showShortcuts() {
-    const rows = this.shortcutTable.map(([spec, cmd]) => [spec.label, this.commands()[cmd].label]);
-    rows.push(['Ctrl+Z / Ctrl+Y', 'Undo / redo'], ['Ctrl+F', 'Find & replace'], ['Ctrl+/', 'Toggle comment'], ['Alt+↑ / Alt+↓', 'Move line'],
-      ['Shift+Alt+↓', 'Duplicate line'], ['Ctrl+Shift+K', 'Delete line'], ['Ctrl+] / Ctrl+[', 'Indent / outdent'], ['Ctrl+Space', 'Autocomplete'], ['Tab', 'Accept suggestion / expand Emmet'],
-      ['Ctrl+D', 'Select next occurrence'], ['Alt+click / drag', 'Multiple cursors / column select'], ['Ctrl+Shift+[ / ]', 'Fold / unfold']);
-    showModal('Keyboard shortcuts', h('table.help-table', h('tbody', rows.map(([k, l]) => h('tr', h('td', h('kbd', k)), h('td', l))))), { className: 'wide' });
+    const rows = this.commandList().filter((c) => c.key).sort((a, b) => a.label.localeCompare(b.label)).map((c) => [c.key, c.label]);
+    if (this.keyFor('commandPalette') === 'Ctrl+Shift+P') rows.push(['F1', 'Command palette']);
+    rows.push(['Ctrl+Space', 'Autocomplete'], ['Tab', 'Accept suggestion / expand Emmet'],
+      ['Alt+click / drag', 'Multiple cursors / column select'], ['Ctrl+Shift+[ / ]', 'Fold / unfold']);
+    const m = showModal('Keyboard shortcuts', h('table.help-table', h('tbody', rows.map(([k, l]) => h('tr', h('td', h('kbd', k)), h('td', l))))), {
+      className: 'wide',
+      actions: [h('button.btn', { type: 'button', onclick: () => { m.close(null); this.openSettings('shortcuts'); } }, 'Change shortcuts…')],
+    });
   }
 
   showGestureGuide() {
-    showModal('Touch gestures', h('div', h('p.modal-message', 'Gestures work on the code itself. Change them in Settings → Touch & gestures.'), gestureCheatSheet(this)));
+    showModal('Touch gestures', h('div', h('p.modal-message', 'Gestures work on the code itself. Change them in Settings → Gestures.'), gestureCheatSheet(this)));
   }
 
   async storageInfo() {

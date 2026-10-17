@@ -11,7 +11,7 @@ build, and how we know it is done.
 |---|---|---|---|
 | 0 | Real-device test loop (diagnostics) | Small | Skipped for now: the owner's reports were enough to find every bug so far. Build it when a bug can't be reproduced |
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
-| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Part 1 built (v2.2.0, refined after the owner's tests in v2.3.0 and v2.4.0): the new keys bar** (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 next: Settings pages (2.1), keys-bar editor (2.7), custom key bindings |
+| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | Not started |
 | 4 | Tabs drag & split, VS Code-like file explorer | Medium | Not started (dragging tabs and files to move them shipped early) |
 | 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
@@ -340,6 +340,31 @@ layer opens) the browser's follow-up click landed on whatever was under the
 finger by then (e.g. the status bar's line number, which opened "go to
 line"). Keys now cancel that click. Old default symbol layouts saved in
 settings are upgraded to the new defaults (edited ones are kept).
+
+### Part 2 — result (v2.5.0)
+
+Built: `ui/settingsView.js` (pages, search, navigation), `ui/keysBarEditor.js`
+(bar editor, symbol keys, import / export), `ui/shortcutsEditor.js`,
+`core/keybindings.js` (shortcuts as data), and in `core/keysLayout.js` the bar
+as data (`DEFAULT_BAR`, `barProblem`, `pinToBar`, `tokenProblem`). The three
+UI modules are one chunk loaded when Settings first opens: the startup bundle
+got smaller (main.js 360 → 319 KB). Tests: `tests/unit/keybindings.test.mjs`,
+`tests/unit/keysBarLayout.test.mjs`, `tests/e2e/settings.spec.mjs`, Pin in
+`keysbar.spec.mjs`.
+
+| Item | Shipped | Differences from the plan |
+|---|---|---|
+| 2.1 Settings pages | Appearance · Editor · Typing & autocomplete · Keys bar · Keyboard shortcuts · Gestures · Files & saving · Run · Git · Snippets · About & diagnostics. Search over every page (rows carry their words; a found setting works in the results; big editors show as a link to their page). Phone: list → page, ← and **Android Back** go back. ≥ 720 px wide: pages left, page right. About: export / import all settings as JSON | Opens **over the workspace**, like VS Code's Settings editor, not in the 260 px side bar: two columns and the bar editor need the room. The Settings button of the side bar opens it |
+| 2.7 keys-bar editor | Each device type (phone, phone sideways, tablet) drawn as it looks; tap a key → replace (catalog of every key, or your own symbol), move left / right / to the other row, remove; **+** adds; Tab, ⋯ and Mod (or Ctrl + Shift + Alt) can't go. Symbol keys per language: tap, swipe up / down / left / right, hold-only, as fields (no gaps allowed), or as text. **Pin** in ⋯ (replaces the last context key), **Customize** there opens this page. Export / import / reset | Not built: editing the **context-row rules** (they are code, per language and situation; a rule editor is a big feature for little use — later if the owner wants it). Drag-and-drop arrangement is tap → menu instead (works the same with one thumb, and with TalkBack) |
+| 2.9 custom shortcuts | Settings → Keyboard shortcuts: every command, its shortcut; press the new one or type it (`Ctrl+Shift+K`); "No shortcut"; "Default"; a shortcut taken from another command moves (the dialog says which). The owner's shortcut runs first; a moved default does nothing, also inside the editor (CodeMirror's own Ctrl+D…). Palette, tooltips, context menu and the shortcuts list show the shortcuts in use | Plain keys and Shift+key are refused (they are typing); F1–F24 allowed. Browser keys (Ctrl+W, Ctrl+T, Ctrl+N) get a warning: browsers may keep them |
+
+Found while building:
+- F1 opened the command palette, but the command list said it showed the
+  shortcuts sheet: the data now says what the key does (F1 = palette, as in
+  VS Code).
+- Keys starting with `@` that are not actions were built as broken action
+  keys: CSS's `@media ` context key, JavaScript's `@` symbol key in ⋯ and the
+  `@` operator. Now an `@name` is an action only when that action exists.
 
 ### 2.1 Settings split into pages (foundation for the keys-bar editor)
 

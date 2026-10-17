@@ -5,8 +5,8 @@ import { boot, newProject, openFile, editorText, setText, writeProjectFile } fro
 
 test('settings apply live and persist across reloads', async ({ page }) => {
   await boot(page);
-  await page.evaluate(() => window.__app.showPanel('settings'));
-  const panel = page.locator('.side-panel[data-panel="settings"]');
+  await page.evaluate(() => window.__app.openSettings('appearance'));
+  const panel = page.locator('.settings-view');
   await panel.getByLabel('Theme').selectOption('light');
   await expect(page.locator('html')).toHaveClass(/theme-light/);
   await panel.getByLabel('Font size').fill('18');
@@ -74,7 +74,7 @@ test('a minified one-line file opens with highlighting off instead of freezing',
 test('Settings → About shows the version and build time; Check for updates', async ({ page }) => {
   await boot(page);
   const v = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
-  await page.evaluate(() => window.__app.showPanel('settings'));
+  await page.evaluate(() => window.__app.openSettings('about'));
   await expect(page.locator('.app-version')).toHaveText(`CodeEditor ${v}`);
   await expect(page.locator('.app-version + .s-desc')).toContainText('Built ');
   await page.getByRole('button', { name: 'Check for updates' }).click();

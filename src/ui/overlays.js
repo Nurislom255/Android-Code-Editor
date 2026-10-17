@@ -102,6 +102,20 @@ export function showModal(title, body, { className = '', actions = null, onClose
   return m;
 }
 
+/** Shows `data` as JSON to copy (Settings export). */
+export function showJson(title, data) {
+  const text = JSON.stringify(data, null, 2);
+  const ta = h('textarea.input.input-multiline', { rows: 12, readonly: true, 'aria-label': `${title} JSON`, spellcheck: 'false' });
+  ta.value = text;
+  const m = showModal(`${title} (JSON)`, h('div', h('p.modal-message', 'Copy this text and keep it, or paste it into Import on another device.'), ta), {
+    actions: [h('button.btn.btn-primary', { type: 'button', onclick: async () => {
+      try { await navigator.clipboard.writeText(text); toast('Copied.', 'success'); m.close(null); } catch { ta.select(); toast('Select the text and copy it.', 'info'); }
+    } }, 'Copy')],
+  });
+  requestAnimationFrame(() => ta.select());
+  return m;
+}
+
 // ---- toasts -----------------------------------------------------------------
 
 /** @param {{label:string, run:()=>void}} [action]  a button in the message */

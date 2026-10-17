@@ -6,10 +6,11 @@ An offline-first code editor for Android phones and tablets, built as a web app
 native-Android decision to its web equivalent, and adds **touch gestures** so
 coding on a phone feels natural.
 
-What's next: see **[ROADMAP.md](ROADMAP.md)** (settings pages, VS Code look,
-tabs & explorer, built-in Python, C, C++ and Rust). Phase 1 — typing
-correctness — is done (see *Typing*); Phase 2 part 1, the new **keys bar**,
-is built (see *Keys bar*).
+What's next: see **[ROADMAP.md](ROADMAP.md)** (VS Code look, tabs &
+explorer, built-in Python, C, C++ and Rust). Phase 1 — typing correctness —
+is done (see *Typing*); Phase 2 — the new **keys bar**, Settings pages, a
+keys-bar editor and your own keyboard shortcuts — is built (see *Keys bar*
+and *Settings*).
 
 Run it: build once (`npm run build`), then `npm run serve` and open
 <http://localhost:5173>. It also works as an installable PWA from GitHub Pages
@@ -22,7 +23,7 @@ website for a newer one; a downloaded update offers a **Reload** button.
 ## Touch gestures (new in v2)
 
 Gestures act on the code itself. All of them can be remapped or switched off
-in **Settings → Touch & gestures**, and a hint chip shows what each one did.
+in **Settings → Gestures**, and a hint chip shows what each one did.
 
 | Gesture | Default action |
 |---|---|
@@ -113,8 +114,35 @@ swipe up (or hold).
   `;` or `()` up there when `;` and `(` are below).
 - Every key's tooltip shows its keyboard shortcut (e.g. new line above
   **Ctrl+Alt+Enter**), for when a keyboard is connected.
-- Symbol rows per language are editable in Settings (`(^)^[]^{}` = tap `(`,
-  swipe up `)`, down `[]`, left `{}`; a fourth variant is swipe right).
+- **Your own bar:** Settings → *Keys bar* shows the bar of each device type
+  (phone, phone sideways, tablet) as it looks; tap a key to move, replace or
+  remove it, **+** adds one (any action, symbol, a context key or a language
+  symbol slot). Tab, ⋯ and Mod (or Ctrl, Shift and Alt) always stay. The
+  symbol keys of each language are edited one by one (tap, the four swipes,
+  the rest of the hold menu), or as text (`(^)^[]^{}` = tap `(`, swipe up
+  `)`, down `[]`, left `{}`; a fourth variant is swipe right). Export /
+  import as JSON, reset.
+- **Pin:** in ⋯ tap **Pin**, then any key: it goes on the bar, in place of
+  the last context key. **Customize** there opens Settings → Keys bar.
+
+---
+
+## Settings (ROADMAP 2.1)
+
+Settings open over the workspace, in pages: Appearance · Editor · Typing &
+autocomplete · Keys bar · Keyboard shortcuts · Gestures · Files & saving ·
+Run · Git · Snippets · About & diagnostics. Phones show the list, then a page
+(← or Android's Back goes back); wider screens show both side by side. The
+**search box** looks through every page — "semicolon", "wrap", "delete line"
+— and a found setting works right in the results. About exports and imports
+all settings as JSON.
+
+**Keyboard shortcuts** (for a Bluetooth or USB keyboard): every command with
+its shortcut. Tap one, then press the new shortcut — or type it, like
+`Ctrl+Shift+K` — or take it off, or put the default back. A shortcut belongs
+to one command: giving it to another moves it. The new one is shown in the
+command palette, the tooltips and the shortcuts list; the old one stops
+working (also inside the editor).
 
 ---
 
@@ -169,7 +197,8 @@ swipe up (or hold).
   HTML, CSS, JSON, Markdown, Python, C/C++, Java; highlight-only modes for
   Kotlin, Go, Rust, Swift, PHP, Ruby, Lua, Shell, YAML, SQL, …).
 - Find & replace (regex, case, whole word), hardware-keyboard shortcuts
-  (press **F1** or open *Keyboard shortcuts* in the palette).
+  (**F1** opens the command palette, which shows them; *Keyboard shortcuts*
+  lists them all; change them in Settings → Keyboard shortcuts).
 - Save keeps **encoding, BOM, line endings and final newline** exactly;
   invalid UTF-8 opens read-only; huge/minified files degrade instead of freezing.
 - **Unsaved-buffer recovery**: dirty buffers are mirrored to IndexedDB ~1.5 s
@@ -228,14 +257,17 @@ src/
   core/      pure logic, no DOM — runs in Node unit tests (spec: editor-core)
              gestures.js (recognizer) · textFormat.js (BOM/EOL/encoding) ·
              editorconfig.js · lineDiff.js (Myers) · fuzzy.js · search.js ·
-             ignore.js · navHistory.js · settings.js · inspect.js · linkify.js
+             ignore.js · navHistory.js · settings.js · inspect.js · linkify.js ·
+             keysLayout.js (the keys bar as data) · keybindings.js (shortcuts)
   storage/   ProjectFs implementations (File System Access / OPFS handles,
              Capacitor), IndexedDB, recovery store, local history, secrets
   editor/    CodeMirror setup, languages, gesture layer, outline, sticky
              scroll, expand selection, syntax lint, git gutter, snippets
   app/       workspace (documents, panes, tabs, save, recovery), composition
              root (app.js), chrome (tabs/status bar), preview controller
-  ui/        layout, file tree, palette, panels, keys bar, dialogs
+  ui/        layout, file tree, palette, panels, keys bar, dialogs;
+             settingsView.js · keysBarEditor.js · shortcutsEditor.js (Settings,
+             loaded the first time it is opened)
   run/       JS runner, preview builder, Prettier client
   git/       isomorphic-git service + ProjectFs → fs adapter
   workers/   run.worker.js (JS sandbox), format.worker.js (Prettier)

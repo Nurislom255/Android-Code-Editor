@@ -78,7 +78,7 @@ test('a horizontal drag that is not a swipe leaves the cursor where it was', asy
 
 test('the Settings test pad explains how a swipe was read', async ({ page }) => {
   await boot(page);
-  await page.evaluate(() => window.__app.showPanel('settings'));
+  await page.evaluate(() => window.__app.openSettings('gestures'));
   const pad = page.locator('.gesture-pad');
   await pad.scrollIntoViewIfNeeded();
   const b = await pad.boundingBox();

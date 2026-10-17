@@ -1,7 +1,8 @@
 // core/settings.js — settings defaults, validation and v1 → v2 migration.
 // Pure: storage (localStorage) is done by the caller.
 
-import { DEFAULT_LAYOUTS, LEGACY_DEFAULT_LAYOUTS } from './keysLayout.js';
+import { DEFAULT_LAYOUTS, LEGACY_DEFAULT_LAYOUTS, normalizeBar } from './keysLayout.js';
+import { normalizeBindings } from './keybindings.js';
 
 export const SETTINGS_VERSION = 2;
 
@@ -69,6 +70,7 @@ export const DEFAULTS = Object.freeze({
   autosaveDelay: 1500,
   keysBarMode: 'auto',        // 'auto' | 'always' | 'never'
   keysLayouts: { ...DEFAULT_LAYOUTS },
+  keysBar: {},                // the owner's bar per profile (core/keysLayout.js DEFAULT_BAR); missing = default
   haptics: true,
   gesturesEnabled: true,
   gestureHints: true,
@@ -94,6 +96,7 @@ export const DEFAULTS = Object.freeze({
   gitAuthorName: '',
   gitAuthorEmail: '',
   gitCorsProxy: 'https://cors.isomorphic-git.org',
+  keyBindings: {},            // the owner's shortcuts: { commandId: "Ctrl+Shift+K" | "" (none) }
 });
 
 const clamp = (v, lo, hi, d) => {
@@ -140,6 +143,7 @@ export function normalizeSettings(raw) {
     autosaveDelay: clamp(r.autosaveDelay, 300, 60000, d.autosaveDelay),
     keysBarMode: oneOf(r.keysBarMode, ['auto', 'always', 'never'], d.keysBarMode),
     keysLayouts: layouts,
+    keysBar: normalizeBar(r.keysBar),
     haptics: bool(r.haptics, d.haptics),
     gesturesEnabled: bool(r.gesturesEnabled, d.gesturesEnabled),
     gestureHints: bool(r.gestureHints, d.gestureHints),
@@ -164,6 +168,7 @@ export function normalizeSettings(raw) {
     gitAuthorName: str(r.gitAuthorName, d.gitAuthorName, 200),
     gitAuthorEmail: str(r.gitAuthorEmail, d.gitAuthorEmail, 200),
     gitCorsProxy: str(r.gitCorsProxy, d.gitCorsProxy, 500),
+    keyBindings: normalizeBindings(r.keyBindings),
   };
 }
 
