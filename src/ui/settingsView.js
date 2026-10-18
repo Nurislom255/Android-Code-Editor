@@ -141,8 +141,10 @@ export class SettingsView {
     const info = PAGES.find((p) => p.id === page);
     this.el.dataset.view = searching ? 'search' : page ? 'page' : 'list';
     this.title.textContent = searching ? 'Search' : !wide && info ? info.title : 'Settings';
-    this.backBtn.hidden = !(searching || (!wide && (page || this.returnTo)));
-    const backLabel = !searching && !page && this.returnTo ? 'Back to the side panels' : 'Back';
+    // ← is always there (a tablet showed only ✕, and ← is where Android's
+    // apps keep "back"): search → page → list → out of Settings.
+    this.backBtn.hidden = false;
+    const backLabel = !searching && !wide && page ? 'Back to the list' : !searching && this.returnTo ? 'Back to the side panels' : 'Back';
     this.backBtn.title = backLabel;
     this.backBtn.setAttribute('aria-label', backLabel);
     this.nav.textContent = '';

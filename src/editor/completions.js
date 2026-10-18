@@ -3,10 +3,11 @@
 //     language's own scope completion or completeAnyWord),
 //   • project file paths inside src="…", href="…", url(…), import '…',
 //     #include "…" and Markdown links,
-// plus a fallback that opens the list while a soft keyboard is composing.
+// plus a fallback that opens the list while a soft keyboard is composing,
+// and the list's keys (↑ ↓ Enter…) working while one is.
 
 import { ViewPlugin } from '@codemirror/view';
-import { completionStatus, startCompletion } from '@codemirror/autocomplete';
+import { completionStatus, startCompletion, acceptCompletion, closeCompletion, moveCompletionSelection, selectedCompletion } from '@codemirror/autocomplete';
 import { docInfo, editorEnv } from './context.js';
 import { dirname, relative, extname } from '../core/paths.js';
 
@@ -151,5 +152,53 @@ export const composeCompletion = ViewPlugin.fromClass(class {
 
   destroy() {
     clearTimeout(this.timer);
+  }
+});
+
+// ---- the list's keys while a keyboard is composing ------------------------------
+//
+// Gboard (also with a hardware keyboard, on a tablet) keeps the word being
+// typed "composing" (underlined). CodeMirror ignores every key during a
+// composition, and on Android it lets Enter reach the page before its own
+// keys: so ↑ / ↓ moved the cursor and Enter started a new line instead of
+// picking a suggestion. The list's keys are caught on the editor before
+// CodeMirror sees them; they do what its completion keys do.
+
+export const completionKeys = ViewPlugin.fromClass(class {
+  constructor(view) {
+    this.view = view;
+    this.onKey = (e) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (completionStatus(view.state) !== 'active') return;
+      let done;
+      // ↑ ↓ belong to the open list. Right after it changed, CodeMirror
+      // ignores them for a moment (against accidental picks): then the
+      // move waits that moment out instead of moving the cursor.
+      const move = (cmd) => {
+        if (cmd(view)) return true;
+        setTimeout(() => { if (completionStatus(view.state) === 'active') cmd(view); }, 90);
+        return true;
+      };
+      switch (e.key) {
+        case 'ArrowDown': done = move(moveCompletionSelection(true)); break;
+        case 'ArrowUp': done = move(moveCompletionSelection(false)); break;
+        case 'PageDown': done = move(moveCompletionSelection(true, 'page')); break;
+        case 'PageUp': done = move(moveCompletionSelection(false, 'page')); break;
+        case 'Escape': done = closeCompletion(view); break;
+        case 'Enter': {
+          const c = selectedCompletion(view.state);
+          if (c && c.prose) { closeCompletion(view); return; } // a word in a sentence: Enter is a new line (see proseEnter)
+          done = acceptCompletion(view);
+          break;
+        }
+        default: return;
+      }
+      if (done) { e.preventDefault(); e.stopPropagation(); }
+    };
+    view.dom.addEventListener('keydown', this.onKey, true);
+  }
+
+  destroy() {
+    this.view.dom.removeEventListener('keydown', this.onKey, true);
   }
 });

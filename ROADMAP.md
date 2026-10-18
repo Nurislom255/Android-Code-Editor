@@ -13,9 +13,9 @@ build, and how we know it is done.
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
 | 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
 | 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0, fixed in v2.8.1) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
-| 5 | Built-in runtimes: Python, C, C++, **Rust** (owner: the app may pass 100 MB) | 5A small; 5B, 5C unknown until their spikes | Not started (packages checked, see Phase 5) |
-| 6 | VS Code extras: JS/TS intelligence, project replace, … | Large | Not started |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0, fixed in v2.8.1; fixes in v2.9.0) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
+| 5 | **The app as an APK, with a real Linux terminal** (Alpine Linux via proot, like Acode): automatic APK builds, projects as real files, xterm.js terminal, Run with real compilers the user installs, VS Code-style language servers as an option | Large (6 steps) | **Planned** (owner, Oct 2026) — replaces the earlier "WebAssembly runtimes" plan. See Phase 5 |
+| 6 | VS Code extras: project replace, colour picker, diff, … (JS/TS intelligence comes from Phase 5.5's language servers) | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
 
 Order matters: 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7. Each phase ends with a tested build
@@ -29,7 +29,14 @@ pushed to the branch and this table updated.
 |---|---|
 | How the phone is held | **Two thumbs.** Most-used keys sit at the left and right ends of the bars; less-used keys in the middle. |
 | Semicolons | `;` matters most in **C++** (also C, Java, C#, JS/TS). Automatic `;` is **on by default** for those languages. JS/TS files written without semicolons are detected and left alone. |
-| Running code | **Built in only.** No Termux, no online compiler, no manual setup: install the app and press Run. **Python, C, C++ and Rust** (owner, Oct 2026), and **the app may grow past 100 MB** for them. If one still can't be bundled, stop and discuss with the owner before choosing anything external. |
+| The product | **The Android app (APK).** The website build stays only as a quick preview and for the automated tests; what needs Linux says "in the app" there (owner, Oct 2026). |
+| Running code | **A real Linux inside the app, the way Acode does it:** Alpine Linux run by proot in the app's own folder (no root, no Termux app). The user installs compilers and libraries themselves (`apk add python3 g++ rust`, `pip install …`) — space is the user's choice; the app offers one-tap installs and shows sizes. **Python, C, C++ and Rust** first (owner, Oct 2026). Replaces the earlier rule "built in only, no downloads". No online compiler. |
+| Terminal | **xterm.js** (the terminal VS Code uses), in the bottom panel. |
+| Code intelligence | A Settings choice: **Basic** (today's built-in features — light, for low-end devices) or **Advanced** (language servers running in the app's Linux, as VS Code uses: pyright / python-lsp-server, clangd, rust-analyzer, typescript-language-server). |
+| APK builds | **Automatic, on GitHub** (no Android Studio for the owner): every PR has an APK to download; every merge publishes a release. |
+| Test device | **Samsung Galaxy Tab A9+** (arm64). The app is built for **arm64-v8a** only until someone asks for more. The owner's phone can't install APKs: phone layouts are checked on the tablet in a narrow window. |
+| Projects in the APK | **Real files** in the app's folder, visible in the terminal. Projects in shared folders (Download/…) later, if it stays simple ("All files access"). |
+| Where big files live | **This repository** — its GitHub Releases if we host anything (each file ≤ 2 GB, not counted in the repo's size). Compilers and libraries come from Alpine's, PyPI's and crates.io's own servers. |
 | Keys bar | Tab is a first-class key, always visible. Ctrl, Shift, Alt and Esc are reachable whenever they are needed. The whole bar is **customizable from Settings**. Never delete a key from the app — re-rank it into the "More" sheet instead. |
 | Settings | Split into small pages with a search box. |
 | Accent colour | VS Code blue (`#0078D4`; `#3794FF` on dark backgrounds). |
@@ -709,90 +716,153 @@ list is `a`'s.
 |---|---|---|
 | Sometimes, sliding a long-pressed tab slides the tab bar instead | Three things could do it. **1.** v2.8.0 moved the "don't scroll while dragging" listener from the list to the page, added only when the finger lands — but a browser decides *as the finger lands* whether it may wait for a page to stop scrolling, counting only listeners already on the element under it; so on a phone a bar long enough to scroll scrolled under the dragged tab (headless Chromium never shows this, so the test checks the listener itself through the DevTools protocol). **2.** A tab picked up near the bar's edge (one cut off by it) started the edge auto-scroll at once, even while moving away from the edge. **3.** After any drop the bar was rebuilt and jumped back to the active tab | **1.** The listener is on each list (tab bars, tree, Open editors) from the start; the page one stays for a tab moved into the other bar. **2.** The edge scrolls only once the finger has moved 8 px toward it. **3.** The bar scrolls to the active tab only when the active tab changes |
 
+### After v2.8.1 — fixes from the owner's test on the tablet (v2.9.0)
+
+| Report | Cause | Fix |
+|---|---|---|
+| Enter on a suggestion starts a new line; ↑ / ↓ move the cursor instead of the list (tablet with a keyboard) | Gboard keeps the word being typed "composing" (underlined), also with a hardware keyboard. CodeMirror ignores every key during a composition, and on Android lets Enter reach the page before its own keys | The list's keys (↑ ↓ PgUp PgDn Enter Esc) are caught on the editor before CodeMirror, and do what its completion keys do (a word in a sentence still takes Enter as a new line). Reproduced with a composition in the test browser: Enter added two new lines before, now picks the suggestion |
+| (the same cause) Shortcuts while a word is being typed | Shortcuts were skipped while composing, and the built-in ones matched the letter typed, not the key — "Unidentified" while composing, or another alphabet | A key held with Ctrl / Alt / ⌘, or an F-key, is a shortcut even mid-word; the physical key decides when the letter isn't a Latin one |
+| "document is not defined" | Run on `app.js` of the Web template ran it in the console's sandbox, which has no page | Run on a script a page loads (`<script src>`, the nearest page first) shows that page — its console output still in the console. A script no page loads still runs in the console, and a "… is not defined" error for `document`, `window`, `alert`… says why |
+| The divider between panes jumps to the left when grabbed; the preview beside the code can't be resized | With the code split *and* the preview beside it (three columns), the divider computed the first pane's share of the whole width as if there were two: a 3 px drag moved it ~160 px. The preview had no divider of its own | Each divider moves only its two neighbours, from the sizes they have when the drag starts. The side preview has its own divider. Showing or hiding a column starts them equal again |
+| Ctrl+B like VS Code; dragging the sidebar to its edge should hide it; a shortcut to move between split panes | Ctrl+B existed (see the composition fix above for why it could fail) | Pulled narrower than half its smallest width, the sidebar fades and hides when let go; Ctrl+B or the activity bar brings it back at its old width. **Ctrl+1 / Ctrl+2** (VS Code's) focus the first / second pane; Ctrl+2 splits first |
+| Long-press shows a tooltip, hover doesn't | Hover relied on the browser's `title` tooltip, which Android's browsers never show, even with a mouse | On Android a mouse or trackpad resting on a button shows the same bubble as a long-press (after 0.5 s; at once when moving along a toolbar). Desktop browsers keep their own |
+| Tablet: no ← in Settings | ← was only shown on narrow screens (and on the phone's list when opened from the drawer) | ← is always there: search → page → list → out of Settings |
+| Owner's request: shortcuts of two keys, like VS Code's Ctrl+K, then another key (e.g. Ctrl+K F closes the folder) | — | A shortcut may be two keys ("Ctrl+K F"; the first needs Ctrl, Alt or Cmd). Pressing the first one waits for the second; a panel lists what each second key does (VS Code only says it in the status bar); Esc, a tap elsewhere or leaving the app cancels; a second key that does nothing says so and types nothing. Defaults, VS Code's where the app has the command: Ctrl+K F close project, M language, P copy path, R reveal in tree, V preview, W close all tabs, U close saved tabs, Enter keep a preview tab, T colour theme, Ctrl+C / Ctrl+U line comment, Ctrl+0 / Ctrl+J fold / unfold all, Ctrl+X trim trailing whitespace, Ctrl+O open folder, Ctrl+S keyboard shortcuts (not Ctrl+K Ctrl+W / Ctrl+T: the browser keeps Ctrl+W and Ctrl+T). Settings → Keyboard shortcuts records two keys pressed within 1.5 s, or a typed "Ctrl+K Z"; Ctrl+K alone is refused while two-key shortcuts start with it; a two-key one whose first key was another command's takes it off that command |
+
+
 ---
 
-## Phase 5 — Built-in runtimes: Python, C, C++, Rust (reported issue 7)
+## Phase 5 — The app as an APK, with a real Linux terminal (owner, Oct 2026)
 
-Rule from the owner: **install the app and press Run** — nothing external, no
-manual setup. **Owner decision (Oct 2026): Python, C, C++ and Rust, and the
-app may grow past 100 MB for them.** The owner may move this phase earlier.
+**Goal:** a terminal like VS Code's, inside the app, where the user installs
+what they need (`apk add python3 g++ rust`, `pip install requests`, `cargo
+add …`) and runs it — plus Run (F5) using those real tools, and, as an option,
+the language servers VS Code uses. The way **Acode** (an Android code editor)
+already does it: **Alpine Linux run by proot inside the app's own folder.**
 
-**Checked from the build machine (Oct 2026):**
-- npm is reachable, so `npm install` brings the toolchains — nobody has to
-  download or upload them by hand:
-  - **Pyodide** (`pyodide`, CPython for WebAssembly): 14 MB core and
-    standard library; more packages on demand.
-  - **LLVM / Clang / LLD for WebAssembly** (`@yowasp/clang`): about 105 MB
-    unpacked; compiles C and C++ to WebAssembly.
-  - A WASI shim to run the compiled programs in a worker
-    (`@bjorn3/browser_wasi_shim`, 115 KB): stdout, stdin, exit code.
-- GitHub release downloads are blocked from the build machine (HTTP 403),
-  and Rust has no maintained npm package of a compiler that runs in a
-  browser (5C).
+*Replaces the earlier plan* (WebAssembly toolchains bundled into the app:
+Pyodide, clang compiled to WebAssembly, an experimental rustc): real Linux
+tools are complete, faster, and the same ones VS Code's terminal runs; the
+WebAssembly route only made sense for the website, which is no longer the
+product.
 
-**How the big files reach the phone:**
-- **APK:** bundled in the app: works offline from the first start.
-- **Website (GitHub Pages):** each toolchain downloads the first time a file
-  of that language is run (with a progress bar), then stays in the browser's
-  storage for offline use. It is not in the offline precache, so opening the
-  editor stays fast.
-- **GitHub's limits:** one file in a repository must be < 100 MB (bigger
-  ones are split into parts and joined when loaded); a Pages site ≤ 1 GB;
-  and every update of a 100 MB file committed to `docs/` stays in the git
-  history forever. So toolchains do **not** go into git: the site is built
-  and deployed by a **GitHub Actions** workflow (`npm ci`, build, deploy);
-  the owner switches Pages' source to "GitHub Actions" once.
-- The owner's offer to upload files by hand is only needed if a toolchain
-  exists nowhere but in GitHub releases — possibly Rust (5C).
+**Words used here:**
+- *Kernel vs. userland:* Android already runs on the Linux **kernel**. What
+  it lacks is a normal Linux **userland** — the shell, `apk`, compilers, the
+  `/usr` layout. Alpine Linux provides that (its base is ~3 MB).
+- *proot* makes Alpine's programs believe they run in a normal Linux system
+  (it translates paths like `/usr/bin` to the app's folder and pretends to be
+  root). No root access, no kernel of its own.
+- *Running programs on Android ≥ 10:* an app may not start programs it wrote
+  to its own folder. Programs started **through Android's own loader**
+  (`/system/bin/linker64 <program>`) are allowed — Termux's `termux-exec` and
+  Acode work this way. proot itself ships **inside the APK**, which Android
+  always allows.
 
-### 5A Python (low risk)
+**How it fits together:**
 
-- **Pyodide** in a worker: streamed output, Stop button and time limit (as
-  for JS), clickable `File "main.py", line 3` errors.
-- `input()`: interactive input from a worker needs `SharedArrayBuffer`, which
-  requires the page to be "cross-origin isolated". GitHub Pages can't send those
-  headers; the service worker can add them (`coi-serviceworker` approach).
-  Fallback when unavailable: the Program input box (lines prepared before running).
-- Measure: download / APK size added, cold start time on the owner's phone.
+```
+our app (WebView: editor, xterm.js)
+   ⇅  Capacitor plugin "Linux" (Kotlin)  ⇅  a little C (JNI): pseudo-terminal + process
+                                              │
+      /system/bin/linker64 → proot (libproot.so, in the APK)
+                              → Alpine Linux in the app's folder → sh, apk, python3, g++, cargo, …
+```
 
-### 5B C and C++ (spike first)
+- **Alpine base** (aarch64 "minirootfs", ~3 MB): downloaded on the first
+  terminal start from Alpine's servers, checked against its SHA-256; a pinned
+  copy in this repository's GitHub Releases as a fallback.
+- **Packages:** `apk add` from Alpine's mirrors; `pip`, `cargo`, `npm` from
+  their usual registries. Nothing for us to host.
+- **Projects** are bound into Linux at `/root/projects/<name>` (proot `-b`),
+  so the editor and the terminal see the same files.
 
-- **Main candidate: clang + lld compiled to WebAssembly** (`@yowasp/clang`).
-  The program is compiled to WebAssembly (wasm32-wasi) and runs in a worker
-  with the WASI shim: `cout` / `printf`, `cin`, exit code, Stop and time
-  limit, real clang error messages made clickable. Same code path in the
-  website and the APK.
-- Fallback: **native clang for Android inside the APK** (executables packaged
-  as native libraries): faster, real ARM programs, but APK-only, a native
-  build pipeline, and Android's rule against running files the app writes
-  itself means an older target SDK (fine for sideloading, not for the Play
-  Store).
-- Spike measurements on the owner's phone: size added (download and
-  installed); first and warm compile+run time of a `#include <iostream>`
-  hello world; peak memory; whether `<iostream>`, `<string>`, `<vector>`,
-  `<map>`, `<algorithm>`, `<cmath>` work; `cin`.
-- Go / no-go (owner to confirm): warm compile+run ≤ 5 s, first ≤ 20 s; those
-  headers work. Plain C comes with it.
+### Steps — each its own PR, each tested on the tablet
 
-### 5C Rust (spike first; the hardest)
+**5.1 Automatic APK builds (first; everything else needs it).**
+- GitHub Actions: build the web part → `npx cap sync` → Gradle → a signed
+  APK. Every PR: the APK as a download (build artifact). Every merge to
+  `main`: a GitHub Release with the APK — a direct download on the tablet.
+- The native Android project (`android/`) is committed (native code lives
+  there). The app gets its real ID (today `com.example.codeeditor`), since it
+  becomes part of the app's folder path.
+- **Signing key:** made once and kept in the repository's GitHub Secrets, so
+  each new APK installs over the previous one without losing projects. (The
+  owner does one guided step; never committed to the repository.)
+- Done when: merging a PR gives a release whose APK installs on the tablet and
+  shows the new version in Settings → About.
 
-- `rustc` is large (well over 100 MB as WebAssembly in the experimental
-  builds that exist) and needs Rust's standard library built for wasm32-wasi.
-- Options to measure, in this order: (A) an experimental rustc compiled to
-  WASI, running in a worker like 5B (community builds exist; find a source
-  the build can fetch, else the owner uploads it in < 100 MB parts or CI
-  builds it); (B) a native Rust toolchain inside the APK (APK-only, large,
-  older target SDK, as in 5B's fallback).
-- Go / no-go (owner to confirm): warm compile+run of hello world ≤ 15 s on
-  the phone, ≤ 300 MB added. If both options miss, **stop and discuss with
-  the owner**.
+**5.2 Projects as real files in the APK.**
+- In the APK, new projects are folders in the app's storage (the existing
+  device-files mode, `CapacitorProjectFs`, now run for real). Browser-storage
+  projects get **Move to device files**. Tree, search, git, recovery and
+  trash work as before.
+- Done when: a project made on the tablet survives an app update, and its
+  files are plain files.
+
+**5.3 The terminal.**
+- A **Terminal** tab in the bottom panel (xterm.js, loaded on first use);
+  several terminals; follows the colour theme; pinch to zoom; copy / paste;
+  the keys bar works in it (Ctrl, Esc, Tab, arrows, the joystick).
+- First start: "Set up Linux (≈ 3 MB download)" with progress; then a shell
+  in the project's folder. Settings → Storage shows the Linux size and
+  **Remove the Linux environment**.
+- Done when, on the tablet: `uname -a`; `apk add python3`; `python3 -c
+  'print(42)'`; Ctrl+C stops a running program; output is kept when
+  switching panels.
+
+**5.4 Run with real tools.**
+- Run (F5) on `.py`, `.c`, `.cpp`, `.rs`, `.js` (Node), `.go`, … runs the
+  matching command in a terminal (`python3 main.py`; `g++ main.cpp -o main
+  && ./main`; `cargo run`), editable per project. Input works — it is a real
+  terminal.
+- A missing tool: **"Install Python (≈ 50 MB)?"** → `apk add …` with
+  progress. Compiler and runtime errors (`main.cpp:4:5: error …`, `File
+  "main.py", line 3`) are clickable, as in the console today.
+- Done when: hello world with input in Python, C++ and Rust on the tablet.
+
+**5.5 Code intelligence: Basic / Advanced (Settings).**
+- **Advanced** starts a language server in Linux and connects the editor to
+  it (the Language Server Protocol, as VS Code does): smarter completions,
+  types on hover, go to definition, rename, real errors. Per language, each
+  installed on demand: pyright or python-lsp-server, clangd,
+  rust-analyzer, typescript-language-server.
+- **Basic** keeps today's built-in features: light, for low-end devices.
+- Done when: in C++, an undeclared name is underlined by clangd and
+  go-to-definition jumps into another file.
+
+**5.6 Projects in shared folders (later; only if it stays simple).**
+- With Android's **All files access** (granted by the user in Settings),
+  folders like `Download/` open as projects and are bound into Linux
+  (`/sdcard`). The device-files code already supports this mode.
+
+### Risks and limits (honest list)
+
+- Android could close the "start through the system loader" way in a future
+  version (Termux calls its own approach temporary). Fallback for a
+  sideloaded APK: an older target SDK, as Termux does.
+- proot slows work that makes many system calls (big builds); fine for
+  learning-sized projects.
+- Space is the user's: Python ≈ 50 MB, a C/C++ toolchain a few hundred MB,
+  Rust more (estimates — measured on the tablet in 5.3–5.4).
+- Google Play forbids downloading runnable code from outside Play; this app
+  is distributed on GitHub. (Acode is on Play with the same design —
+  enforcement is unclear.)
+- The native parts can't run in our automated tests (desktop Chromium):
+  pure logic gets unit tests (command per language, error-line parsing,
+  download checksums), the app side is tested against a fake plugin, and the
+  rest are device checks in TESTS.md.
+- Licences: proot is GPL-2.0 (it runs as a separate program, so the app's
+  own code is unaffected; its source is linked from Settings → About);
+  xterm.js is MIT; Alpine packages carry their own, installed by the user.
 
 ---
 
 ## Phase 6 — VS Code extras (ranked by value for effort)
 
-1. **Real JS/TS intelligence** with the TypeScript language service in a worker:
-   smarter completions, types on hover, go to definition, rename, real errors.
+1. **Real JS/TS intelligence** — from Phase 5.5 (typescript-language-server
+   in the app's Linux, "Advanced" setting): smarter completions, types on
+   hover, go to definition, rename, real errors.
 2. Find and **replace** across the whole project (with preview).
 3. CSS colour swatches and a colour picker.
 4. Side-by-side diff view (git and local history).
@@ -850,5 +920,6 @@ be resolved on the phone without a keyboard.
 
 - Minimap — unreadable on a 6" screen; outline + sticky scroll cover it.
 - Third-party extensions — out of scope by the original spec.
-- Online compile services / Termux as the main way to run C++ — the owner
-  wants everything built in (see Phase 5B for the fallback rule).
+- Online compile services, or the separate Termux app — the app runs its own
+  Linux instead (Phase 5): works offline once a tool is installed, nothing
+  else to install.

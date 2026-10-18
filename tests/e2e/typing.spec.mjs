@@ -331,6 +331,40 @@ test('suggestions show while a keyboard is still composing the word (Gboard-styl
   expect(await editorText(page)).toBe('const documentTitle = 1;\ndoc');
 });
 
+test('while a keyboard is still composing, ↑ ↓ move in the suggestion list and Enter picks (Gboard with a hardware keyboard)', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'drives desktop contenteditable composition through CDP');
+  await boot(page);
+  await newProject(page, 'ime2', 'js');
+  await openFile(page, 'main.js');
+  await setText(page, 'const documentTitle = 1;\nconst docCount = 2;\n');
+  const cdp = await page.context().newCDPSession(page);
+  for (const t of ['d', 'do', 'doc']) {
+    await cdp.send('Input.imeSetComposition', { text: t, selectionStart: t.length, selectionEnd: t.length });
+    await page.waitForTimeout(40);
+  }
+  const selected = page.locator('.cm-tooltip-autocomplete li[aria-selected] .cm-completionLabel');
+  await expect(selected).toHaveText('docCount', { timeout: 1500 });
+  const head = () => page.evaluate(() => window.__app.ws.view.state.selection.main.head);
+  const at = await head();
+  expect(await page.evaluate(() => window.__app.ws.view.composing)).toBe(true);
+  await page.keyboard.press('ArrowDown'); // the list, not the cursor
+  await expect(selected).toHaveText('documentTitle');
+  expect(await head()).toBe(at);
+  await page.keyboard.press('ArrowUp');
+  await expect(selected).toHaveText('docCount');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter'); // picks it — no new line
+  await expect.poll(() => editorText(page)).toBe('const documentTitle = 1;\nconst docCount = 2;\ndocumentTitle');
+  await page.keyboard.type('.x;'); // and typing goes on normally
+  await expect.poll(() => editorText(page)).toBe('const documentTitle = 1;\nconst docCount = 2;\ndocumentTitle.x;');
+  // a shortcut with Ctrl still works mid-word (Ctrl+B: the sidebar)
+  for (const t of ['a', 'ab']) await cdp.send('Input.imeSetComposition', { text: t, selectionStart: t.length, selectionEnd: t.length });
+  const sidebar = () => page.evaluate(() => window.__app.layout.isSidebarVisible());
+  const before = await sidebar();
+  await page.keyboard.press('Control+b');
+  await expect.poll(sidebar).toBe(!before);
+});
+
 test('import paths are suggested relative to the file', async ({ page }) => {
   await boot(page);
   await newProject(page, 'imp', 'empty');

@@ -1,35 +1,61 @@
-// ROADMAP Phase 5 — built-in runtimes. Acceptance tests written ahead: each
-// is test.fixme (reported as skipped) until the phase is built. 5B and 5C
-// start with a spike; their go/no-go numbers are measured on the owner's phone.
+// ROADMAP Phase 5 — the app as an APK, with a real Linux terminal (Alpine
+// Linux run by proot, as Acode does). Acceptance tests written ahead: each is
+// test.fixme (reported as skipped) until its step is built. The native parts
+// (proot, the pseudo-terminal) can't run in desktop Chromium: when a step is
+// built, its app side is tested here against a fake "Linux" plugin, and the
+// rest becomes a device check in TESTS.md (Galaxy Tab A9+).
 import { test } from '@playwright/test';
 
-test.fixme('5A Python: Run streams print() output; time limit and Stop work', async () => {
-  // main.py: for i in range(3): print(i)  → console shows 0, 1, 2 as they come, then "✓ Finished".
-  // while True: pass → stopped by the time limit; Stop ends it at once. The status bar is orange meanwhile.
+// ---- 5.1 automatic APK builds (checked on GitHub and the tablet, not here) ----------------
+
+test.fixme('5.1 a merged PR publishes a release with an APK that installs over the previous one', async () => {
+  // GitHub Actions: build → cap sync → Gradle → signed APK. The PR has the APK as a download;
+  // the merge creates a release. Installing it over the last one keeps projects; About shows the new version.
 });
 
-test.fixme('5A Python: input() reads the Program input lines (or asks, where cross-origin isolated)', async () => {
-  // name = input(); print("hi", name) with Program input "Ann" → "hi Ann".
+// ---- 5.2 projects as real files ------------------------------------------------------------
+
+test.fixme('5.2 in the APK, a new project is a folder of plain files; Move to device files keeps everything', async () => {
+  // Fake plugin: new project → files written through the device-files mode. A browser-storage project
+  // → "Move to device files" → same tree, same unsaved buffers, git history kept.
 });
 
-test.fixme('5A Python: an error points at its line, and the link jumps there', async () => {
-  // Line 3 raises ZeroDivisionError → console shows File "main.py", line 3 as a link; tapping it puts the cursor on line 3.
+// ---- 5.3 the terminal ----------------------------------------------------------------------
+
+test.fixme('5.3 the Terminal tab sets up Linux once (download with progress), then opens a shell in the project', async () => {
+  // Fake plugin reports download progress, then a prompt. Second start: no download. Settings → Storage
+  // shows the Linux size and "Remove the Linux environment".
 });
 
-test.fixme('5A Python: works offline after the first download (web) / from the first start (APK)', async () => {
-  // Run once online, go offline (context.setOffline), reload, Run again → same output.
+test.fixme('5.3 the terminal takes typing, the keys bar (Ctrl, Esc, Tab, arrows) and Ctrl+C', async () => {
+  // Keys typed in xterm.js reach the plugin as bytes (Ctrl+C = \x03, ↑ = \x1b[A); output is drawn;
+  // several terminals; the theme follows; output is kept when switching panels.
 });
 
-test.fixme('5B C++: hello world with <iostream> compiles and runs; cin works', async () => {
-  // #include <iostream> … std::cout << "hi" → "hi". int n; std::cin >> n; with input "41" → n+1 = 42.
-  // <string>, <vector>, <map>, <algorithm>, <cmath> compile.
+// ---- 5.4 Run with real tools -----------------------------------------------------------------
+
+test.fixme('5.4 Run on .py / .cpp / .rs runs the real tool in a terminal, with input', async () => {
+  // main.py → python3 main.py; main.cpp → g++ main.cpp -o main && ./main; Cargo project → cargo run.
+  // The command can be changed per project.
 });
 
-test.fixme('5B C/C++: compile errors are clickable and the program exit code is shown', async () => {
-  // A missing ; on line 4 → clang's message with main.cpp:4:… as a link to line 4.
-  // return 3; → "exited with code 3".
+test.fixme('5.4 a missing tool: "Install Python (≈ 50 MB)?" installs it with apk, then runs', async () => {
+  // Fake plugin: `command -v python3` fails → the offer → apk add python3 → Run again.
 });
 
-test.fixme('5C Rust: hello world compiles and runs (only if the spike is a go)', async () => {
-  // fn main() { println!("hi"); } → "hi". If neither option meets the owner's limits, this stays fixme and is discussed.
+test.fixme('5.4 compiler and runtime errors in the terminal are clickable', async () => {
+  // "main.cpp:4:5: error: …" and 'File "main.py", line 3' → tap → the file opens at that line.
+});
+
+// ---- 5.5 code intelligence ------------------------------------------------------------------
+
+test.fixme('5.5 Settings → Code intelligence: Basic keeps the built-in features; Advanced uses a language server', async () => {
+  // Advanced + C++: clangd (installed on demand) underlines an undeclared name; go to definition
+  // jumps into another file; hover shows the type. Basic: none of it starts.
+});
+
+// ---- 5.6 shared folders ----------------------------------------------------------------------
+
+test.fixme('5.6 with All files access, a folder in Download/ opens as a project and is visible in the terminal', async () => {
+  // Granted in Settings; the folder is bound into Linux (/sdcard/Download/…).
 });

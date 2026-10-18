@@ -191,7 +191,38 @@ Automated
     moved toward that edge, and then does (v2.8.1).
 - e2e `workspace`: create / rename / delete from the tree menu, now in place.
 
+- After v2.8.1 (v2.9.0): `typing` — while a keyboard is composing, ↑ ↓
+  move in the suggestion list (the cursor stays) and Enter picks (no new
+  line), Ctrl+B still works mid-word; unit `keybindings` — a Ctrl / Alt /
+  F-key shortcut while composing, by the physical key; `run` — Run on a
+  script a page loads shows the page (no "document is not defined"), a lone
+  script says why `document` is missing; three columns (split + side
+  preview): a 3 px drag moves a divider 3 px, the preview's own divider; two
+  panes on every screen (phone: up and down); `workspace` — Ctrl+1 / Ctrl+2,
+  Ctrl+B (also by the physical key), the sidebar dragged to its edge hides
+  and comes back at its width; `lookfeel` — a mouse hovering an icon shows
+  its name on Android, not on desktop (the browser does); `settings` — ← on
+  wide screens; unit `pages`.
+- Two-key shortcuts (v2.9.0): unit `keybindings` — "Ctrl+K F" written
+  several ways, what may be one, which start with a key (plain second keys
+  first), Ctrl+K alone vs. Ctrl+K …; `settings` — Ctrl+K shows the panel
+  with the second keys, Esc cancels, Ctrl+K Ctrl+C comments, Ctrl+K Ctrl+X
+  trims, an unknown second key says so and types nothing, Ctrl+K F closes
+  the project, listed in Keyboard shortcuts; two keys pressed in a row in
+  Settings make one (Ctrl+K alone refused), typed works, and it runs.
+
 On the device
+- [ ] Tablet with a keyboard: type `doc`, ↓ ↓ in the list, Enter — the
+      suggestion, no new line; Ctrl+B mid-word.
+- [ ] Web template: open app.js, Run — the page shows, "app.js loaded" in the
+      console, no "document is not defined".
+- [ ] Split the code, open the preview beside it: both dividers move from
+      where they are, no jump.
+- [ ] Drag the sidebar's edge to the left: it hides; Ctrl+B brings it back.
+- [ ] A mouse on the tablet: rest it on an icon — its name shows.
+- [ ] Tablet: Settings → ← closes it.
+- [ ] With a keyboard: Ctrl+K — the panel; F closes the project. Settings →
+      Keyboard shortcuts: give a command Ctrl+K then a letter; use it.
 - [ ] Tap a few files in the tree: one italic tab follows; type in one: it
       stays.
 - [ ] Long-press a tab, drag it to the lower half of the code: split.
@@ -210,14 +241,18 @@ On the device
       screen's edge, and slide it: the bar doesn't slide; move it to the
       edge on purpose: the bar scrolls on.
 
-## Phase 5 — Built-in runtimes (not built)
+## Phase 5 — The APK with a real Linux terminal (not built)
 
-Acceptance tests (`tests/e2e/phase5.spec.mjs`, fixme): Python output
-streams, time limit and Stop, `input()`, clickable error lines, offline;
-C++ hello world with `<iostream>` and `cin`, the common headers, clickable
-compile errors and the exit code; Rust hello world only if its spike is a go.
-On the device: size added, first and warm run time (go / no-go numbers in
-ROADMAP Phase 5).
+Acceptance tests (`tests/e2e/phase5.spec.mjs`, fixme), one group per step:
+5.1 a merged PR yields a release with an APK that installs over the last one;
+5.2 projects are real files (Move to device files keeps everything); 5.3 the
+terminal sets up Linux once and runs `apk add` / `python3` with Ctrl+C and
+the keys bar working; 5.4 Run uses the real tools, offers to install a
+missing one and makes error lines clickable; 5.5 Advanced code intelligence
+(language servers) vs. Basic; 5.6 shared folders. Native parts can't run in
+desktop Chromium: their app side is tested against a fake plugin, pure logic
+gets unit tests, and the rest are device checks on the tablet (phone layouts
+in a narrow window: the owner's phone can't install APKs).
 
 ## Phase 6 — VS Code extras (not built)
 

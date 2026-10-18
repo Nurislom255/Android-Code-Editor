@@ -266,3 +266,63 @@ test('adaptive layout: drawer on phones, persistent sidebar on wide screens', as
     await expect(page.locator('#sidebar')).toBeHidden();
   }
 });
+
+test('Ctrl+1 / Ctrl+2 move the cursor between the code panes (Ctrl+2 splits first, as in VS Code)', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'fp', 'web');
+  await openFile(page, 'index.html');
+  await page.locator('.pane.focused-pane .cm-content').click();
+  const focused = () => page.evaluate(() => {
+    const el = document.activeElement;
+    const pane = el && el.closest('.pane');
+    return { pane: pane ? Number(pane.dataset.pane) : null, active: window.__app.ws.activePane };
+  });
+  await page.keyboard.press('Control+2');
+  await expect(page.locator('#pane-1')).toBeVisible();
+  await expect.poll(focused).toEqual({ pane: 1, active: 1 });
+  await page.keyboard.press('Control+1');
+  await expect.poll(focused).toEqual({ pane: 0, active: 0 });
+  await page.keyboard.press('Control+2');
+  await expect.poll(focused).toEqual({ pane: 1, active: 1 });
+});
+
+test('the sidebar: Ctrl+B hides and shows it; pulled to its edge it hides, and comes back at its width', async ({ page }) => {
+  await boot(page);
+  await newProject(page, 'sb', 'web');
+  test.skip(await isCompact(page), 'a phone has a drawer instead');
+  const visible = () => page.evaluate(() => window.__app.layout.isSidebarVisible());
+  if (!(await visible())) await page.keyboard.press('Control+b');
+  await expect.poll(visible).toBe(true);
+  await page.keyboard.press('Control+b');
+  await expect.poll(visible).toBe(false);
+  await page.keyboard.press('Control+b');
+  await expect.poll(visible).toBe(true);
+  const width = () => page.locator('#sidebar').evaluate((el) => el.getBoundingClientRect().width);
+  const w0 = await width();
+  // drag the edge most of the way to the left: it shows it will hide, and hides on release
+  const r = await page.locator('#sidebar-resizer').boundingBox();
+  const x = r.x + r.width / 2, y = r.y + r.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - w0 + 30, y, { steps: 8 });
+  await expect(page.locator('#app')).toHaveClass(/sidebar-collapsing/);
+  await page.mouse.up();
+  await expect.poll(visible).toBe(false);
+  await page.keyboard.press('Control+b');
+  await expect.poll(visible).toBe(true);
+  expect(Math.abs(await width() - w0)).toBeLessThan(2);
+  // a normal resize still resizes
+  const r2 = await page.locator('#sidebar-resizer').boundingBox();
+  await page.mouse.move(r2.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(r2.x + 2 + 60, y, { steps: 5 });
+  await page.mouse.up();
+  expect(Math.abs(await width() - (w0 + 60))).toBeLessThan(3);
+  expect(await visible()).toBe(true);
+  // Ctrl+B by the key under the finger: a Cyrillic layout, or a keyboard still composing a word ("Unidentified")
+  const press = (key) => page.evaluate((k) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: 'KeyB', ctrlKey: true, bubbles: true, cancelable: true })), key);
+  await press('и');
+  await expect.poll(visible).toBe(false);
+  await press('Unidentified');
+  await expect.poll(visible).toBe(true);
+});
