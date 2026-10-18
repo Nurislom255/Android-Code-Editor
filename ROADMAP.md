@@ -11,9 +11,9 @@ build, and how we know it is done.
 |---|---|---|---|
 | 0 | Real-device test loop (diagnostics) | Small | Skipped for now: the owner's reports were enough to find every bug so far. Build it when a bug can't be reproduced |
 | 1 | Typing correctness: gestures, autocomplete, Emmet, semicolons | Medium | **Done** — tested by the owner on the phone and tablet; the reported problems were fixed in PRs #2–#7 (see "After Phase 1") |
-| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the phone |
-| 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the phone |
-| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0, fixed in v2.8.1; fixes in v2.9.0) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the phone |
+| 2 | Keys bar redesign, cursor & selection, Settings split | Large | **Built.** Part 1 (v2.2.0, refined in v2.3.0–v2.4.2): the new keys bar (2.2–2.6, 2.8, shortcuts of 2.9). Part 2 (v2.5.0): Settings pages with search (2.1), the keys-bar editor and Pin (2.7), custom keyboard shortcuts (2.9) — see "Part 2 — result". Waiting for the owner's test on the tablet |
+| 3 | Look & feel: VS Code blue, icons, tooltips, full screen, themes | Medium | **Built** (v2.6.0) — see "Phase 3 — result". Waiting for the owner's test on the tablet |
+| 4 | Tabs drag & split, VS Code-like file explorer | Medium | **Built** (v2.7.0; reordering redone in v2.8.0, fixed in v2.8.1; fixes in v2.9.0) — see "Phase 4 — result" and "After Phase 4". Waiting for the owner's test on the tablet |
 | 5 | **The app as an APK, with a real Linux terminal** (Alpine Linux via proot, like Acode): automatic APK builds, projects as real files, xterm.js terminal, Run with real compilers the user installs, VS Code-style language servers as an option | Large (6 steps) | **Planned** (owner, Oct 2026) — replaces the earlier "WebAssembly runtimes" plan. See Phase 5 |
 | 6 | VS Code extras: project replace, colour picker, diff, … (JS/TS intelligence comes from Phase 5.5's language servers) | Large | Not started |
 | 7 | Git, more advanced: history, sync, hunks, merge, stash, … | Medium–large | Not started (owner's request; the owner may move it earlier) |
@@ -48,9 +48,11 @@ pushed to the branch and this table updated.
 
 ## Working rules for every phase
 
-1. **Verify touch and keyboard behaviour on a real Android phone** (Phase 0
-   tools), with Gboard at minimum. v2's emulated tests passed while real-phone
-   bugs remained — emulation is necessary but not enough.
+1. **Verify touch and keyboard behaviour on a real Android device** — the
+   owner's Galaxy Tab A9+ with the APK (phone layouts in a narrow window; the
+   owner's phone can't install APKs), with Gboard at minimum. v2's emulated
+   tests passed while real-device bugs remained — emulation is necessary but
+   not enough.
 2. Every new behaviour gets an automated test (`tests/unit` for pure logic,
    `tests/e2e` for UI). **[TESTS.md](TESTS.md)** lists, per phase, the tests
    that must pass and the checks to do on the device; `tests/phases.json`
@@ -65,13 +67,17 @@ pushed to the branch and this table updated.
 6. **Every PR bumps the version** (`npm version <x.y.z> --no-git-tag-version`;
    minor for features, patch for fixes only) and its description says which
    version it is. The owner checks Settings → About ("CodeEditor 2.1.0, built
-   …") to know whether the merged change has reached the phone.
+   …") to know whether the merged change has reached the tablet.
 
 Code map (from v2): pure logic in `src/core/`, editor behaviour in
 `src/editor/`, app wiring in `src/app/`, UI in `src/ui/`, runners in `src/run/`
 and `src/workers/`. Keys bar: `src/ui/keysBar.js`. Gestures:
 `src/core/gestures.js` + `src/editor/gestureLayer.js`. Settings schema:
-`src/core/settings.js`; settings UI: `src/ui/settingsPanel.js`.
+`src/core/settings.js`; settings UI: `src/ui/settingsView.js` (pages),
+`src/ui/keysBarEditor.js`, `src/ui/shortcutsEditor.js`. Shortcuts:
+`src/core/keybindings.js` (one- and two-key). File tree: `src/ui/fileTree.js`
++ `src/core/explorer.js`. Drag to move: `src/ui/dragMove.js`. Native Android
+code (from Phase 5): `android/`.
 
 ---
 
@@ -789,6 +795,10 @@ our app (WebView: editor, xterm.js)
 - **Signing key:** made once and kept in the repository's GitHub Secrets, so
   each new APK installs over the previous one without losing projects. (The
   owner does one guided step; never committed to the repository.)
+- **A fresh app identity:** the owner's earlier Android Studio build (its ID
+  and key) is gone with its folder, and a new key can't update it anyway. The
+  new app gets a new ID; projects in the old app are exported as .zip
+  (Files ⋯) and imported into the new one, then the old app is uninstalled.
 - Done when: merging a PR gives a release whose APK installs on the tablet and
   shows the new version in Settings → About.
 
