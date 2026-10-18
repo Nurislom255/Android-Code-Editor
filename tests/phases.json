@@ -26,7 +26,7 @@
     "e2e": ["explorer"]
   },
   "5": {
-    "title": "Built-in runtimes: Python, C, C++, Rust",
+    "title": "The APK with a real Linux terminal (Alpine via proot): APK builds, real files, terminal, Run, language servers",
     "unit": [],
     "e2e": ["phase5"]
   },

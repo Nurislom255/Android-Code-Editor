@@ -241,14 +241,18 @@ On the device
       screen's edge, and slide it: the bar doesn't slide; move it to the
       edge on purpose: the bar scrolls on.
 
-## Phase 5 — Built-in runtimes (not built)
+## Phase 5 — The APK with a real Linux terminal (not built)
 
-Acceptance tests (`tests/e2e/phase5.spec.mjs`, fixme): Python output
-streams, time limit and Stop, `input()`, clickable error lines, offline;
-C++ hello world with `<iostream>` and `cin`, the common headers, clickable
-compile errors and the exit code; Rust hello world only if its spike is a go.
-On the device: size added, first and warm run time (go / no-go numbers in
-ROADMAP Phase 5).
+Acceptance tests (`tests/e2e/phase5.spec.mjs`, fixme), one group per step:
+5.1 a merged PR yields a release with an APK that installs over the last one;
+5.2 projects are real files (Move to device files keeps everything); 5.3 the
+terminal sets up Linux once and runs `apk add` / `python3` with Ctrl+C and
+the keys bar working; 5.4 Run uses the real tools, offers to install a
+missing one and makes error lines clickable; 5.5 Advanced code intelligence
+(language servers) vs. Basic; 5.6 shared folders. Native parts can't run in
+desktop Chromium: their app side is tested against a fake plugin, pure logic
+gets unit tests, and the rest are device checks on the tablet (phone layouts
+in a narrow window: the owner's phone can't install APKs).
 
 ## Phase 6 — VS Code extras (not built)
 

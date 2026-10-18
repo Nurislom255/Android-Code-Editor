@@ -316,8 +316,7 @@ working (also inside the editor).
 | Spec item | Status |
 |---|---|
 | Native Kotlin editor view / InputConnection / tree-sitter via NDK | Replaced by their web equivalents: CodeMirror 6's contenteditable input and Lezer incremental parsers |
-| Python execution (Chaquopy) | Not in the web build; it would need a bundled interpreter (Pyodide, 10+ MB) |
-| Termux bridge, LSP-lite autocomplete | Not possible from a web page without a native plugin |
+| Python, C, C++, Rust; a terminal; language servers | **Planned for the APK (ROADMAP Phase 5):** a real Linux inside the app (Alpine via proot, as Acode does), an xterm.js terminal where you `apk add` / `pip install` what you need, Run with those tools, and VS Code's language servers as an option |
 | Push/pull in a plain browser | Works, but GitHub's git servers don't send CORS headers, so requests go through the proxy configured in Settings → Git |
 | Device folders (Option B, all-files access) | `CapacitorProjectFs` is implemented and unit-tested against a fake plugin, **not yet run on a real device** — see `CAPACITOR_SETUP.md` |
 | Haptics in the APK | `navigator.vibrate` needs the `VIBRATE` permission in the Android manifest |
